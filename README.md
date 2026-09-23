@@ -4,6 +4,8 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
+![Cron schedules, webhooks, kickd event and file changes fire named events. kickd records each firing in its SQLite queue and starts the command of the event.](docs/images/overview.svg)
+
 ## How kickd works
 
 A named command in the config file is called an **event**.
@@ -131,3 +133,4 @@ To keep kickd running in the background, install it as a service by following th
 - [Delivery guarantees and idempotency](docs/internals/idempotency.md): when a firing can be lost or repeated, and how to write commands that tolerate repeats
 - [How commands run](docs/internals/execution.md): processes, environment, output, stopping, exit status
 - [Platform differences](docs/internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows
+- [User accounts](docs/internals/users.md): which user runs the agent and its commands, who can fire events, and the files that kickd creates
