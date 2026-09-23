@@ -33,7 +33,9 @@ func TestDocumentedConfigsLoad(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for i, m := range block.FindAllStringSubmatch(string(b), -1) {
+		// A checkout on Windows can turn line endings into CRLF.
+		text := strings.ReplaceAll(string(b), "\r\n", "\n")
+		for i, m := range block.FindAllStringSubmatch(text, -1) {
 			body := dedent(m[2], len(m[1]))
 			if !strings.Contains(body, "events:") {
 				continue
