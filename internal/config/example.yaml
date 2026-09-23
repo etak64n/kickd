@@ -1,0 +1,70 @@
+# kickd configuration.
+# Every event has a name. "kickd event NAME" fires any event; triggers
+# (cron, webhook, file) fire it automatically. Each firing is first stored
+# in the queue database, and kickd consumes the queue.
+# Durations are strings such as "30s", "5m", "1h". Relative paths are
+# resolved against the directory of this file; "~" expands to the home dir.
+
+log:
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides)
+  format: auto         # auto | json | text; auto = text on a terminal, json otherwise (LOG_FORMAT overrides)
+  file: kickd.log      # empty = stderr; rotated once it exceeds max_size_mb
+  max_size_mb: 10
+  max_backups: 5       # rotated generations to keep (kickd.log.1 ... kickd.log.5)
+
+webhook:
+  listen: "127.0.0.1:8787"   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576
+
+queue:
+  path: kickd.db       # SQLite file holding queued, running and finished runs
+  retention: 168h      # how long finished runs stay in the history
+
+events:
+  # Sync a folder after files stop changing for 2 seconds.
+  - name: sync-notes
+    shell: "rsync -a --delete ~/Notes/ ~/Backup/Notes/"   # command: [...] runs without a shell
+    timeout: 5m
+    concurrency: skip        # skip | queue | parallel: what to do with a firing while the event runs
+    on_interrupt: rerun      # abandon | rerun: what to do on restart with a run cut off by a stop or crash
+    max_attempts: 3          # with rerun: give up after this many runs of one firing
+    triggers:
+      - type: file
+        path: ~/Notes
+        recursive: true
+        include: ["*.md", "*.txt"]      # base name patterns; "a/*.md" matches a relative path
+        exclude: [".git", ".obsidian"]  # matched against every path component
+        changes: [create, write, remove, rename]   # chmod is off by default
+        debounce: 2s
+
+  # A nightly report; also "kickd event nightly-report".
+  - name: nightly-report
+    shell: "python3 report.py >> report.log 2>&1"
+    workdir: ~/reports
+    env:
+      REPORT_MODE: nightly
+    triggers:
+      - type: cron
+        schedule: "0 3 * * *"       # minute hour day month weekday (a leading seconds field is optional)
+        timezone: Asia/Tokyo        # empty = local time
+
+  # Deploy on demand or from GitHub: "kickd event deploy ref=v1.2", or
+  # POST /hooks/deploy?ref=v1.2. The payload JSON (parameters, request
+  # body, headers) is at $KICKD_PAYLOAD_FILE and, with "stdin: payload",
+  # on standard input.
+  - name: deploy
+    description: Deploy the app
+    command: ["./deploy.sh"]
+    workdir: ~/app
+    stdin: payload
+    concurrency: queue
+    params:                  # optional; when given, only these keys are accepted
+      - name: ref
+        default: main
+    triggers:
+      - type: webhook
+        path: /hooks/deploy
+        methods: [POST]
+        secret: "change-me"        # HMAC-SHA256 in X-Hub-Signature-256 (GitHub compatible)
+        # token: "change-me"       # or a bearer token / X-Kickd-Token header / ?token=
+        # wait: true               # respond after the run finishes, with its exit code and output

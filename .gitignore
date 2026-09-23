@@ -1,0 +1,8 @@
+/dist/
+/kickd
+/kickd.exe
+*.log
+*.log.[0-9]*
+*.db
+*.db-wal
+*.db-shm
