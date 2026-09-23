@@ -37,7 +37,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | `on_interrupt` | What happens, when the agent starts again, to a run that a stop or crash cut off: `abandon` (default) or `rerun`. |
 | `max_attempts` | With `rerun`, how many times one firing may run, counting the first run. Default `3`. |
 | `stdin` | `payload` also passes the payload JSON, the information about the run, on standard input. Default `none`. |
-| `log_output` | Whether the command's output is logged. With the default `true`, each line of output is logged at DEBUG, and the record of a failed run includes the end of standard error. `false` logs neither. |
+| `log_output` | Whether kickd keeps the command's output. With the default `true`, each line of output is logged at DEBUG, the record of a failed run includes the end of standard error, and the first 64 KB are stored with the run. `false` does none of these; a webhook with `wait: true` still returns the output. |
 | `params` | The parameters that a firing can pass. |
 | `triggers` | The triggers. An event fired only from the command line needs none. |
 

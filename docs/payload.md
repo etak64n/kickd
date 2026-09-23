@@ -37,7 +37,12 @@ Depending on the trigger, these variables are also set:
 
 With `stdin: payload` in the event, the command also receives the payload JSON on standard input.
 
+The payload of a file firing holds `files`, a list of the combined changes, each with `path` and `op`.
+The payload of a cron firing holds `cron.schedule`, the cron expression that fired.
+
 The payload of a webhook firing holds the request body, headers and query.
+A header or query parameter with several values keeps only its first value.
+The body is stored as a JSON string, so bytes that are not valid UTF-8 are replaced with U+FFFD.
 kickd removes the headers `Authorization` and `X-Kickd-Token` and the query parameter `token`, which carry credentials.
 A webhook payload looks like this:
 

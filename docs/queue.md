@@ -38,7 +38,7 @@ A run is always in one of these statuses:
 ## Run history
 
 Finished runs stay in the queue for `queue.retention`, 7 days by default.
-The history holds the status and exit code of each run, and the first 64 KB of its output.
+The history holds the status and exit code of each run, and the first 64 KB of its output when the event's `log_output` is `true`, the default.
 `kickd runs` lists the history, and `kickd show` displays one run.
 
 By default, the queue is `kickd.db` in the directory of the config file.

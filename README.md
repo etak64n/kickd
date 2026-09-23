@@ -108,6 +108,8 @@ To keep kickd running in the background, install it as a service by following th
 
 ## Documentation
 
+### Guides
+
 - [Building kickd](docs/build.md): building from source, cross builds for other platforms, release builds, versions
 - [Installing on macOS](docs/install-macos.md): the executable, the config file, running as a LaunchAgent, access to protected folders
 - [Installing on Linux](docs/install-linux.md): the executable, the config file, running as a systemd unit, per-user units
@@ -121,3 +123,11 @@ To keep kickd running in the background, install it as a service by following th
 - [Logging](docs/logging.md): formats, levels, keys, messages, rotation
 - [Known limitations](docs/limitations.md): what kickd does not do yet, and what has not been tested
 - [Development](docs/development.md): tests, builds, source layout
+
+### Internals
+
+- [Architecture](docs/internals/architecture.md): the parts of the agent, the path of a firing, reloading and stopping
+- [Queue internals](docs/internals/queue.md): the SQLite database, locking between processes, consumption, recovery at startup
+- [Delivery guarantees and idempotency](docs/internals/idempotency.md): when a firing can be lost or repeated, and how to write commands that tolerate repeats
+- [How commands run](docs/internals/execution.md): processes, environment, output, stopping, exit status
+- [Platform differences](docs/internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows

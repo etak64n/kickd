@@ -73,6 +73,7 @@ With the example's `file: kickd.log`, the log goes to `/etc/kickd/kickd.log`.
 systemd sets `HOME` only for units with a `User=` setting, and the unit that kickd writes has none.
 Without `HOME`, `~` in the config file is not expanded.
 Write absolute paths in the config file, and pass `HOME` with the event's `env` to commands that need it.
+The unit that kickd writes also reads environment variables from `/etc/sysconfig/kickd` when that file exists, so a line `HOME=/root` there gives the whole agent a home directory.
 
 ## 3. Try it in the foreground
 
