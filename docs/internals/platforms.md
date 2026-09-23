@@ -79,6 +79,12 @@ macOS guards some locations, such as the Desktop, Documents and Downloads folder
 macOS checks the access of a command against the permission of kickd, the program that started it, so kickd needs Full Disk Access to watch or process those locations.
 A kickd started by launchd cannot show the dialog that asks for permission, so an access without permission can hang instead of failing.
 
+## Time zones
+
+The `timezone` of a cron trigger names a zone of the IANA time zone database, such as `Asia/Tokyo`.
+Windows has no copy of this database, and minimal Linux systems may lack one, so kickd carries its own copy inside the executable.
+The copy adds about 450 KB to the executable, and kickd uses it only when the OS has no database.
+
 ## Paths
 
 - **Home directory**: `~` expands to `$HOME` on macOS and Linux, and to `%USERPROFILE%` on Windows. Without a home directory, as in a systemd unit without `User=`, `~` stays unexpanded.

@@ -116,9 +116,9 @@ func TestAgentRunsTriggersAndReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfgPath := filepath.Join(dir, "kickd.yaml")
-	outA := filepath.ToSlash(filepath.Join(dir, "a.txt"))
-	outB := filepath.ToSlash(filepath.Join(dir, "b.txt"))
-	base := "events:\n  - name: on-change\n    shell: \"echo changed >> " + outA + "\"\n" +
+	outA := filepath.Join(dir, "a.txt")
+	outB := filepath.Join(dir, "b.txt")
+	base := "events:\n  - name: on-change\n" + helperEvent("append", outA, "HELPER_TEXT", "changed") +
 		"    triggers:\n      - {type: file, path: in, include: ['*.md'], debounce: 100ms}\n"
 	writeFile(t, cfgPath, base)
 	cancel, done := startAgent(t, cfgPath)
@@ -128,7 +128,7 @@ func TestAgentRunsTriggersAndReloads(t *testing.T) {
 	waitForFile(t, filepath.Join(dir, "a.txt"), "changed", 10*time.Second)
 
 	// Saving the config adds a cron event; the agent must pick it up.
-	writeFile(t, cfgPath, base+"  - name: tick\n    shell: \"echo tick >> "+outB+"\"\n    triggers: [{type: cron, schedule: '@every 1s'}]\n")
+	writeFile(t, cfgPath, base+"  - name: tick\n"+helperEvent("append", outB, "HELPER_TEXT", "tick")+"    triggers: [{type: cron, schedule: '@every 1s'}]\n")
 	waitForFile(t, filepath.Join(dir, "b.txt"), "tick", 15*time.Second)
 	stopAgent(t, cancel, done)
 }
@@ -145,7 +145,7 @@ func TestAgentKeepsPreviousConfigOnBrokenReload(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "kickd.yaml")
 	out := filepath.Join(dir, "tick.txt")
-	writeFile(t, cfgPath, "events:\n  - name: tick\n    shell: \"echo tick >> "+filepath.ToSlash(out)+"\"\n    triggers: [{type: cron, schedule: '@every 1s'}]\n")
+	writeFile(t, cfgPath, "events:\n  - name: tick\n"+helperEvent("append", out, "HELPER_TEXT", "tick")+"    triggers: [{type: cron, schedule: '@every 1s'}]\n")
 	cancel, done := startAgent(t, cfgPath)
 	waitForFile(t, out, "tick", 10*time.Second)
 
@@ -168,9 +168,8 @@ func TestAgentKeepsPreviousConfigOnBrokenReload(t *testing.T) {
 func TestAgentRunsKickEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "kickd.yaml")
-	out := filepath.ToSlash(filepath.Join(dir, "deployed.txt"))
-	writeFile(t, cfgPath, "events:\n  - name: deploy\n    params: [{name: ref, default: main}]\n"+
-		"    shell: \"echo ref=$KICKD_DATA_REF event=$KICKD_EVENT trigger=$KICKD_TRIGGER >> "+out+"\"\n")
+	out := filepath.Join(dir, "deployed.txt")
+	writeFile(t, cfgPath, "events:\n  - name: deploy\n    params: [{name: ref, default: main}]\n"+helperEvent("append-event", out))
 	cancel, done := startAgent(t, cfgPath)
 	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
 
@@ -194,9 +193,8 @@ func TestAgentRunsKickEvents(t *testing.T) {
 func TestAgentRerunsAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "kickd.yaml")
-	out := filepath.ToSlash(filepath.Join(dir, "attempts.txt"))
-	writeFile(t, cfgPath, "events:\n  - name: slow\n    on_interrupt: rerun\n    max_attempts: 2\n"+
-		"    shell: \"echo attempt=$KICKD_ATTEMPT >> "+out+"; [ $KICKD_ATTEMPT -ge 2 ] || sleep 30\"\n")
+	out := filepath.Join(dir, "attempts.txt")
+	writeFile(t, cfgPath, "events:\n  - name: slow\n    on_interrupt: rerun\n    max_attempts: 2\n"+helperEvent("attempt", out))
 	cancel, done := startAgent(t, cfgPath)
 	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
 	first := kickEvent(t, store, "slow", nil)

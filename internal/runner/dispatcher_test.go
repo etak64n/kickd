@@ -394,3 +394,18 @@ func TestQueuedRunsSurviveRestart(t *testing.T) {
 	env := startDispatcher(t, path, spec)
 	waitRun(t, env.store, id, queue.StatusSucceeded)
 }
+
+func TestLogOutputFalseKeepsOutputOutOfTheQueue(t *testing.T) {
+	spec := helperJob("exit")
+	spec.LogOutput = false
+	env := newDispatcher(t, spec)
+	ev := fired(spec.Name)
+	ev.RequestID = "quiet"
+	res, err := env.d.Handler(spec.Name).RunSync(context.Background(), ev)
+	if err != nil || !strings.Contains(res.Output, "failing on purpose") {
+		t.Fatalf("a waiting caller still gets the output: res = %+v, err = %v", res, err)
+	}
+	if run := runOf(t, env.store, "quiet"); run.Output != "" {
+		t.Errorf("stored output = %q, want none with log_output: false", run.Output)
+	}
+}

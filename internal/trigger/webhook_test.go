@@ -404,3 +404,37 @@ func TestWebhookParamsFromQuery(t *testing.T) {
 		t.Errorf("rejected = %v", r)
 	}
 }
+
+func TestWebhookEmptyQueryValueIsMissing(t *testing.T) {
+	srv, _, _ := newTestServer(t, 0, WebhookRoute{Event: "deploy", Path: "/d", Params: []string{"env"}, Required: []string{"env"}})
+	code, out, _ := do(t, "POST", srv.URL+"/d?env=", "", nil)
+	if code != http.StatusBadRequest || out["error"] != "missing parameter env" {
+		t.Fatalf("an empty value must count as missing: %d %v", code, out)
+	}
+}
+
+func TestWebhookPayloadHeaders(t *testing.T) {
+	srv, h, _ := newTestServer(t, 0, WebhookRoute{Event: "deploy", Path: "/d", Token: "tok"})
+	req, err := http.NewRequest("POST", srv.URL+"/d", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Kickd-Token", "tok")
+	req.Header.Add("X-Multi", "first")
+	req.Header.Add("X-Multi", "second")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	ev := <-h.events
+	if _, ok := ev.Webhook.Headers["X-Kickd-Token"]; ok {
+		t.Error("the X-Kickd-Token header must be stripped from the payload")
+	}
+	if ev.Webhook.Headers["X-Multi"] != "first" {
+		t.Errorf("X-Multi = %q, want the first value", ev.Webhook.Headers["X-Multi"])
+	}
+}

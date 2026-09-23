@@ -11,6 +11,9 @@ go vet ./...               # static checks
 ./scripts/build-all.sh     # build kickd for six platforms into dist/
 ```
 
+GitHub Actions runs `go vet` and the tests on Linux, macOS and Windows for every push to `main` and every pull request.
+On Linux, it also runs the tests with the race detector, builds kickd for every platform, and runs the tests with the oldest Go version that `go.mod` allows.
+
 Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them with `checksums.txt`.
 
 ```sh
@@ -30,5 +33,5 @@ internal/agent/     Builds the triggers and the queue consumer from the config, 
 internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
 scripts/            build-all.sh, the cross build for every platform
-.github/workflows/  release.yml, the release workflow
+.github/workflows/  ci.yml, the tests on every OS; release.yml, the release workflow
 ```

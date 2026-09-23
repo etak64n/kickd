@@ -45,9 +45,12 @@ const (
 	maxLogLine        = 8 * 1024
 	tailLines         = 20
 	tailBytes         = 4 * 1024
-	// killGrace is how long a process gets after SIGTERM before it is killed.
-	killGrace = 10 * time.Second
 )
+
+// killGrace is how long a stopped process gets to exit, and how long kickd
+// waits for the output pipes to close, before it kills the process. Tests
+// shorten it.
+var killGrace = 10 * time.Second
 
 // Spec is what the runner needs to know about a named event.
 type Spec struct {

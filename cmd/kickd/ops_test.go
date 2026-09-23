@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/etak64n/kickd/internal/agent"
+	"github.com/etak64n/kickd/internal/config"
 	"github.com/etak64n/kickd/internal/queue"
 )
 
@@ -32,20 +34,6 @@ func writeConfig(t *testing.T, body string) (string, string) {
 	}
 	return dir, path
 }
-
-const eventConfig = `
-events:
-  - name: deploy
-    description: Deploy the app
-    params: [{name: ref, default: main}]
-    shell: "echo deploying $KICKD_DATA_REF"
-  - name: boom
-    shell: "echo broken >&2; exit 7"
-    triggers: [{type: cron, schedule: "@yearly"}]
-  - name: slow
-    on_interrupt: rerun
-    shell: "[ $KICKD_ATTEMPT -ge 2 ] || sleep 30"
-`
 
 func TestParseInterleavedFlags(t *testing.T) {
 	fs := flag.NewFlagSet("event", flag.ContinueOnError)
@@ -68,7 +56,7 @@ func TestParseInterleavedFlags(t *testing.T) {
 }
 
 func TestOpsWithoutAgent(t *testing.T) {
-	_, cfg := writeConfig(t, eventConfig)
+	_, cfg := writeConfig(t, eventConfig())
 	code, out, errOut := ops(t, "event", "deploy", "-c", cfg, "ref=v2")
 	if code != 0 || !regexp.MustCompile(`^queued run 1 \(event deploy, request [0-9a-f]{16}\)\n$`).MatchString(out) || !strings.Contains(errOut, "the agent is not running") {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
@@ -126,7 +114,7 @@ func startAgent(t *testing.T, cfg string) func() {
 }
 
 func TestOpsWithAgent(t *testing.T) {
-	_, cfg := writeConfig(t, eventConfig)
+	_, cfg := writeConfig(t, eventConfig())
 	stop := startAgent(t, cfg)
 	defer stop()
 
@@ -153,7 +141,7 @@ func TestOpsWithAgent(t *testing.T) {
 // a rerun event and starts it again; the wait must follow the rerun and
 // report its success.
 func TestWaitFollowsRerun(t *testing.T) {
-	_, cfg := writeConfig(t, eventConfig)
+	_, cfg := writeConfig(t, eventConfig())
 	stop := startAgent(t, cfg)
 	result := make(chan [3]string, 1)
 	go func() {
@@ -208,5 +196,35 @@ func waitAlive(t *testing.T, dbPath string) {
 			t.Fatal("kickd did not start")
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestEventDataFlag(t *testing.T) {
+	_, cfg := writeConfig(t, eventConfig())
+	if code, _, errOut := ops(t, "event", "deploy", "--data", `{"ref":"from-data"}`, "ref=from-arg", "-c", cfg); code != 0 {
+		t.Fatalf("event: %d %q", code, errOut)
+	}
+	if code, out, _ := ops(t, "show", "1", "-c", cfg); code != 0 || !strings.Contains(out, "ref=from-arg") {
+		t.Errorf("KEY=VALUE must override --data: %d %q", code, out)
+	}
+	if code, _, errOut := ops(t, "event", "deploy", "--data", "not json", "-c", cfg); code != exitUsage || !strings.Contains(errOut, "--data must be a JSON object of strings") {
+		t.Errorf("bad --data: %d %q", code, errOut)
+	}
+}
+
+func TestInitWritesTheExampleOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "config.yaml")
+	if err := cmdInit([]string{"-c", path}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || string(b) != config.Example {
+		t.Fatalf("init wrote %d bytes, err %v", len(b), err)
+	}
+	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+		t.Errorf("config permissions %o, want 600", st.Mode().Perm())
+	}
+	if err := cmdInit([]string{"-c", path}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a second init must refuse to overwrite: %v", err)
 	}
 }

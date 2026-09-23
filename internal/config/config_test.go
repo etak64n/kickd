@@ -46,6 +46,7 @@ func TestLoadAppliesDefaultsAndResolvesPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir) // the home directory on Windows
 	t.Setenv("USERPROFILE", dir)
 	path := write(t, dir, "kickd.yaml", `
 log:

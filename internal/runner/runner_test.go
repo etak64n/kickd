@@ -6,9 +6,14 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
+	"os/signal"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -54,6 +59,47 @@ func helperMain() {
 	case "short":
 		time.Sleep(700 * time.Millisecond)
 		os.Exit(0)
+	case "secret":
+		fmt.Println("password=hunter2")
+		os.Exit(0)
+	case "orphan", "orphan-quiet":
+		// Leave a child in the background; "orphan" hands it our output.
+		child := exec.Command(os.Args[0])
+		child.Env = append(os.Environ(), "KICKD_HELPER_MODE=sleep")
+		if os.Getenv("KICKD_HELPER_MODE") == "orphan" {
+			child.Stdout, child.Stderr = os.Stdout, os.Stderr
+		}
+		if err := child.Start(); err != nil {
+			fmt.Println("START_ERROR=" + err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("CHILD=%d\n", child.Process.Pid)
+		os.Exit(0)
+	case "tree":
+		// A child in the same process group that ignores SIGTERM.
+		child := exec.Command(os.Args[0])
+		child.Env = append(os.Environ(), "KICKD_HELPER_MODE=ignore-term")
+		if err := child.Start(); err != nil {
+			os.Exit(1)
+		}
+		_ = os.WriteFile(os.Getenv("KICKD_HELPER_PIDFILE"), []byte(strconv.Itoa(child.Process.Pid)), 0o600)
+		time.Sleep(20 * time.Second)
+		os.Exit(0)
+	case "ignore-term":
+		signal.Ignore(syscall.SIGTERM)
+		time.Sleep(20 * time.Second)
+		os.Exit(0)
+	case "trap-term":
+		// Exit with code 0 as soon as SIGTERM arrives.
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGTERM)
+		fmt.Println("ready")
+		select {
+		case <-ch:
+			os.Exit(0)
+		case <-time.After(20 * time.Second):
+			os.Exit(1)
+		}
 	default:
 		os.Exit(99)
 	}
@@ -347,5 +393,75 @@ func TestLineWriterSplitsLines(t *testing.T) {
 	got := rec.find("Run output")
 	if len(got) != 3 || got[0]["text"] != "one" || got[1]["text"] != "two" || got[2]["text"] != "three" || got[0]["stream"] != "stdout" {
 		t.Fatalf("lines = %v", got)
+	}
+}
+
+func TestExecuteKickdVariablesOverrideEnv(t *testing.T) {
+	r, _, _ := newRunner(t)
+	res := r.Execute(context.Background(), helperJob("env", "KICKD_EVENT", "spoofed"), fileEvent())
+	if !strings.Contains(res.Output, "KICKD_EVENT=demo\n") || strings.Contains(res.Output, "spoofed") {
+		t.Fatalf("env must not override KICKD_ variables:\n%s", res.Output)
+	}
+}
+
+func TestExecuteStoredOutputIsNotMasked(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	res := r.Execute(context.Background(), helperJob("secret"), fileEvent())
+	if !strings.Contains(res.Output, "password=hunter2") {
+		t.Fatalf("stored output must be raw: %q", res.Output)
+	}
+	lines := rec.find("Run output")
+	if len(lines) != 1 || lines[0]["text"] != "password=***masked***" {
+		t.Fatalf("the log line must be masked: %v", lines)
+	}
+}
+
+// killChild stops the background child that the orphan helpers report.
+func killChild(t *testing.T, output string) {
+	t.Helper()
+	m := regexp.MustCompile(`CHILD=(\d+)`).FindStringSubmatch(output)
+	if m == nil {
+		t.Fatalf("no child reported in %q", output)
+	}
+	pid, _ := strconv.Atoi(m[1])
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Kill()
+	}
+}
+
+func shortGrace(t *testing.T) {
+	old := killGrace
+	killGrace = 300 * time.Millisecond
+	t.Cleanup(func() { killGrace = old })
+}
+
+func TestExecuteBackgroundProcessHoldingOutput(t *testing.T) {
+	shortGrace(t)
+	r, rec, _ := newRunner(t)
+	start := time.Now()
+	res := r.Execute(context.Background(), helperJob("orphan"), fileEvent())
+	killChild(t, res.Output)
+	if res.ExitCode != 0 || res.Reason != "wait_failed" {
+		t.Fatalf("a child holding the output must end the wait with wait_failed: %+v", res)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("waited %s for the output to close", d)
+	}
+	if f := rec.find("Run failed"); len(f) != 1 || f[0]["reason"] != "wait_failed" {
+		t.Errorf("failed = %v", f)
+	}
+}
+
+func TestExecuteBackgroundProcessWithClosedOutput(t *testing.T) {
+	shortGrace(t)
+	r, _, _ := newRunner(t)
+	start := time.Now()
+	res := r.Execute(context.Background(), helperJob("orphan-quiet"), fileEvent())
+	killChild(t, res.Output)
+	if res.ExitCode != 0 || res.Reason != "" || res.Error != "" {
+		t.Fatalf("a child without our output must not affect the run: %+v", res)
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("run took %s", d)
 	}
 }

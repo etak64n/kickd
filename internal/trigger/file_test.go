@@ -177,3 +177,41 @@ func TestMatchAny(t *testing.T) {
 		}
 	}
 }
+
+// A directory moved into the tree arrives with its files already inside;
+// they are reported as created because no watch saw them being written.
+func TestFileWatcherReportsFilesOfMovedInDirectory(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(t.TempDir(), "batch")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	touch(t, filepath.Join(src, "one.txt"))
+	touch(t, filepath.Join(src, "two.txt"))
+	c := startWatcher(t, &FileWatcher{Event: "j", Root: root, Recursive: true, Ops: []string{"create"}, Debounce: 300 * time.Millisecond})
+	if err := os.Rename(src, filepath.Join(root, "batch")); err != nil {
+		t.Fatal(err)
+	}
+	got := paths(c.wait(t, 5*time.Second))
+	if got["one.txt"] != "create" || got["two.txt"] != "create" {
+		t.Fatalf("files = %v, want one.txt and two.txt as created", got)
+	}
+}
+
+func TestFileWatcherDiscardsPendingChangesOnStop(t *testing.T) {
+	dir := t.TempDir()
+	w := &FileWatcher{Event: "j", Root: dir, Ops: []string{"create"}, Debounce: time.Second,
+		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	c := newCollector()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctx, c) }()
+	time.Sleep(100 * time.Millisecond)
+	touch(t, filepath.Join(dir, "a.txt"))
+	time.Sleep(300 * time.Millisecond) // collected, but the debounce time has not passed
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	c.none(t, 1500*time.Millisecond)
+}

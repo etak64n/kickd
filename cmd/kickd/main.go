@@ -15,6 +15,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	// Windows has no IANA time zone database, and a minimal Linux may lack
+	// one; the embedded copy keeps the timezone of cron triggers working.
+	_ "time/tzdata"
 
 	"github.com/kardianos/service"
 
