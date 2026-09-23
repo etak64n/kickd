@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -22,9 +23,6 @@ import (
 	"github.com/etak64n/kickd/internal/event"
 	"github.com/etak64n/kickd/internal/logging"
 )
-
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
 
 const usageText = `kickd - run named events from cron, webhooks, file changes or the command line
 
@@ -50,6 +48,8 @@ Every command takes -c CONFIG. The config is found in this order:
 `
 
 func main() {
+	info, ok := debug.ReadBuildInfo()
+	version = resolveVersion(version, info, ok)
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usageText)
 		os.Exit(2)

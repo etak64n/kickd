@@ -11,6 +11,13 @@ go vet ./...               # static checks
 ./scripts/build-all.sh     # build kickd for six platforms into dist/
 ```
 
+Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them with `checksums.txt`.
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
 ## Source layout
 
 ```
@@ -22,4 +29,6 @@ internal/trigger/   Cron (robfig/cron), webhooks (net/http), file watching (fsno
 internal/agent/     Builds the triggers and the queue consumer from the config, and reloads the config
 internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
+scripts/            build-all.sh, the cross build for every platform
+.github/workflows/  release.yml, the release workflow
 ```

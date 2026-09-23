@@ -16,29 +16,34 @@ In kickd, a named command in the config file is an **event**, and the long-runni
 Put the `kickd` executable in `/usr/local/bin`.
 `/usr/local/bin` is on the default `PATH` of macOS, so `kickd` works from any directory.
 
-With Go installed:
+The releases page of kickd has an executable for each kind of Mac: `kickd-darwin-arm64` for Apple silicon, and `kickd-darwin-amd64` for an Intel CPU.
+`checksums.txt` on the same page lists the SHA-256 hash of every file.
+These commands download the executable for Apple silicon, check it, and install it:
+
+```sh
+curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-darwin-arm64
+curl -fLO https://github.com/etak64n/kickd/releases/latest/download/checksums.txt
+shasum -a 256 -c --ignore-missing checksums.txt
+sudo mkdir -p /usr/local/bin
+sudo install -m 755 kickd-darwin-arm64 /usr/local/bin/kickd
+kickd version
+```
+
+With Go installed, `go install` builds kickd from source instead:
 
 ```sh
 go install github.com/etak64n/kickd/cmd/kickd@latest
 sudo mkdir -p /usr/local/bin
 sudo install -m 755 "$(go env GOPATH)/bin/kickd" /usr/local/bin/kickd
-kickd version
-```
-
-With an executable built on another machine, such as `kickd-darwin-arm64`, install that file instead:
-
-```sh
-sudo mkdir -p /usr/local/bin
-sudo install -m 755 kickd-darwin-arm64 /usr/local/bin/kickd
 ```
 
 The service definition records the path of the executable that installed it.
 Move the executable to its final place before installing the service.
 
 macOS adds a **quarantine attribute** (`com.apple.quarantine`) to files downloaded with a browser or received through AirDrop.
-Gatekeeper, the macOS check for downloaded programs, blocks a quarantined executable when it starts.
-Files built on the same Mac, and files copied with `scp`, have no quarantine attribute.
-For a downloaded file, remove the attribute:
+Gatekeeper, the macOS check for downloaded programs, blocks a quarantined executable when it starts, because the kickd executables are not signed with an Apple Developer ID.
+Files downloaded with `curl`, built on the same Mac, or copied with `scp` have no quarantine attribute.
+For a file downloaded with a browser, remove the attribute:
 
 ```sh
 xattr -d com.apple.quarantine /usr/local/bin/kickd

@@ -32,19 +32,46 @@ The queue is a file, so runs that are still waiting survive a restart of the age
 - **Service installation**: kickd installs itself as a launchd job on macOS, a systemd unit on Linux and a Windows service on Windows.
 - **Structured logs**: JSON Lines in a log file, colored text on a terminal.
 
+## Installation
+
+Prebuilt executables are on the [releases page](https://github.com/etak64n/kickd/releases/latest).
+Each file is kickd for one platform, and needs no other files:
+
+| Machine | File |
+|---|---|
+| Mac with Apple silicon | `kickd-darwin-arm64` |
+| Mac with an Intel CPU | `kickd-darwin-amd64` |
+| Linux on x86-64 | `kickd-linux-amd64` |
+| Linux on 64-bit ARM | `kickd-linux-arm64` |
+| Windows on x64 | `kickd-windows-amd64.exe` |
+| Windows on ARM | `kickd-windows-arm64.exe` |
+
+`checksums.txt` on the same page lists the SHA-256 hash of every file.
+On Linux, these commands download kickd for x86-64, check it against `checksums.txt`, and install it as `/usr/local/bin/kickd`:
+
+```sh
+curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-linux-amd64
+curl -fLO https://github.com/etak64n/kickd/releases/latest/download/checksums.txt
+sha256sum -c --ignore-missing checksums.txt
+sudo install -m 755 kickd-linux-amd64 /usr/local/bin/kickd
+```
+
+On a Mac, the same commands work with the file name for the Mac and with `shasum -a 256 -c --ignore-missing checksums.txt` as the check.
+
+With Go 1.25 or later, `go install` builds kickd from source instead.
+Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless Go is configured otherwise.
+
+```sh
+go install github.com/etak64n/kickd/cmd/kickd@latest
+```
+
+The installation guides for macOS, Linux and Windows cover each OS in detail, including running kickd as a service.
+
 ## Quick start
 
-The quick start needs Go 1.25 or later.
+With `kickd` installed, these steps define an event, run the agent and fire the event.
 
-1. Install kickd.
-   Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless Go is configured otherwise.
-   If the shell cannot find `kickd`, add that directory to `PATH`.
-
-   ```sh
-   go install github.com/etak64n/kickd/cmd/kickd@latest
-   ```
-
-2. Create a config file named `kickd.yaml` that defines one event, `hello`.
+1. Create a config file named `kickd.yaml` that defines one event, `hello`.
 
    ```yaml
    events:
@@ -52,14 +79,14 @@ The quick start needs Go 1.25 or later.
        shell: "echo hello from kickd"
    ```
 
-3. Start the agent in the foreground.
+2. Start the agent in the foreground.
    Ctrl+C stops it.
 
    ```sh
    kickd run -c kickd.yaml
    ```
 
-4. In another terminal, fire the event.
+3. In another terminal, fire the event.
    With `--wait`, `kickd event` waits for the run to finish and prints the result.
 
    ```sh
@@ -71,7 +98,7 @@ The quick start needs Go 1.25 or later.
    1    hello  1        succeeded  0     12ms      -
    ```
 
-5. Show the run, including the output of its command.
+4. Show the run, including the output of its command.
 
    ```sh
    kickd show 1 -c kickd.yaml
@@ -81,7 +108,7 @@ To keep kickd running in the background, install it as a service by following th
 
 ## Documentation
 
-- [Building kickd](docs/build.md): `go install`, building from source, and executables for machines without Go
+- [Building kickd](docs/build.md): building from source, cross builds for other platforms, release builds, versions
 - [Installing on macOS](docs/install-macos.md): the executable, the config file, running as a LaunchAgent, access to protected folders
 - [Installing on Linux](docs/install-linux.md): the executable, the config file, running as a systemd unit, per-user units
 - [Installing on Windows](docs/install-windows.md): the executable, the config file, running as a Windows service, the SYSTEM account

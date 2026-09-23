@@ -22,7 +22,7 @@ cd kickd
 go build -o kickd ./cmd/kickd        # on Windows: go build -o kickd.exe ./cmd/kickd
 ```
 
-## Executables for machines without Go
+## Cross builds for other platforms
 
 Go can build executables for other operating systems and CPUs.
 kickd is written entirely in Go, including its SQLite driver, so these builds need no C compiler.
@@ -53,8 +53,26 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o kickd-linux-arm64 ./cmd/kickd
 `x86_64` and `AMD64` call for the amd64 executable.
 `arm64`, `aarch64` and `ARM64` call for the arm64 executable.
 
+## Release builds
+
+Pushing a tag whose name starts with `v`, such as `v0.2.0`, starts the release workflow on GitHub Actions.
+The workflow runs the tests, builds the six executables with `scripts/build-all.sh`, and writes their SHA-256 hashes to `checksums.txt`.
+It then publishes the seven files as a release named after the tag.
+The workflow builds with the latest Go release, so release executables include its security fixes.
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The file names carry no version, so `https://github.com/etak64n/kickd/releases/latest/download/<file>` always points to the file of the latest release.
+
 ## Version
 
-`kickd version` prints the version embedded at build time.
-`scripts/build-all.sh` embeds the output of `git describe`.
-Builds made with plain `go build` or `go install` print `dev`.
+`kickd version` prints the version of the executable.
+Release executables and `scripts/build-all.sh` embed a version at build time: the tag, or the output of `git describe`.
+
+Without an embedded version, kickd prints the version that the go command recorded in the executable.
+`go install ...@latest` records the tag that it installed.
+A build inside a git checkout records a pseudo-version made from the commit, with `+dirty` when the checkout has uncommitted changes.
+When neither is available, kickd prints `dev`.

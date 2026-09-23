@@ -1,0 +1,38 @@
+# Builds kickd for every supported platform when a version tag is pushed,
+# and publishes the executables with their SHA-256 checksums as a release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Release builds use the latest Go release, so they include its
+      # security fixes; go.mod only sets the minimum version.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: ./scripts/build-all.sh "$GITHUB_REF_NAME"
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum kickd-* > checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "kickd $GITHUB_REF_NAME" --generate-notes --verify-tag

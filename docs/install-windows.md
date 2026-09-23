@@ -16,30 +16,38 @@ These steps have not yet been tested on a real Windows machine.
 ## 1. Place the executable
 
 Put the executable at `C:\Program Files\kickd\kickd.exe`.
-Any of these builds works:
+The releases page of kickd has an executable for each CPU: `kickd-windows-amd64.exe` for x64, and `kickd-windows-arm64.exe` for ARM.
+`$env:PROCESSOR_ARCHITECTURE` in PowerShell prints the CPU: `AMD64` calls for amd64, and `ARM64` for arm64.
 
-- `kickd-windows-amd64.exe` (x64) or `kickd-windows-arm64.exe` (ARM), built on another machine with `scripts/build-all.sh`
-- `kickd.exe` from `go install github.com/etak64n/kickd/cmd/kickd@latest`, in `$(go env GOPATH)\bin`
-- `kickd.exe` from `go build -o kickd.exe ./cmd/kickd` in the source tree
-
-In PowerShell opened as administrator, copy the file and add its folder to the system `PATH`.
-Replace `.\kickd-windows-amd64.exe` with the path of the file at hand.
+In PowerShell opened as administrator, these commands download the executable for x64 and add its folder to the system `PATH`:
 
 ```powershell
 New-Item -ItemType Directory -Force 'C:\Program Files\kickd' | Out-Null
-Copy-Item .\kickd-windows-amd64.exe 'C:\Program Files\kickd\kickd.exe'
+Invoke-WebRequest https://github.com/etak64n/kickd/releases/latest/download/kickd-windows-amd64.exe -OutFile 'C:\Program Files\kickd\kickd.exe'
 $p = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 [Environment]::SetEnvironmentVariable('Path', "$p;C:\Program Files\kickd", 'Machine')
 ```
 
 PowerShell windows opened after this find `kickd` by name.
 
+`checksums.txt` on the releases page lists the SHA-256 hash of every file.
+These commands print the hash listed for the file and the hash of the downloaded file, and the two must match:
+
+```powershell
+Invoke-WebRequest https://github.com/etak64n/kickd/releases/latest/download/checksums.txt -OutFile checksums.txt
+Select-String 'kickd-windows-amd64.exe' checksums.txt
+(Get-FileHash 'C:\Program Files\kickd\kickd.exe' -Algorithm SHA256).Hash.ToLower()
+```
+
+With Go installed, `go install github.com/etak64n/kickd/cmd/kickd@latest` builds `kickd.exe` into `$(go env GOPATH)\bin` instead.
+Copy that file to `C:\Program Files\kickd\kickd.exe`.
+
 The service definition records the path of the executable that installed it.
 Move the executable to its final place before installing the service.
 
 Windows marks files downloaded with a browser or received in a chat as coming from the internet.
-SmartScreen may block a marked executable when it starts.
-For a downloaded file, remove the mark:
+SmartScreen may block a marked executable when it starts, because the kickd executables are not signed with a code signing certificate.
+`Unblock-File` removes the mark, and does nothing to a file without one:
 
 ```powershell
 Unblock-File 'C:\Program Files\kickd\kickd.exe'
