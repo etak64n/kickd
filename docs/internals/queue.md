@@ -42,7 +42,8 @@ A transaction that takes the write lock at its beginning turns this into an ordi
 Two processes that create a new database at the same moment can still collide while they switch it to WAL mode.
 kickd retries the setup for up to 30 seconds in that case.
 
-On macOS and Linux, a new database file gets the permission 0600, readable and writable only by its owner, because runs hold payloads and command output.
+On macOS and Linux, kickd creates a new database file with the permission 0600, readable and writable only by its owner, before SQLite opens it, because runs hold payloads and command output.
+SQLite gives the `-wal` and `-shm` files that it creates next to the database the permissions of the database file, so they are private as well.
 The version of the table layout is stored in SQLite's `user_version` field, and a kickd that finds a newer version than it knows refuses to open the database.
 
 ## Tables

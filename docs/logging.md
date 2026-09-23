@@ -121,6 +121,9 @@ In command lines, command output and `stderrTail`, values that look like passwor
 The forms it recognizes include `Authorization: Bearer ...`, `password=...`, `--token ...` and `user:password@` in URLs.
 kickd cannot recognize secrets in other forms, so pass secrets to commands with `env` rather than as arguments.
 
+On macOS and Linux, kickd creates the log file with the permissions that the umask allows, usually 0644, so other users of the machine can read it.
+A failed run adds the end of its standard error to the log, and at the DEBUG level every line of output goes there too, so commands should not print secrets.
+
 ## Log file rotation
 
 When the file set by `log.file` grows past `log.max_size_mb`, kickd renames it to `kickd.log.1`.

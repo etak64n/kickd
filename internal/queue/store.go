@@ -13,6 +13,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -108,8 +109,15 @@ func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return nil, err
 	}
-	_, statErr := os.Stat(abs)
-	created := errors.Is(statErr, os.ErrNotExist)
+	// Create a new database file with owner-only permissions before SQLite
+	// opens it. SQLite gives the -wal and -shm files that it creates next
+	// to the database the permissions of the database file, and those
+	// files hold recent payloads and command output as well.
+	if f, err := os.OpenFile(abs, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
+		f.Close()
+	} else if !errors.Is(err, os.ErrExist) {
+		return nil, err
+	}
 
 	// Writes take the lock up front (_txlock=immediate) so that kickd and
 	// the command-line subcommands never deadlock upgrading a read lock;
@@ -144,11 +152,29 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("queue %s: %w", abs, err)
 	}
-	if created {
-		// Output and payloads can hold private data.
-		_ = os.Chmod(abs, 0o600)
-	}
+	tightenSidecars(abs)
 	return s, nil
+}
+
+// tightenSidecars narrows the permissions of the -wal and -shm files to
+// those of the database file. kickd v0.1.0 set the permissions of a new
+// database only after SQLite had created these files, so files that it
+// left behind can be readable by other users.
+func tightenSidecars(db string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	st, err := os.Stat(db)
+	if err != nil {
+		return
+	}
+	want := st.Mode().Perm()
+	for _, suffix := range []string{"-wal", "-shm"} {
+		p := db + suffix
+		if side, err := os.Stat(p); err == nil && side.Mode().Perm()&^want != 0 {
+			_ = os.Chmod(p, want)
+		}
+	}
 }
 
 // isBusy reports whether err is SQLITE_BUSY (the database is locked).
