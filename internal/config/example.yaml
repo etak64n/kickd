@@ -1,13 +1,3 @@
-# kickd configuration for macOS and Linux.
-# Every event has a name. kickd event NAME fires any event, and triggers
-# (cron, webhook, file) fire it automatically. kickd records every firing
-# as a run in its database, then starts the command of the run.
-# A relative path starts at the directory of this file, and ~ is the home
-# directory. Strings are in single quotes, which keep backslashes and
-# double quotes as they are.
-# Every key is described in
-# https://github.com/etak64n/kickd/blob/main/docs/config-keys.md
-
 log:
   path: 'LOG_PATH'   # without a path, kickd logs to standard error
   level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
@@ -17,54 +7,57 @@ log:
 
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the server starts only when an event has a webhook trigger
-  max_body_bytes: 1048576
+  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576    # the largest request body accepted
 
 database:
-  path: 'DATABASE_PATH'   # the SQLite file that records every run: waiting, running and finished
+  path: 'DATABASE_PATH'   # the SQLite file that records every run
   retention: 168h         # how long finished runs stay in the history
 
 events:
-  # Build a project 2 seconds after its sources stop changing.
-  - name: build
-    description: 'Build the project'   # shown by kickd events
-    command: ['make', 'build']   # a string, such as 'make build && make test', runs through the shell
-    workdir: '~/project'         # without it, the directory of this file
-    timeout: 10m                 # the longest time the command may run; without it, no limit
-    concurrency: queue           # skip | queue | parallel: what a firing does while the event runs
-    on_interrupt: rerun          # abandon | rerun: what happens to a run that a stop or a crash cut off
-    triggers:
-      - type: file
-        path: '~/project/src'
-        recursive: true
-        exclude: ['.git', 'node_modules']   # matched against every part of the path
-        debounce: 2s
-
-  # A nightly report. kickd event nightly-report also runs it.
-  - name: nightly-report
-    description: 'Write the nightly report'
-    command: 'python3 report.py >> report.log 2>&1'
-    workdir: '~/reports'
-    timeout: 30m
-    concurrency: skip
-    on_interrupt: abandon
+  # Cron: every night at 3:00, Tokyo time.
+  - name: backup
+    command: 'rsync -a ~/work/ ~/backup/work/'
+    workdir: '~'
+    timeout: 1h              # the longest time the command may run
+    concurrency: skip        # a firing while the backup runs is skipped
+    on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
-        schedule: '0 3 * * *'   # minute hour day month weekday; a leading seconds field is optional
+        schedule: '0 3 * * *'   # minute hour day month weekday
         timezone: Asia/Tokyo    # without it, local time
+        missed: run             # after sleep or downtime, run once for the missed times
 
-  # Deploy with kickd event deploy, or with POST /hooks/deploy.
+  # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
-    description: 'Deploy the app'
     command: ['./deploy.sh']
     workdir: '~/app'
     timeout: 10m
-    concurrency: queue
-    on_interrupt: abandon
+    concurrency: queue       # deploys wait for each other and run in order
+    on_interrupt: abandon    # a deploy that a stop or a crash cut off does not run again
     triggers:
       - type: webhook
         path: '/hooks/deploy'
         methods: [POST]
-        secret: 'change-me'        # HMAC-SHA256 in X-Hub-Signature-256, as GitHub sends it
-        # token: 'change-me'       # or a bearer token, the X-Kickd-Token header or ?token=
-        # wait: true               # respond after the run finishes, with its exit code and output
+        token: 'replace-with-a-long-random-string'
+
+  # File changes: 2 seconds after the last change in ~/app/src or below.
+  - name: build
+    command: ['make', 'build']
+    workdir: '~/app'
+    timeout: 10m
+    concurrency: queue       # changes during a build are built after it
+    on_interrupt: abandon    # the next change starts a new build
+    triggers:
+      - type: file
+        path: '~/app/src'
+        recursive: true      # also watch subdirectories
+        debounce: 2s
+
+  # No triggers: runs only by hand, with kickd event notify.
+  - name: notify
+    command: ['./notify.sh']
+    workdir: '~/app'
+    timeout: 1m
+    concurrency: parallel    # notifications do not wait for each other
+    on_interrupt: abandon

@@ -347,6 +347,7 @@ func cmdInit(args []string) error {
 	fmt.Printf("wrote %s\n", path)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 	fmt.Printf("Edit it, then run: kickd check -c %s\n", path)
+	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
 	return nil
 }
 

@@ -47,7 +47,7 @@ sudoedit /etc/kickd/config.yaml
 sudo kickd check -c /etc/kickd/config.yaml
 ```
 
-The example config defines three events.
+The example is the Linux config of the README, with four events, one for each kind of trigger.
 Delete the events that are not needed, and change the paths to match the machine.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 

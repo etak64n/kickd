@@ -52,7 +52,7 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 
 `kickd init` writes an example config to `~/Library/Application Support/kickd/config.yaml`.
 It puts the log of kickd in `~/Library/Logs/kickd/kickd.log`, and the database in `~/Library/Application Support/kickd/kickd.db`.
-The example defines three events.
+The example is the macOS config of the README, with four events, one for each kind of trigger.
 Delete the events that are not needed, and change the paths to match the Mac.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 

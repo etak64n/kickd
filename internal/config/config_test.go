@@ -37,8 +37,8 @@ func TestExampleDecodes(t *testing.T) {
 			if err := dec.Decode(&cfg); err != nil {
 				t.Fatalf("%s example does not decode: %v", goos, err)
 			}
-			if len(cfg.Events) != 3 {
-				t.Fatalf("%s: events = %d, want 3", goos, len(cfg.Events))
+			if len(cfg.Events) != 4 {
+				t.Fatalf("%s: events = %d, want 4, one for each kind of trigger and one without", goos, len(cfg.Events))
 			}
 			want := PathsFor(goos, system)
 			if cfg.Log.Path != want.Log || cfg.Database.Path != want.Database {

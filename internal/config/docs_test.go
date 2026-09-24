@@ -99,3 +99,56 @@ func checkLoads(t *testing.T, name, path string) {
 		t.Errorf("%s: %v", name, err)
 	}
 }
+
+// TestReadmeShowsWhatInitWrites keeps the configs in the README the same as
+// the files that kickd init writes: in the home directory on macOS and
+// Linux, and in C:\ProgramData on Windows.
+func TestReadmeShowsWhatInitWrites(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := strings.ReplaceAll(string(b), "\r\n", "\n")
+	for _, c := range []struct {
+		summary, goos string
+		system        bool
+	}{
+		{"macOS", "darwin", false},
+		{"Linux", "linux", false},
+		{"Windows", "windows", true},
+	} {
+		_, rest, ok := strings.Cut(readme, "<summary>"+c.summary+"</summary>")
+		if ok {
+			_, rest, ok = strings.Cut(rest, "```yaml\n")
+		}
+		var got string
+		if ok {
+			got, _, ok = strings.Cut(rest, "```\n")
+		}
+		if !ok {
+			t.Errorf("the README has no YAML block under %s", c.summary)
+			continue
+		}
+		if want := Example(c.goos, c.system); got != want {
+			t.Errorf("the %s config in the README differs from what kickd init writes: %s", c.summary, firstDiff(got, want))
+		}
+	}
+}
+
+// firstDiff describes the first line where got and want differ.
+func firstDiff(got, want string) string {
+	g, w := strings.Split(got, "\n"), strings.Split(want, "\n")
+	for i := 0; i < len(g) || i < len(w); i++ {
+		var gl, wl string
+		if i < len(g) {
+			gl = g[i]
+		}
+		if i < len(w) {
+			wl = w[i]
+		}
+		if gl != wl {
+			return fmt.Sprintf("line %d is %q in the README and %q in kickd init", i+1, gl, wl)
+		}
+	}
+	return "no line differs"
+}

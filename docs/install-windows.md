@@ -63,8 +63,8 @@ notepad C:\ProgramData\kickd\config.yaml
 kickd check -c C:\ProgramData\kickd\config.yaml
 ```
 
-The example config defines three events.
-Their commands start the PowerShell scripts `build.ps1`, `report.ps1` and `deploy.ps1` in the working folders of the events, so write those scripts or replace the commands.
+The example is the Windows config of the README, with four events, one for each kind of trigger.
+Their commands start the PowerShell scripts `backup.ps1`, `deploy.ps1`, `build.ps1` and `notify.ps1` in the working folders of the events, so write those scripts or replace the commands.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.

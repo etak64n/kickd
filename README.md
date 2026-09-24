@@ -17,7 +17,7 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
-![kickd runs as a long-running process on macOS, Linux or Windows, and the service manager of the OS (launchd, systemd or Windows services) starts it and restarts it. Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event as a child process: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
+![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
 
 ## How kickd works
 
@@ -43,7 +43,9 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 A config file is YAML with four sections: `log`, `webhook`, `database` and `events`.
 Only `events` is required, and every other key has a default.
 Commands, shells and paths differ between operating systems, so a config file is written for one OS.
-These files define one event for each kind of trigger, and give the full paths of the log and the database:
+`kickd init` writes these files, the one for the OS that it runs on.
+The paths of the log and the database depend on where the config file is: these files have them for a config file in the home directory on macOS and Linux, and in `C:\ProgramData\kickd` on Windows.
+Each file defines one event for each kind of trigger:
 
 <details open>
 <summary>macOS</summary>
@@ -51,12 +53,19 @@ These files define one event for each kind of trigger, and give the full paths o
 ```yaml
 log:
   path: '~/Library/Logs/kickd/kickd.log'   # without a path, kickd logs to standard error
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
+  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
+  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
+  max_backups: 5       # how many renamed files to keep
+
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576    # the largest request body accepted
+
 database:
   path: '~/Library/Application Support/kickd/kickd.db'   # the SQLite file that records every run
-  retention: 168h            # how long finished runs stay in the history
+  retention: 168h         # how long finished runs stay in the history
 
 events:
   # Cron: every night at 3:00, Tokyo time.
@@ -68,9 +77,9 @@ events:
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
-        schedule: '0 3 * * *'
-        timezone: Asia/Tokyo
-        missed: run          # after sleep or downtime, run once for the missed times
+        schedule: '0 3 * * *'   # minute hour day month weekday
+        timezone: Asia/Tokyo    # without it, local time
+        missed: run             # after sleep or downtime, run once for the missed times
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -115,12 +124,19 @@ events:
 ```yaml
 log:
   path: '~/.local/state/kickd/kickd.log'   # without a path, kickd logs to standard error
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
+  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
+  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
+  max_backups: 5       # how many renamed files to keep
+
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576    # the largest request body accepted
+
 database:
   path: '~/.local/state/kickd/kickd.db'   # the SQLite file that records every run
-  retention: 168h            # how long finished runs stay in the history
+  retention: 168h         # how long finished runs stay in the history
 
 events:
   # Cron: every night at 3:00, Tokyo time.
@@ -132,9 +148,9 @@ events:
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
-        schedule: '0 3 * * *'
-        timezone: Asia/Tokyo
-        missed: run          # after sleep or downtime, run once for the missed times
+        schedule: '0 3 * * *'   # minute hour day month weekday
+        timezone: Asia/Tokyo    # without it, local time
+        missed: run             # after sleep or downtime, run once for the missed times
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -179,12 +195,19 @@ events:
 ```yaml
 log:
   path: 'C:\ProgramData\kickd\kickd.log'   # without a path, kickd logs to standard error
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
+  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
+  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
+  max_backups: 5       # how many renamed files to keep
+
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576    # the largest request body accepted
+
 database:
   path: 'C:\ProgramData\kickd\kickd.db'   # the SQLite file that records every run
-  retention: 168h            # how long finished runs stay in the history
+  retention: 168h         # how long finished runs stay in the history
 
 events:
   # Cron: every night at 3:00, Tokyo time.
@@ -196,9 +219,9 @@ events:
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
-        schedule: '0 3 * * *'
-        timezone: Asia/Tokyo
-        missed: run          # after sleep or downtime, run once for the missed times
+        schedule: '0 3 * * *'   # minute hour day month weekday
+        timezone: Asia/Tokyo    # without it, local time
+        missed: run             # after sleep or downtime, run once for the missed times
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
