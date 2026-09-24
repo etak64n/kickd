@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -306,6 +307,7 @@ func (m *machine) check() {
 	m.waitWho("a webhook request")
 
 	// The service manager starts kickd again after it crashes.
+	pid = m.waitAgent(0, "the agent runs", 60*time.Second)
 	killed := time.Now()
 	if runtime.GOOS == "windows" {
 		m.must("taskkill", "/F", "/PID", strconv.Itoa(pid))
@@ -324,6 +326,15 @@ func (m *machine) check() {
 
 	m.service("stop")
 	waitFor(t, "the service stops", 60*time.Second, func() bool { return m.agentPID() == 0 })
+	// The agent records its stop before its process ends; the next service
+	// needs the address of the webhook server.
+	waitFor(t, "the agent releases the webhook address", 60*time.Second, func() bool {
+		ln, err := net.Listen("tcp", "127.0.0.1:8787")
+		if err == nil {
+			ln.Close()
+		}
+		return err == nil
+	})
 	m.service("uninstall")
 	if _, _, code := m.kickd(append([]string{"service", "status"}, m.flags...)...); code == 0 {
 		t.Error("kickd service status succeeds after uninstall")
@@ -378,6 +389,22 @@ func (m *machine) waitWho(what string) {
 // diagnose describes the service and the end of its log, for a failure.
 func (m *machine) diagnose() string {
 	status, statusErr, _ := m.kickd(append([]string{"service", "status"}, m.flags...)...)
+	var manager, managerErr string
+	switch runtime.GOOS {
+	case "darwin":
+		errLog := "/var/log/kickd.err.log"
+		if m.flags != nil {
+			errLog = filepath.Join(m.home, "kickd.err.log")
+		}
+		manager, managerErr, _ = m.run("launchctl", "list", "kickd")
+		tail, _, _ := m.run("tail", "-n", "20", errLog)
+		manager += "\n" + errLog + ":\n" + tail
+	case "linux":
+		manager, managerErr, _ = m.run("systemctl", append(m.flags, "status", "kickd", "--no-pager")...)
+	case "windows":
+		manager, managerErr, _ = m.run("sc", "queryex", "kickd")
+	}
+	status += statusErr + "\nservice manager: " + manager + managerErr
 	var log string
 	if runtime.GOOS != "windows" {
 		log, _, _ = m.run("tail", "-n", "30", m.expand(m.logFile))
@@ -385,7 +412,7 @@ func (m *machine) diagnose() string {
 		lines := strings.Split(string(b), "\n")
 		log = strings.Join(lines[max(0, len(lines)-30):], "\n")
 	}
-	return "kickd service status: " + status + statusErr + "\nlog:\n" + log
+	return "kickd service status: " + status + "\nlog:\n" + log
 }
 
 // waitFor waits until ok reports true; on a timeout it fails the test with
