@@ -56,8 +56,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o kickd-linux-arm64 ./cmd/kickd
 ## Release builds
 
 Pushing a tag whose name starts with `v`, such as `v0.2.0`, starts the release workflow on GitHub Actions.
-The workflow runs the tests, builds the six executables with `scripts/build-all.sh`, and writes their SHA-256 hashes to `checksums.txt`.
-It then publishes the seven files as a release named after the tag.
+The workflow runs the tests and builds the six executables with `scripts/build-all.sh`.
+It adds `LICENSE`, and `THIRD_PARTY_LICENSES.txt` with the license texts of the Go standard library and of the Go modules that the executables include.
+It writes the SHA-256 hashes of all these files to `checksums.txt`, and publishes the files as a release named after the tag.
 The workflow builds with the latest Go release, so release executables include its security fixes.
 
 ```sh

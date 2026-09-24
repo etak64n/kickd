@@ -28,9 +28,16 @@ jobs:
       - name: Build
         run: ./scripts/build-all.sh "$GITHUB_REF_NAME"
 
+      # The executables include the Go standard library and third-party Go
+      # modules, whose licenses ask for their texts to travel with them.
+      - name: Licenses
+        run: |
+          cp LICENSE dist/LICENSE
+          ./scripts/third-party-licenses.sh > dist/THIRD_PARTY_LICENSES.txt
+
       - name: Checksums
         working-directory: dist
-        run: sha256sum kickd-* > checksums.txt
+        run: sha256sum kickd-* LICENSE THIRD_PARTY_LICENSES.txt > checksums.txt
 
       - name: Publish
         env:

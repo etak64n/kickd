@@ -39,6 +39,10 @@ jobs:
         if: runner.os == 'Linux'
         run: ./scripts/build-all.sh
 
+      - name: Third-party licenses
+        if: runner.os == 'Linux'
+        run: ./scripts/third-party-licenses.sh > /dev/null
+
       # Windows has no IANA time zone database, so kickd embeds one.
       - name: Embedded time zone data
         if: runner.os == 'Linux'
