@@ -42,13 +42,12 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 
 A config file is YAML with five sections: `base_dir`, `log`, `webhook`, `database` and `events`.
 Only `events` is required, and every other key has a default.
-This file defines one event for each kind of trigger:
+This file, for macOS and Linux, defines one event for each kind of trigger:
 
 ```yaml
 base_dir:                    # where the log and the database go on each OS
   macos: '~/Library/Application Support/kickd'
   linux: '~/.local/state/kickd'
-  windows: '~\AppData\Local\kickd'
 log:
   path: 'kickd.log'          # base_dir/kickd.log; without a path, kickd logs to standard error
 webhook:
@@ -105,6 +104,7 @@ events:
 ```
 
 A relative `log.path` or `database.path` starts at the `base_dir` of the OS that kickd runs on, and every other relative path starts at the directory of the config file.
+Commands, shells and paths differ between operating systems, so each OS gets a config file of its own: on Windows, `shell` runs with cmd, and [examples/windows-mirror.yaml](examples/windows-mirror.yaml) is a complete config for Windows.
 Strings are in single quotes, which keep backslashes and double quotes as they are; double quotes appear only inside shell commands.
 
 `kickd check` validates a config file, lists its events and triggers, and prints where the log and the database go.

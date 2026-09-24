@@ -52,7 +52,7 @@ On a Mac, this file puts the log at `~/Library/Application Support/kickd/kickd.l
 Without a `base_dir` entry for the OS, the two files start at the directory of the config file, as every other relative path in the file does.
 Without `log.path`, kickd writes its log to standard error, and without `database.path`, the database is `kickd.db`.
 
-`kickd init` fills in `base_dir` with the usual places of the OS.
+`kickd init` writes the `base_dir` entry of the OS that it runs on, with the usual place of that OS.
 A config file inside the home directory is taken for a user's kickd, and one outside it, such as `/etc/kickd/config.yaml`, for a service of the whole system:
 
 | OS | For a user | For the whole system |
@@ -62,6 +62,27 @@ A config file inside the home directory is taken for a user's kickd, and one out
 | Windows | `~\AppData\Local\kickd` | `C:\ProgramData\kickd` |
 
 `kickd check` prints the resolved paths of the log and the database.
+
+## One config file for each OS
+
+The events of a config file are written for one OS.
+The shell differs, `/bin/sh` on macOS and Linux and cmd on Windows, and so do the programs that commands call and the absolute paths of folders.
+kickd does not translate commands between operating systems, so each OS gets a config file of its own.
+`kickd init` writes an example for the OS that it runs on: with shell commands on macOS and Linux, and with PowerShell scripts on Windows.
+
+To keep the files for several machines in one place, such as a repository of dotfiles, name them after their OS and give the one for the machine with `-c` or `KICKD_CONFIG`:
+
+```sh
+kickd run -c ~/dotfiles/kickd/kickd.macos.yaml
+```
+
+A few things already work the same on every OS:
+
+- A leading `~` is the home directory, and `/` separates folders on Windows too.
+- `${VAR}` in a path expands to the environment variable `VAR`.
+- `command` starts a program without a shell, so its arguments need no quoting for sh or cmd.
+
+A `base_dir` entry for another OS has no effect, so a file copied to another OS keeps its log and database next to the config file instead of in a folder of the wrong OS.
 
 ## Defining events
 

@@ -29,20 +29,27 @@ func noLogEnv(t *testing.T) {
 func TestExampleDecodes(t *testing.T) {
 	// The example refers to directories that only exist on a real machine,
 	// so only check that every key is known and that every OS has a base.
-	for _, system := range []bool{false, true} {
-		dec := yaml.NewDecoder(strings.NewReader(Example(system)))
-		dec.KnownFields(true)
-		var cfg Config
-		if err := dec.Decode(&cfg); err != nil {
-			t.Fatalf("example config does not decode: %v", err)
-		}
-		if len(cfg.Events) != 3 {
-			t.Fatalf("events = %d, want 3", len(cfg.Events))
-		}
-		for _, goos := range []string{"darwin", "linux", "windows"} {
-			b := cfg.BaseDir.For(goos)
-			if b == "" || system == strings.HasPrefix(b, "~") {
-				t.Errorf("system %v: base_dir for %s is %q", system, goos, b)
+	oses := []string{"darwin", "linux", "windows"}
+	for _, goos := range oses {
+		for _, system := range []bool{false, true} {
+			dec := yaml.NewDecoder(strings.NewReader(Example(goos, system)))
+			dec.KnownFields(true)
+			var cfg Config
+			if err := dec.Decode(&cfg); err != nil {
+				t.Fatalf("%s example does not decode: %v", goos, err)
+			}
+			if len(cfg.Events) != 3 {
+				t.Fatalf("%s: events = %d, want 3", goos, len(cfg.Events))
+			}
+			// Only the OS of the example has a base directory.
+			for _, other := range oses {
+				b := cfg.BaseDir.For(other)
+				if other == goos && (b == "" || system == strings.HasPrefix(b, "~")) || other != goos && b != "" {
+					t.Errorf("%s example, system %v: base_dir for %s is %q", goos, system, other, b)
+				}
+			}
+			if windows := cfg.Events[0].Command[0] == "powershell"; windows != (goos == "windows") {
+				t.Errorf("%s example starts %v", goos, cfg.Events[0].Command)
 			}
 		}
 	}

@@ -331,7 +331,7 @@ func cmdInit(args []string) error {
 		return err
 	}
 	system := initForSystem(path)
-	if err := os.WriteFile(path, []byte(config.Example(system)), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(config.Example(runtime.GOOS, system)), 0o600); err != nil {
 		return err
 	}
 	kind := "a user"

@@ -1,13 +1,15 @@
-# kickd configuration for macOS and Linux.
+# kickd configuration for Windows.
 # Every event has a name. kickd event NAME fires any event, and triggers
 # (cron, webhook, file) fire it automatically. kickd records every firing
 # as a run in its database, then starts the command of the run.
-# ~ is the home directory. Strings are in single quotes, which keep
+# ~ is the home folder. Strings are in single quotes, which keep
 # backslashes and double quotes as they are.
+# A shell string runs with cmd /S /C. These events start PowerShell with
+# command instead, which passes every argument as it is.
 
 # kickd keeps its log and its database in base_dir: a relative log.path or
-# database.path starts there. Other relative paths start at the directory
-# of this file. kickd check shows where the files go.
+# database.path starts there. Other relative paths start at the folder of
+# this file. kickd check shows where the files go.
 base_dir:
   OS_KEY: 'BASE_DIR'
 
@@ -30,23 +32,23 @@ database:
 events:
   # Build a project 2 seconds after its sources stop changing.
   - name: build
-    command: ['make', 'build']   # shell: '...' runs a string through the shell instead
-    workdir: '~/project'
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    workdir: '~\project'
     timeout: 10m
     concurrency: queue       # skip | queue | parallel: what a firing does while the event runs
     on_interrupt: rerun      # abandon | rerun: what happens to a run that a stop or a crash cut off
     max_attempts: 3          # with rerun: give up after this many runs of one firing
     triggers:
       - type: file
-        path: '~/project/src'
+        path: '~\project\src'
         recursive: true
-        exclude: ['.git', 'node_modules']   # matched against every part of the path
+        exclude: ['.git', 'bin', 'obj']   # matched against every part of the path
         debounce: 2s
 
   # A nightly report. kickd event nightly-report also runs it.
   - name: nightly-report
-    shell: 'python3 report.py >> report.log 2>&1'
-    workdir: '~/reports'
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'report.ps1']
+    workdir: '~\reports'
     env:
       REPORT_MODE: nightly
     triggers:
@@ -55,12 +57,13 @@ events:
         timezone: Asia/Tokyo    # without it, local time
 
   # Deploy with kickd event deploy ref=v1.2, or with POST /hooks/deploy?ref=v1.2.
-  # The payload JSON (parameters, request body, headers) is in the file
-  # $KICKD_PAYLOAD_FILE and, with stdin: payload, on standard input.
+  # The script reads the ref as $env:KICKD_DATA_REF. The payload JSON
+  # (parameters, request body, headers) is in the file $env:KICKD_PAYLOAD_FILE
+  # and, with stdin: payload, on standard input.
   - name: deploy
     description: 'Deploy the app'
-    command: ['./deploy.sh']
-    workdir: '~/app'
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    workdir: '~\app'
     stdin: payload
     concurrency: queue
     params:                  # optional; when given, only these keys are accepted

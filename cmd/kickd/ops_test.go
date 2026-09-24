@@ -236,11 +236,11 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 		if err := cmdInit([]string{"-c", c.path}); err != nil {
 			t.Fatal(err)
 		}
-		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.Example(c.system) {
+		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.Example(runtime.GOOS, c.system) {
 			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
 		}
 	}
-	if config.Example(true) == config.Example(false) || !strings.Contains(config.Example(true), "/var/lib/kickd") {
+	if config.Example("linux", true) == config.Example("linux", false) || !strings.Contains(config.Example("linux", true), "/var/lib/kickd") {
 		t.Fatal("the system example must have its own base_dir")
 	}
 	path := user

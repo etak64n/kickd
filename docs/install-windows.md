@@ -64,7 +64,7 @@ kickd check -c C:\ProgramData\kickd\config.yaml
 ```
 
 The example config defines three events.
-Their commands are written for macOS and Linux, so replace them with commands that work on Windows.
+Their commands start the PowerShell scripts `build.ps1`, `report.ps1` and `deploy.ps1` in the working folders of the events, so write those scripts or replace the commands.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.

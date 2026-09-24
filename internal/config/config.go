@@ -19,37 +19,44 @@ import (
 	"github.com/etak64n/kickd/internal/trigger"
 )
 
-//go:embed example.yaml
-var exampleFile string
-
-// example is exampleFile with Unix line endings, which a checkout on
-// Windows can turn into CRLF.
-var example = strings.ReplaceAll(exampleFile, "\r\n", "\n")
-
-// userBaseDir and systemBaseDir are the base_dir sections of Example: the
-// usual places for the files of a user's program, and of a service that
-// runs for the whole system.
-const (
-	userBaseDir = `base_dir:
-  macos: '~/Library/Application Support/kickd'
-  linux: '~/.local/state/kickd'
-  windows: '~\AppData\Local\kickd'
-`
-	systemBaseDir = `base_dir:
-  macos: '/Library/Application Support/kickd'
-  linux: '/var/lib/kickd'
-  windows: 'C:\ProgramData\kickd'
-`
+// The examples that "kickd init" writes: one with shell commands for macOS
+// and Linux, and one with PowerShell commands for Windows.
+var (
+	//go:embed example.yaml
+	exampleUnix string
+	//go:embed example-windows.yaml
+	exampleWindows string
 )
 
-// Example returns the annotated configuration that "kickd init" writes,
-// with the base directories of a system-wide service when system is true,
-// and those of a user otherwise.
-func Example(system bool) string {
-	if !system {
-		return example
+// initBaseDirs are the base directories that "kickd init" writes for each
+// OS: the usual places for the files of a user's program, and those of a
+// service for the whole system.
+var initBaseDirs = map[string]struct{ key, user, system string }{
+	"darwin":  {"macos", "~/Library/Application Support/kickd", "/Library/Application Support/kickd"},
+	"linux":   {"linux", "~/.local/state/kickd", "/var/lib/kickd"},
+	"windows": {"windows", `~\AppData\Local\kickd`, `C:\ProgramData\kickd`},
+}
+
+// Example returns the annotated configuration that "kickd init" writes on
+// the OS goos, as runtime.GOOS names it: with commands for Windows or for
+// macOS and Linux, and with the base directory of goos, for a service of
+// the whole system when system is true and for a user otherwise.
+func Example(goos string, system bool) string {
+	text := exampleUnix
+	if goos == "windows" {
+		text = exampleWindows
 	}
-	return strings.Replace(example, userBaseDir, systemBaseDir, 1)
+	// A checkout on Windows can turn the line endings into CRLF.
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	b, ok := initBaseDirs[goos]
+	if !ok {
+		b = initBaseDirs["linux"]
+	}
+	dir := b.user
+	if system {
+		dir = b.system
+	}
+	return strings.Replace(text, "  OS_KEY: 'BASE_DIR'\n", "  "+b.key+": '"+dir+"'\n", 1)
 }
 
 // Concurrency policies.
