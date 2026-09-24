@@ -20,6 +20,11 @@ func TestParseSchedule(t *testing.T) {
 		{"@hourly", "Asia/Tokyo"},
 		{"30 9 * * 1-5", "Asia/Tokyo"},
 		{"CRON_TZ=UTC 0 0 * * *", ""},
+		// Forms that gocron v0.2.0 added.
+		{"0 0 L * *", "UTC"},
+		{"0 9 * * mon#1", "Asia/Tokyo"},
+		{"0 18 * * 5L", ""},
+		{"0 0 * * 7", ""},
 	}
 	for _, c := range valid {
 		if _, err := ParseSchedule(c.spec, c.tz); err != nil {

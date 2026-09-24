@@ -5,7 +5,7 @@ Go standard library and the Go modules below, under their own licenses.
 
 - Go standard library
 - github.com/dustin/go-humanize v1.0.1
-- github.com/etak64n/gocron v0.1.0
+- github.com/etak64n/gocron v0.2.0
 - github.com/fsnotify/fsnotify v1.10.1
 - github.com/google/uuid v1.6.0
 - github.com/kardianos/service v1.3.0
@@ -105,7 +105,7 @@ SOFTWARE.
 <http://www.opensource.org/licenses/mit-license.php>
 
 ================================================================================
-github.com/etak64n/gocron v0.1.0: LICENSE
+github.com/etak64n/gocron v0.2.0: LICENSE
 ================================================================================
 
 MIT License

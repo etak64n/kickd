@@ -57,7 +57,7 @@ A kickd running as a service has the directory of its config file as its working
 | Key | Description |
 |---|---|
 | `type` | `cron`, required |
-| `schedule` | A cron expression with five fields: minute, hour, day of month, month and day of week. A six-field form with a leading seconds field, and forms such as `@hourly`, `@daily` and `@every 10m`, also work. Required. |
+| `schedule` | A cron expression with five fields: minute, hour, day of month, month and day of week. A six-field form with a leading seconds field, and forms such as `@hourly`, `@daily` and `@every 10m`, also work. The day fields also take `L` for the last day of the month, `15W` for the weekday nearest to the 15th, `5L` for the last Friday and `fri#3` for the third Friday, and `7` is Sunday as `0` is. The [gocron README](https://github.com/etak64n/gocron#expressions) describes every form. Required. |
 | `timezone` | A time zone name such as `Asia/Tokyo`. Without it, the local time of the machine applies. |
 | `missed` | What happens to scheduled times that passed while the machine slept or kickd was stopped: `run` (default) runs once right after the machine wakes or kickd starts, however many times passed; `skip` waits for the next scheduled time. A scheduled time counts as missed when kickd notices it more than a minute late. |
 
