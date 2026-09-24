@@ -1,0 +1,22 @@
+# Checks the dependencies and the Go standard library for known
+# vulnerabilities with govulncheck, the checker of the Go team. It runs for
+# every push to main and every pull request, and once a week, because
+# vulnerabilities are published after the code was written.
+name: Vulnerabilities
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: golang/govulncheck-action@v1
