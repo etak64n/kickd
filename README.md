@@ -17,7 +17,7 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
+![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. The kickd agent runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
 
 ## How kickd works
 
