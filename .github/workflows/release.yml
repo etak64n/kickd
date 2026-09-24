@@ -1,5 +1,5 @@
 # Builds kickd for every supported platform when a version tag is pushed,
-# and publishes the executables with their SHA-256 checksums as a release.
+# and publishes the executables as a release.
 name: Release
 
 on:
@@ -25,21 +25,16 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # "kickd licenses" prints the licenses that the executables must carry,
+      # so a release must not build from an outdated list.
+      - name: Licenses
+        run: ./scripts/third-party-licenses.sh --check
+
       - name: Build
         run: ./scripts/build-all.sh "$GITHUB_REF_NAME"
 
-      # The executables include the Go standard library and third-party Go
-      # modules, whose licenses ask for their texts to travel with them.
-      - name: Licenses
-        run: |
-          cp LICENSE dist/LICENSE
-          ./scripts/third-party-licenses.sh > dist/THIRD_PARTY_LICENSES.txt
-
-      - name: Checksums
-        working-directory: dist
-        run: sha256sum kickd-* LICENSE THIRD_PARTY_LICENSES.txt > checksums.txt
-
+      # GitHub shows the SHA-256 digest of every file on the release page.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "kickd $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" dist/kickd-* --title "kickd $GITHUB_REF_NAME" --generate-notes --verify-tag

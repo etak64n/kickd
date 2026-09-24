@@ -28,6 +28,7 @@ The queue subcommands read and write the database named in the config file direc
 | `kickd show RUN_ID` | Shows one run: its details, parameters and command output. |
 | `kickd cancel RUN_ID` | Cancels a queued run, or stops a running one. |
 | `kickd status` | Shows whether the agent is running, and how many runs are waiting. |
+| `kickd licenses` | Prints the licenses of kickd and of the third-party software that its executables include. |
 | `kickd version` | Prints the version. |
 
 `kickd service` takes two more options:

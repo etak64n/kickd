@@ -24,6 +24,7 @@ import (
 	"github.com/etak64n/kickd/internal/agent"
 	"github.com/etak64n/kickd/internal/config"
 	"github.com/etak64n/kickd/internal/event"
+	"github.com/etak64n/kickd/internal/licenses"
 	"github.com/etak64n/kickd/internal/logging"
 )
 
@@ -44,6 +45,7 @@ Usage:
   kickd init    [-c CONFIG]                Write an example config
   kickd service ACTION [-c CONFIG] [--user] [--name NAME]
                 ACTION: install | uninstall | start | stop | restart | status
+  kickd licenses                           Print the licenses of kickd and of the software it includes
   kickd version
 
 Every command takes -c CONFIG. The config is found in this order:
@@ -69,6 +71,8 @@ func main() {
 		err = cmdService(os.Args[2:])
 	case "event", "events", "queue", "runs", "show", "cancel", "status":
 		os.Exit(runOps(os.Args[1:], os.Stdout, os.Stderr))
+	case "licenses":
+		fmt.Print(licenses.Text)
 	case "version", "-v", "--version":
 		fmt.Println("kickd " + version)
 	case "help", "-h", "--help":

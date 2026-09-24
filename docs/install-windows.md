@@ -30,12 +30,10 @@ $p = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 
 PowerShell windows opened after this find `kickd` by name.
 
-`checksums.txt` on the releases page lists the SHA-256 hash of every file.
-These commands print the hash listed for the file and the hash of the downloaded file, and the two must match:
+The releases page shows the SHA-256 digest of every file.
+This command prints the SHA-256 hash of the downloaded file, which must match the digest on the page:
 
 ```powershell
-Invoke-WebRequest https://github.com/etak64n/kickd/releases/latest/download/checksums.txt -OutFile checksums.txt
-Select-String 'kickd-windows-amd64.exe' checksums.txt
 (Get-FileHash 'C:\Program Files\kickd\kickd.exe' -Algorithm SHA256).Hash.ToLower()
 ```
 

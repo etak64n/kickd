@@ -14,7 +14,9 @@ go vet ./...               # static checks
 GitHub Actions runs `go vet` and the tests on Linux, macOS and Windows for every push to `main` and every pull request.
 On Linux, it also runs the tests with the race detector, builds kickd for every platform, and runs the tests with the oldest Go version that `go.mod` allows.
 
-Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them with `LICENSE`, `THIRD_PARTY_LICENSES.txt` and `checksums.txt`.
+Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
+
+After a change to the dependencies in `go.mod`, run `./scripts/third-party-licenses.sh` and commit `internal/licenses/licenses.txt`, the text that `kickd licenses` prints. CI fails while that file is out of date.
 
 ```sh
 git tag v0.2.0
@@ -32,6 +34,7 @@ internal/trigger/   Cron (robfig/cron), webhooks (net/http), file watching (fsno
 internal/agent/     Builds the triggers and the queue consumer from the config, and reloads the config
 internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
-scripts/            build-all.sh, the cross build for every platform; third-party-licenses.sh, the license texts for releases
+internal/licenses/  The license texts that kickd licenses prints
+scripts/            build-all.sh, the cross build for every platform; third-party-licenses.sh, the list of licenses
 .github/workflows/  ci.yml, the tests on every OS; release.yml, the release workflow
 ```

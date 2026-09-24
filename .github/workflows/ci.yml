@@ -39,9 +39,13 @@ jobs:
         if: runner.os == 'Linux'
         run: ./scripts/build-all.sh
 
-      - name: Third-party licenses
+      # internal/licenses/licenses.txt must list the current dependencies,
+      # and its copy of the Go license must match the official distribution.
+      - name: Licenses
         if: runner.os == 'Linux'
-        run: ./scripts/third-party-licenses.sh > /dev/null
+        run: |
+          ./scripts/third-party-licenses.sh --check
+          cmp internal/licenses/go-stdlib-LICENSE "$(go env GOROOT)/LICENSE"
 
       # Windows has no IANA time zone database, so kickd embeds one.
       - name: Embedded time zone data

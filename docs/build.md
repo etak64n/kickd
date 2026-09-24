@@ -56,9 +56,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o kickd-linux-arm64 ./cmd/kickd
 ## Release builds
 
 Pushing a tag whose name starts with `v`, such as `v0.2.0`, starts the release workflow on GitHub Actions.
-The workflow runs the tests and builds the six executables with `scripts/build-all.sh`.
-It adds `LICENSE`, and `THIRD_PARTY_LICENSES.txt` with the license texts of the Go standard library and of the Go modules that the executables include.
-It writes the SHA-256 hashes of all these files to `checksums.txt`, and publishes the files as a release named after the tag.
+The workflow runs the tests, checks that the list of licenses is current, builds the six executables with `scripts/build-all.sh`, and publishes them as a release named after the tag.
+GitHub shows the SHA-256 digest of every file on the release page.
 The workflow builds with the latest Go release, so release executables include its security fixes.
 
 ```sh
@@ -67,6 +66,16 @@ git push origin v0.2.0
 ```
 
 The file names carry no version, so `https://github.com/etak64n/kickd/releases/latest/download/<file>` always points to the file of the latest release.
+
+## Licenses
+
+The executables include the Go standard library and third-party Go modules, and their licenses ask for their texts to come with binary copies.
+`kickd licenses` prints them, together with the license of kickd.
+The text is `internal/licenses/licenses.txt`, which the build embeds into the executable, so builds made with `go install` carry it too.
+
+`scripts/third-party-licenses.sh` writes that file from the modules that the release platforms link.
+After a change to the dependencies in `go.mod`, run the script and commit the file.
+CI fails while the file does not match the dependencies.
 
 ## Version
 

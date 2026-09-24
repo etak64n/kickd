@@ -1,20 +1,15 @@
 #!/bin/sh
-# Prints the licenses of the third-party software in the kickd executables:
-# the Go standard library, and every Go module that any release platform
-# links into kickd. The release workflow attaches the output to each
-# release as THIRD_PARTY_LICENSES.txt.
+# Writes internal/licenses/licenses.txt, the text that "kickd licenses"
+# prints: the license of kickd, of the Go standard library, and of every
+# Go module that any release platform links into kickd. Run it after a
+# change to the dependencies in go.mod.
 #
-# The Go license is read from $(go env GOROOT)/LICENSE, which the official
-# Go distributions include.
+# With --check, it writes nothing and fails when the file is out of date.
 set -eu
 cd "$(dirname "$0")/.."
-
-goroot=$(go env GOROOT)
-gover=$(go env GOVERSION)
-if [ ! -f "$goroot/LICENSE" ]; then
-  echo "third-party-licenses.sh: $goroot/LICENSE not found; use an official Go distribution" >&2
-  exit 1
-fi
+out=internal/licenses/licenses.txt
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
 
 modules=$(
   for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
@@ -24,6 +19,13 @@ modules=$(
 )
 
 rule='================================================================================'
+
+# section NAME FILE prints one license file under a heading.
+section() {
+  printf '%s\n%s\n%s\n\n' "$rule" "$1" "$rule"
+  cat "$2"
+  printf '\n'
+}
 
 # licenses NAME DIR prints every license, notice and patent file in DIR.
 licenses() {
@@ -35,9 +37,7 @@ licenses() {
       licen[cs]e* | copying* | notice* | patents*) ;;
       *) continue ;;
     esac
-    printf '%s\n%s: %s\n%s\n\n' "$rule" "$1" "$base" "$rule"
-    cat "$f"
-    printf '\n'
+    section "$1: $base" "$f"
     found=1
   done
   if [ "$found" = 0 ]; then
@@ -46,18 +46,31 @@ licenses() {
   fi
 }
 
-echo "Third-party software in kickd"
-echo
-echo "The kickd executables include the Go standard library and the Go modules"
-echo "below. Their license files follow, as each project ships them."
-echo
-echo "- Go standard library $gover"
-for m in $modules; do
-  echo "- ${m%@*} ${m#*@}"
-done
-echo
+{
+  echo "Licenses of kickd"
+  echo
+  echo "kickd is released under the MIT License. Its executables also include the"
+  echo "Go standard library and the Go modules below, under their own licenses."
+  echo
+  echo "- Go standard library"
+  for m in $modules; do
+    echo "- ${m%@*} ${m#*@}"
+  done
+  echo
+  section "kickd: LICENSE" LICENSE
+  # A copy of the LICENSE file of the official Go distributions; CI checks
+  # that it still matches.
+  section "Go standard library: LICENSE" internal/licenses/go-stdlib-LICENSE
+  for m in $modules; do
+    licenses "${m%@*} ${m#*@}" "$(go list -m -f '{{.Dir}}' "${m%@*}")"
+  done
+} > "$tmp"
 
-licenses "Go standard library $gover" "$goroot"
-for m in $modules; do
-  licenses "${m%@*} ${m#*@}" "$(go list -m -f '{{.Dir}}' "${m%@*}")"
-done
+if [ "${1:-}" = --check ]; then
+  if ! cmp -s "$tmp" "$out"; then
+    echo "third-party-licenses.sh: $out is out of date; run scripts/third-party-licenses.sh" >&2
+    exit 1
+  fi
+  exit 0
+fi
+mv "$tmp" "$out"

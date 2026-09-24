@@ -17,13 +17,12 @@ Put the `kickd` executable in `/usr/local/bin`.
 `/usr/local/bin` is on the default `PATH` of macOS, so `kickd` works from any directory.
 
 The releases page of kickd has an executable for each kind of Mac: `kickd-darwin-arm64` for Apple silicon, and `kickd-darwin-amd64` for an Intel CPU.
-`checksums.txt` on the same page lists the SHA-256 hash of every file.
-These commands download the executable for Apple silicon, check it, and install it:
+The page also shows the SHA-256 digest of every file.
+These commands download the executable for Apple silicon, print its SHA-256 hash to compare with the digest on the page, and install it:
 
 ```sh
 curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-darwin-arm64
-curl -fLO https://github.com/etak64n/kickd/releases/latest/download/checksums.txt
-shasum -a 256 -c --ignore-missing checksums.txt
+shasum -a 256 kickd-darwin-arm64
 sudo mkdir -p /usr/local/bin
 sudo install -m 755 kickd-darwin-arm64 /usr/local/bin/kickd
 kickd version
