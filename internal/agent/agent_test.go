@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,11 +38,41 @@ func quietLogger() *slog.Logger {
 
 func startAgent(t *testing.T, cfgPath string) (context.CancelFunc, chan error) {
 	t.Helper()
+	return startAgentWith(t, cfgPath, quietLogger())
+}
+
+func startAgentWith(t *testing.T, cfgPath string, log *slog.Logger) (context.CancelFunc, chan error) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Run(ctx, quietLogger(), Options{ConfigPath: cfgPath, Version: "test"}) }()
+	go func() { done <- Run(ctx, log, Options{ConfigPath: cfgPath, Version: "test"}) }()
 	return cancel, done
 }
+
+// watchLogger returns a logger that drops its records, and a channel that
+// is closed once a file trigger of an event watches its directory.
+func watchLogger() (*slog.Logger, <-chan struct{}) {
+	h := &watchHandler{started: make(chan struct{})}
+	return slog.New(h), h.started
+}
+
+type watchHandler struct {
+	once    sync.Once
+	started chan struct{}
+}
+
+func (h *watchHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *watchHandler) Handle(_ context.Context, r slog.Record) error {
+	// The watcher of the config file logs the same message at DEBUG.
+	if r.Message == "File watch started" && r.Level == slog.LevelInfo {
+		h.once.Do(func() { close(h.started) })
+	}
+	return nil
+}
+
+func (h *watchHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *watchHandler) WithGroup(string) slog.Handler      { return h }
 
 func stopAgent(t *testing.T, cancel context.CancelFunc, done chan error) {
 	t.Helper()
@@ -123,8 +154,13 @@ func TestAgentRunsTriggersAndReloads(t *testing.T) {
 	base := "events:\n  - name: on-change\n" + helperEvent("append", outA, "HELPER_TEXT", "changed") +
 		"    triggers:\n      - {type: file, path: in, include: ['*.md'], debounce: 100ms}\n"
 	writeFile(t, cfgPath, base)
-	cancel, done := startAgent(t, cfgPath)
-	time.Sleep(300 * time.Millisecond)
+	log, watching := watchLogger()
+	cancel, done := startAgentWith(t, cfgPath, log)
+	select {
+	case <-watching:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the file trigger did not start watching")
+	}
 
 	writeFile(t, filepath.Join(watch, "note.md"), "hi")
 	waitForFile(t, filepath.Join(dir, "a.txt"), "changed", 10*time.Second)

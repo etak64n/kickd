@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,7 +48,8 @@ func (c *collector) none(t *testing.T, d time.Duration) {
 
 func startWatcher(t *testing.T, w *FileWatcher) *collector {
 	t.Helper()
-	w.Logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	log, started := watchLogger()
+	w.Logger = log
 	c := newCollector()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -58,9 +60,52 @@ func startWatcher(t *testing.T, w *FileWatcher) *collector {
 			t.Errorf("watcher returned %v", err)
 		}
 	})
-	// Give the watcher a moment to register on platforms that need it.
-	time.Sleep(100 * time.Millisecond)
+	waitStarted(t, started)
 	return c
+}
+
+// watchLogger returns a logger that prints warnings, and a channel that is
+// closed once the watcher watches its directory.
+func watchLogger() (*slog.Logger, <-chan struct{}) {
+	h := startedHandler{next: slog.NewTextHandler(os.Stderr, nil), once: new(sync.Once), started: make(chan struct{})}
+	return slog.New(h), h.started
+}
+
+func waitStarted(t *testing.T, started <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the watcher did not start")
+	}
+}
+
+type startedHandler struct {
+	next    slog.Handler
+	once    *sync.Once
+	started chan struct{}
+}
+
+func (h startedHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h startedHandler) Handle(ctx context.Context, r slog.Record) error {
+	if r.Message == "File watch started" {
+		h.once.Do(func() { close(h.started) })
+	}
+	if r.Level < slog.LevelWarn {
+		return nil
+	}
+	return h.next.Handle(ctx, r)
+}
+
+func (h startedHandler) WithAttrs(as []slog.Attr) slog.Handler {
+	h.next = h.next.WithAttrs(as)
+	return h
+}
+
+func (h startedHandler) WithGroup(g string) slog.Handler {
+	h.next = h.next.WithGroup(g)
+	return h
 }
 
 func touch(t *testing.T, p string) {
@@ -200,13 +245,13 @@ func TestFileWatcherReportsFilesOfMovedInDirectory(t *testing.T) {
 
 func TestFileWatcherDiscardsPendingChangesOnStop(t *testing.T) {
 	dir := t.TempDir()
-	w := &FileWatcher{Event: "j", Root: dir, Ops: []string{"create"}, Debounce: time.Second,
-		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	log, started := watchLogger()
+	w := &FileWatcher{Event: "j", Root: dir, Ops: []string{"create"}, Debounce: time.Second, Logger: log}
 	c := newCollector()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- w.Run(ctx, c) }()
-	time.Sleep(100 * time.Millisecond)
+	waitStarted(t, started)
 	touch(t, filepath.Join(dir, "a.txt"))
 	time.Sleep(300 * time.Millisecond) // collected, but the debounce time has not passed
 	cancel()
