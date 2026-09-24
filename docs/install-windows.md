@@ -72,14 +72,14 @@ The queue is created next to the config file, as `C:\ProgramData\kickd\kickd.db`
 A database created by the service belongs to administrators and SYSTEM, so run `kickd event` and the other queue commands in an administrator PowerShell as well.
 
 In a double-quoted YAML string, a backslash (`\`) starts an escape sequence.
-`"C:\Data\Inbox"` fails to load with `found unknown escape character`.
+`"C:\Data\Import"` fails to load with `found unknown escape character`.
 Write Windows paths in single quotes, without quotes, or with forward slashes:
 
 ```yaml
 # Any one of these forms works.
-path: 'C:\Data\Inbox'
-path: C:\Data\Inbox
-path: C:/Data/Inbox
+path: 'C:\Data\Import'
+path: C:\Data\Import
+path: C:/Data/Import
 ```
 
 ## 3. Try it in the foreground

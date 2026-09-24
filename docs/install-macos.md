@@ -117,7 +117,7 @@ events:
       PATH: "/opt/homebrew/bin:${PATH}"
     triggers:
       - type: file
-        path: ~/Movies/Inbox
+        path: ~/Movies/Recordings
         include: ["*.mov"]
 ```
 

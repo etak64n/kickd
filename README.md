@@ -17,7 +17,7 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, the command kickd event cleanup, and new PDFs in ~/Inbox. kickd runs the command of each event: rsync for backup, deploy.sh and then notify.sh for deploy, find for cleanup, and mv for archive-pdf.](docs/images/overview.svg)
+![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
 
 ## How kickd works
 
@@ -78,19 +78,24 @@ events:
         methods: [POST]
         token: "replace-with-a-long-random-string"
 
-  # File changes: 5 seconds after the last new PDF in ~/Inbox.
-  - name: archive-pdf
-    shell: 'for f in "$HOME"/Inbox/*.pdf; do [ -e "$f" ] || continue; mv "$f" "$HOME"/Archive/; done'
+  # File changes: 2 seconds after the last change in ~/app/src or below.
+  - name: build
+    command: ["make", "build"]
+    workdir: ~/app
+    concurrency: queue       # changes during a build are built after it
     triggers:
       - type: file
-        path: ~/Inbox
-        include: ["*.pdf"]
-        changes: [create, write]
-        debounce: 5s
+        path: ~/app/src
+        recursive: true      # also watch subdirectories
+        debounce: 2s
 
-  # No triggers: runs only with "kickd event cleanup".
-  - name: cleanup
-    shell: 'find "$HOME/tmp" -type f -mtime +7 -delete'
+  # No triggers: runs only by hand, such as "kickd event notify message=hello".
+  - name: notify
+    shell: './notify.sh "$KICKD_DATA_MESSAGE"'
+    workdir: ~/app
+    params:
+      - name: message
+        default: "Hello from kickd"
 ```
 
 `kickd check` validates a config file and lists its events and triggers.

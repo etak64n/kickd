@@ -88,37 +88,38 @@ A change to `queue.path` takes effect only when the agent restarts.
 | Shell that runs `shell` | `/bin/sh -c` | `cmd /S /C` |
 | Environment variables inside `shell` | `$KICKD_DATA_REF` | `%KICKD_DATA_REF%` |
 | Separator in `KICKD_FILE_PATHS`, the list of changed files | `:` | `;` |
-| Example paths | `~/Inbox`, `/srv/data` | `'C:\Data\Inbox'`, `C:/Data/Inbox` |
+| Example paths | `~/project`, `/srv/data` | `'C:\Data\Import'`, `C:/Data/Import` |
 
 To run PowerShell on Windows, start `powershell` with `command`.
 
-## Example: move PDFs that arrive in a folder
+## Example: rebuild when source files change
 
-This event moves PDFs that arrive in `~/Inbox` to `~/Archive`.
+This event runs `make build` in `~/project` when files in `~/project/src` or its subdirectories change.
 It is written for a kickd that runs as the user: a LaunchAgent on macOS, or a per-user systemd unit on Linux.
 
 ```yaml
 events:
-  - name: archive-pdf
-    shell: 'for f in "$HOME"/Inbox/*.pdf; do [ -e "$f" ] || continue; mv "$f" "$HOME"/Archive/; done'
+  - name: rebuild
+    command: [make, build]
+    workdir: ~/project
+    concurrency: queue
     triggers:
       - type: file
-        path: ~/Inbox
-        include: ["*.pdf"]
-        changes: [create, write]
-        debounce: 3s
+        path: ~/project/src
+        recursive: true
+        exclude: ["*.swp", "*~"]
+        debounce: 2s
 ```
 
-- `include` limits the trigger to files whose names match a pattern, here PDFs.
-- `changes` lists the kinds of change that fire the event.
+- `recursive` also watches the subdirectories of `path`, including ones created later.
+- `exclude` leaves out paths that match a pattern, here the temporary files that editors such as Vim and Emacs write.
 - `debounce` waits until no new change has arrived for the given time, then fires once.
 
-While a file is being copied, `write` changes keep arriving, so this trigger fires once, 3 seconds after the copy finishes.
-Files that arrive during the wait are combined into that one firing.
-For this reason, the script handles every PDF in the folder, whatever the firing lists.
+Saving several files, or switching branches with Git, causes a burst of changes, so this trigger fires once, 2 seconds after the burst ends.
+All changes during the wait are combined into that one firing.
 
-Moving a file out of `~/Inbox` causes a `rename` or `remove` change there.
-`changes` lists only `create` and `write`, so these changes do not fire the event.
+With `concurrency: queue`, a firing that arrives during a build waits and runs after it, so the last change is always built.
+The trigger watches only `src`, so the files that the build writes outside it do not fire the event again.
 
 ## Example: a nightly backup that reruns after an interruption
 
@@ -186,7 +187,7 @@ With `concurrency: queue`, firings that arrive while a deploy is running wait, a
 
 ## Example: a PowerShell script on Windows
 
-This event runs a PowerShell script when a CSV file arrives in `C:\Data\Inbox`.
+This event runs a PowerShell script when a CSV file arrives in `C:\Data\Import`.
 
 ```yaml
 log:
@@ -197,7 +198,7 @@ events:
     workdir: 'C:\Data'
     triggers:
       - type: file
-        path: 'C:\Data\Inbox'
+        path: 'C:\Data\Import'
         include: ['*.csv']
         changes: [create, write]
         debounce: 3s
