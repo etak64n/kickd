@@ -20,7 +20,7 @@ events:
   - name: git-sync
     description: Commit, pull and push ~/wiki
     workdir: ~/wiki
-    shell: |
+    command: |
       set -e
       git add -A
       # git commit fails when nothing changed, so commit only staged changes.

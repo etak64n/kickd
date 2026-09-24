@@ -25,7 +25,7 @@ database:
 events:
   # Build a project 2 seconds after its sources stop changing.
   - name: build
-    command: ['make', 'build']   # shell: '...' runs a string through the shell instead
+    command: ['make', 'build']   # a string, such as 'make build && make test', runs through the shell
     workdir: '~/project'
     timeout: 10m
     concurrency: queue       # skip | queue | parallel: what a firing does while the event runs
@@ -40,7 +40,7 @@ events:
 
   # A nightly report. kickd event nightly-report also runs it.
   - name: nightly-report
-    shell: 'python3 report.py >> report.log 2>&1'
+    command: 'python3 report.py >> report.log 2>&1'
     workdir: '~/reports'
     env:
       REPORT_MODE: nightly

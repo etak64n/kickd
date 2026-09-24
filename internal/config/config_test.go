@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,8 +50,8 @@ func TestExampleDecodes(t *testing.T) {
 					t.Errorf("%s, system %v: path %q", goos, system, p)
 				}
 			}
-			if windows := cfg.Events[0].Command[0] == "powershell"; windows != (goos == "windows") {
-				t.Errorf("%s example starts %v", goos, cfg.Events[0].Command)
+			if run := cfg.Events[0].Run; (len(run.Args) > 0 && run.Args[0] == "powershell") != (goos == "windows") {
+				t.Errorf("%s example starts %+v", goos, run)
 			}
 		}
 	}
@@ -141,8 +142,10 @@ func TestParseErrors(t *testing.T) {
 		{"missing name", "events:\n  - command: [x]", "name is required"},
 		{"bad name", "events:\n  - name: 'has space'" + ok, "must be 1 to 64"},
 		{"duplicate name", "events:\n  - name: a" + ok + "  - name: a" + ok, "duplicate name"},
-		{"no command", "events:\n  - name: a\n", "command or shell is required"},
-		{"both command and shell", "events:\n  - name: a\n    shell: x\n    command: [x]\n", "mutually exclusive"},
+		{"no command", "events:\n  - name: a\n", "command is required"},
+		{"shell is gone", "events:\n  - name: a\n    shell: x\n", "line 3: shell is gone"},
+		{"command of another type", "events:\n  - name: a\n    command: 42\n", "must be a string or a list"},
+		{"empty program", "events:\n  - name: a\n    command: ['']\n", "program of command must not be empty"},
 		{"bad concurrency", "events:\n  - name: a\n    concurrency: sometimes" + ok, "concurrency"},
 		{"bad on_interrupt", "events:\n  - name: a\n    on_interrupt: resume" + ok, "on_interrupt"},
 		{"bad max_attempts", "events:\n  - name: a\n    max_attempts: -1" + ok, "max_attempts"},
@@ -178,6 +181,38 @@ func TestParseErrors(t *testing.T) {
 				t.Fatalf("error %q does not contain %q", err.Error(), c.want)
 			}
 		})
+	}
+}
+
+// A string runs through the shell, and a list starts its program directly.
+func TestCommandForms(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: string
+    command: 'make build && make test'
+  - name: block
+    command: |
+      set -e
+      make build
+  - name: list
+    command: ['make', 'build']
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []struct {
+		shell string
+		args  []string
+	}{
+		{"make build && make test", nil},
+		{"set -e\nmake build\n", nil},
+		{"", []string{"make", "build"}},
+	} {
+		e := cfg.Events[i]
+		if e.Shell != want.shell || !slices.Equal(e.Command, want.args) {
+			t.Errorf("%s: shell %q, command %q", e.Name, e.Shell, e.Command)
+		}
 	}
 }
 
@@ -284,7 +319,7 @@ func TestResolve(t *testing.T) {
 func TestCronMissed(t *testing.T) {
 	dir := t.TempDir()
 	load := func(missed string) (*Config, error) {
-		body := "events:\n  - name: a\n    shell: x\n    triggers:\n      - type: cron\n        schedule: \"0 3 * * *\"\n"
+		body := "events:\n  - name: a\n    command: x\n    triggers:\n      - type: cron\n        schedule: '0 3 * * *'\n"
 		if missed != "" {
 			body += "        missed: " + missed + "\n"
 		}
@@ -307,7 +342,7 @@ func TestCronMissed(t *testing.T) {
 		t.Errorf("an unknown value must fail: %v", err)
 	}
 	path := filepath.Join(dir, "hook.yaml")
-	body := "events:\n  - name: a\n    shell: x\n    triggers:\n      - {type: webhook, path: /h, missed: run}\n"
+	body := "events:\n  - name: a\n    command: x\n    triggers:\n      - {type: webhook, path: /h, missed: run}\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -181,8 +181,7 @@ type Database struct {
 type Event struct {
 	Name        string            `yaml:"name"`
 	Description string            `yaml:"description"`
-	Command     []string          `yaml:"command"`
-	Shell       string            `yaml:"shell"`
+	Run         Command           `yaml:"command"`
 	Workdir     string            `yaml:"workdir"`
 	Env         map[string]string `yaml:"env"`
 	Timeout     time.Duration     `yaml:"timeout"`
@@ -193,6 +192,32 @@ type Event struct {
 	LogOutput   *bool             `yaml:"log_output"`
 	Params      []Param           `yaml:"params"`
 	Triggers    []Trigger         `yaml:"triggers"`
+
+	// Command and Shell hold Run once the file is loaded: the program and
+	// the arguments of a list, or the string that the shell runs.
+	Command []string `yaml:"-"`
+	Shell   string   `yaml:"-"`
+}
+
+// Command is what an event runs: a string, which the shell runs, or a list
+// of a program and its arguments, which kickd starts directly.
+type Command struct {
+	Shell string
+	Args  []string
+}
+
+// UnmarshalYAML reads a command given as a string or as a list.
+func (c *Command) UnmarshalYAML(n *yaml.Node) error {
+	switch {
+	case n.Kind == yaml.ScalarNode && n.Tag == "!!null":
+		return nil
+	case n.Kind == yaml.ScalarNode && n.Tag == "!!str":
+		c.Shell = n.Value
+		return nil
+	case n.Kind == yaml.SequenceNode:
+		return n.Decode(&c.Args)
+	}
+	return fmt.Errorf("line %d: command must be a string or a list of strings", n.Line)
 }
 
 // LogsOutput reports whether command output is written to the log.
@@ -357,6 +382,9 @@ func (c *Config) applyDefaults() {
 	}
 	for i := range c.Events {
 		e := &c.Events[i]
+		if e.Run.Shell != "" || e.Run.Args != nil {
+			e.Command, e.Shell = e.Run.Args, e.Run.Shell
+		}
 		if e.Concurrency == "" {
 			e.Concurrency = ConcurrencySkip
 		}
@@ -461,11 +489,9 @@ func (c *Config) validate() error {
 		}
 		switch {
 		case len(e.Command) == 0 && e.Shell == "":
-			fail("%s: command or shell is required", where)
-		case len(e.Command) > 0 && e.Shell != "":
-			fail("%s: command and shell are mutually exclusive", where)
+			fail("%s: command is required", where)
 		case len(e.Command) > 0 && e.Command[0] == "":
-			fail("%s: command[0] must not be empty", where)
+			fail("%s: the program of command must not be empty", where)
 		}
 		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel}, e.Concurrency) {
 			fail("%s: concurrency %q must be skip, queue or parallel", where, e.Concurrency)
@@ -676,6 +702,14 @@ func renamedKeys(data []byte) error {
 			errs = append(errs, fmt.Errorf("line %d: the queue section is now called database", key.Line))
 		case key.Value == "base_dir":
 			errs = append(errs, fmt.Errorf("line %d: base_dir is gone: give the full paths in log.path and database.path", key.Line))
+		case key.Value == "events" && value.Kind == yaml.SequenceNode:
+			for _, e := range value.Content {
+				for j := 0; e.Kind == yaml.MappingNode && j+1 < len(e.Content); j += 2 {
+					if k := e.Content[j]; k.Value == "shell" {
+						errs = append(errs, fmt.Errorf("line %d: shell is gone: give the string as command, which runs a string through the shell", k.Line))
+					}
+				}
+			}
 		case key.Value == "log" && value.Kind == yaml.MappingNode:
 			for j := 0; j+1 < len(value.Content); j += 2 {
 				if k := value.Content[j]; k.Value == "file" {

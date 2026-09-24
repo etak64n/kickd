@@ -7,14 +7,13 @@ The long-running kickd process, the **agent**, starts the command of each run as
 
 ## Starting the process
 
-An event gives its command in one of two forms:
+The `command` of an event is a string or a list:
 
-- **command**: a list of the program and its arguments. kickd starts the program directly and passes the arguments as they are. It looks the program up in the `PATH` of kickd itself when the run starts, so a program that is not on that `PATH` needs an absolute path.
-- **shell**: a string that a shell interprets. On macOS and Linux, kickd runs `/bin/sh -c` with the string. On Windows, it runs `cmd /S /C "<string>"`, and passes this command line to cmd as it is, so quotes inside the string reach cmd unchanged.
+- **A list** is the program and its arguments. kickd starts the program directly and passes the arguments as they are. A program name without a path is looked up in the `PATH` of the environment that the command gets, which the event's `env` can change. A relative program path starts at the working directory.
+- **A string** is interpreted by a shell. On macOS and Linux, kickd runs `/bin/sh -c` with the string. On Windows, it runs `cmd /S /C "<string>"`, and passes this command line to cmd as it is, so quotes inside the string reach cmd unchanged. A list could not do this on Windows, where the arguments of a list are quoted by the rules of Go, which cmd does not follow.
 
 The command runs in the directory set by `workdir`.
-Without `workdir`, it runs in the working directory of the agent.
-That is the directory of the config file for a service on macOS and Linux, `C:\Windows\System32` for a Windows service, and the current directory for `kickd run` in a terminal.
+Without `workdir`, it runs in the directory of the config file, whether kickd runs as a service or in a terminal.
 
 ## Environment
 

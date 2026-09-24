@@ -105,13 +105,13 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 The `PATH` of a kickd started by launchd is only `/usr/bin:/bin:/usr/sbin:/sbin`.
 Commands installed with Homebrew live in `/opt/homebrew/bin`, so this `PATH` does not find them.
 
-kickd looks up the programs of an event in the `PATH` that the event gives its command, for `command` as for `shell`.
+kickd looks up the programs of an event in the `PATH` that the event gives its command, whether the command is a string or a list.
 Give the event a `PATH` with `env`:
 
 ```yaml
 events:
   - name: to-m4a
-    shell: 'ffmpeg -i "$KICKD_FILE_PATH" "${KICKD_FILE_PATH%.*}.m4a"'
+    command: 'ffmpeg -i "$KICKD_FILE_PATH" "${KICKD_FILE_PATH%.*}.m4a"'
     env:
       PATH: '/opt/homebrew/bin:${PATH}'
     triggers:

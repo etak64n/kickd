@@ -214,9 +214,15 @@ func cmdCheck(args []string) error {
 		fmt.Println("webhook: disabled by webhook.enabled, so webhook triggers do not fire")
 	}
 	for _, e := range cfg.Events {
+		// A list is shown as a list, so that it does not read as a string
+		// for the shell.
 		cmd := e.Shell
 		if cmd == "" {
-			cmd = strings.Join(e.Command, " ")
+			quoted := make([]string, len(e.Command))
+			for i, a := range e.Command {
+				quoted[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+			}
+			cmd = "[" + strings.Join(quoted, ", ") + "]"
 		}
 		interrupt := e.OnInterrupt
 		if e.OnInterrupt == config.InterruptRerun {

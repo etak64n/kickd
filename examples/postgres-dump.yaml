@@ -26,7 +26,7 @@ events:
       - name: db
         default: app
         description: the database to dump
-    shell: |
+    command: |
       set -eu
       case "$KICKD_DATA_DB" in
         # Letters, digits and _ only: no spaces, quotes, or a leading -.

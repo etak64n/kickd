@@ -5,8 +5,8 @@
 # A relative path starts at the folder of this file, and ~ is the home
 # folder. Strings are in single quotes, which keep backslashes and double
 # quotes as they are.
-# A shell string runs with cmd /S /C. These events start PowerShell with
-# command instead, which passes every argument as it is.
+# A command given as a string runs with cmd /S /C. These events start
+# PowerShell with lists instead, which pass every argument as it is.
 
 log:
   path: 'LOG_PATH'   # without a path, kickd logs to standard error

@@ -4,7 +4,7 @@
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd starts the command of each run as a child process.
-A `shell` string runs with `/bin/sh -c` on macOS and Linux and with `cmd /S /C` on Windows, and a `command` list starts its program directly.
+A `command` given as a string runs with `/bin/sh -c` on macOS and Linux and with `cmd /S /C` on Windows, and a list starts its program directly.
 
 ## The environment of a command
 
@@ -30,7 +30,7 @@ An event that prints its environment shows what its commands get:
 ```yaml
 events:
   - name: show-env
-    command: ['env']   # on Windows: shell: 'set'
+    command: ['env']   # on Windows: command: 'set'
 ```
 
 `kickd event show-env --wait` fires it, and `kickd show` with the printed run ID displays the output.
@@ -38,10 +38,10 @@ events:
 ## Where commands run
 
 - **Working directory**: `workdir` is the directory in which the command runs. Without it, the command runs in the directory of the config file. A program or script given with a relative path, such as `./deploy.sh` or `.venv/bin/python`, starts at the working directory.
-- **Programs**: a program name without a path, such as `python3`, is looked up in the `PATH` of the command's environment, for `command` as for `shell`. An event puts the directories of its programs in front of that `PATH` with `env`.
+- **Programs**: a program name without a path, such as `python3`, is looked up in the `PATH` of the command's environment, for a string command as for a list. An event puts the directories of its programs in front of that `PATH` with `env`.
 
 `kickd check` prints the working directory of each event, and the `PATH` that an event sets.
-In `command`, kickd passes every element as it is, so `~` and `$VAR` in the arguments stay unexpanded; `workdir` and a relative program cover most needs, and a `shell` string expands them.
+In a list, kickd passes every element as it is, so `~` and `$VAR` in the arguments stay unexpanded; `workdir` and a relative program cover most needs, and a string command expands them.
 
 ## Python
 
@@ -124,7 +124,7 @@ Give that directory in `env` instead, such as `PATH: '${HOME}/.nvm/versions/node
 Volta keeps its shims in `~/.volta/bin`, which does not change between versions.
 
 On Windows, the installer of Node.js puts `node.exe` in the system `PATH`, so `command: ['node', 'build.mjs']` works for a service.
-`npm` is the batch file `npm.cmd` there, which runs through cmd, so start it with `shell: 'npm run build'`.
+`npm` is the batch file `npm.cmd` there, which runs through cmd, so give it as a string, `command: 'npm run build'`.
 
 A script reads the parameters and the payload in the same way as in Python:
 

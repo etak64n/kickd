@@ -22,7 +22,7 @@ database:
 events:
   - name: deploy-app
     description: Update /srv/app to origin/main and restart it
-    shell: |
+    command: |
       set -eu
       p="$KICKD_PAYLOAD_FILE"
       if [ "$KICKD_TRIGGER" = webhook ]; then

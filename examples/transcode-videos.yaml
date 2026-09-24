@@ -19,7 +19,7 @@ database:
 events:
   - name: transcode
     description: Convert new clips to MP4
-    shell: |
+    command: |
       set -u
       cd "$HOME/Videos/Incoming" || exit 1
       for f in *.mov *.MOV; do

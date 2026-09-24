@@ -9,7 +9,7 @@ In kickd, a named command in the config file is an **event**, each firing of an 
 
 | Item | macOS and Linux | Windows |
 |---|---|---|
-| Shell that runs `shell` | `/bin/sh -c` | `cmd /S /C` |
+| Shell that runs a string command | `/bin/sh -c` | `cmd /S /C` |
 | Process group | Each command gets a process group of its own | Each command gets a process group of its own, which keeps the Ctrl+C of the console away from it |
 | Stopping a command | SIGTERM to the group, then SIGKILL after 10 seconds | `taskkill /T /F` at once |
 | Exit status | The exit code, or `-1` and the signal name | The exit code |
@@ -100,5 +100,5 @@ On the day daylight saving time ends, the clock shows some times twice, and a cr
 ## Paths
 
 - **Home directory**: `~` expands to `$HOME` on macOS and Linux, and to `%USERPROFILE%` on Windows. Without a home directory, as in a systemd unit without `User=`, `~` stays unexpanded.
-- **Environment variables**: `${VAR}` expands in paths and in `env` values on every OS. `%VAR%` expands only inside a `shell` string on Windows, where cmd expands it.
+- **Environment variables**: `${VAR}` expands in paths and in `env` values on every OS. `%VAR%` expands only inside a string command on Windows, where cmd expands it.
 - **Backslashes**: in YAML, a backslash inside double quotes starts an escape sequence, so Windows paths go in single quotes, go without quotes, or use forward slashes.

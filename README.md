@@ -61,7 +61,7 @@ database:
 events:
   # Cron: every night at 3:00, Tokyo time.
   - name: backup
-    shell: 'rsync -a ~/work/ ~/backup/work/'
+    command: 'rsync -a ~/work/ ~/backup/work/'
     timeout: 1h
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
@@ -97,7 +97,7 @@ events:
 
   # No triggers: runs only by hand, as with kickd event notify message=hello.
   - name: notify
-    shell: './notify.sh "$KICKD_DATA_MESSAGE"'
+    command: './notify.sh "$KICKD_DATA_MESSAGE"'
     workdir: '~/app'
     params:
       - name: message
@@ -122,7 +122,7 @@ database:
 events:
   # Cron: every night at 3:00, Tokyo time.
   - name: backup
-    shell: 'rsync -a ~/work/ ~/backup/work/'
+    command: 'rsync -a ~/work/ ~/backup/work/'
     timeout: 1h
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
@@ -158,7 +158,7 @@ events:
 
   # No triggers: runs only by hand, as with kickd event notify message=hello.
   - name: notify
-    shell: './notify.sh "$KICKD_DATA_MESSAGE"'
+    command: './notify.sh "$KICKD_DATA_MESSAGE"'
     workdir: '~/app'
     params:
       - name: message
@@ -229,7 +229,7 @@ events:
 
 </details>
 
-On macOS and Linux, `shell` runs with `/bin/sh`, and on Windows with cmd; the Windows file starts PowerShell scripts with `command` instead.
+A `command` given as a string runs through the shell, `/bin/sh` on macOS and Linux and cmd on Windows, and a list starts its program directly; the Windows file starts PowerShell scripts with lists.
 Relative paths start at the directory of the config file, and a leading `~` is the home directory.
 Strings are in single quotes, which keep backslashes and double quotes as they are; double quotes appear only inside shell commands.
 
@@ -290,7 +290,7 @@ With `kickd` installed, these steps define an event, run the agent and fire the 
    ```yaml
    events:
      - name: hello
-       shell: 'echo hello from kickd'
+       command: 'echo hello from kickd'
    ```
 
 2. Start the agent in the foreground.

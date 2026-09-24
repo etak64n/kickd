@@ -19,7 +19,7 @@ database:
 events:
   - name: disk-alert
     description: Notify when / or /srv is 90% full
-    shell: |
+    command: |
       full=$(df -P / /srv | awk 'NR > 1 && $5 + 0 >= 90 { printf "%s is %s full. ", $6, $5 }')
       [ -z "$full" ] && exit 0
       curl -fsS -H "Title: Disk space on $(hostname)" -d "$full" "https://ntfy.sh/$NTFY_TOPIC"

@@ -26,7 +26,7 @@ events:
       - name: service
         required: true
         description: web or worker
-    shell: |
+    command: |
       case "$KICKD_DATA_SERVICE" in
         web)    unit=nginx.service ;;
         worker) unit=app-worker.service ;;

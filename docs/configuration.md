@@ -41,7 +41,7 @@ database:
   path: '~/Library/Application Support/kickd/kickd.db'
 events:
   - name: hello
-    shell: 'echo hello from kickd'
+    command: 'echo hello from kickd'
 ```
 
 Without `log.path`, kickd writes its log to standard error.
@@ -89,10 +89,10 @@ This config defines two events:
 ```yaml
 events:
   - name: hello
-    shell: 'echo hello from kickd'
+    command: 'echo hello from kickd'
 
   - name: archive
-    shell: 'tar czf "$HOME/backup/notes-$(date +%Y%m%d).tgz" -C "$HOME" notes'
+    command: 'tar czf "$HOME/backup/notes-$(date +%Y%m%d).tgz" -C "$HOME" notes'
     triggers:
       - type: cron
         schedule: '30 3 * * *'
@@ -102,10 +102,10 @@ events:
 `hello` has no triggers, so it runs only when fired with `kickd event hello`.
 `archive` fires every day at 3:30 Tokyo time from its cron trigger, and also with `kickd event archive`.
 
-An event gives its command in one of two ways:
+`command` is a string or a list:
 
-- **shell**: a string run by the system shell, `/bin/sh -c` on macOS and Linux and `cmd /S /C` on Windows. Pipes, redirections and variables work as in the shell.
-- **command**: a list of the program and its arguments, started directly without a shell. kickd passes every element as it is, so `~`, `*` and `$VAR` stay unexpanded.
+- **A string** runs through the system shell, `/bin/sh -c` on macOS and Linux and `cmd /S /C` on Windows. Pipes, redirections and variables work as in the shell.
+- **A list** is the program and its arguments, started directly without a shell. kickd passes every element as it is, so `~`, `*` and `$VAR` stay unexpanded, and no argument needs quoting for the shell.
 
 Without `log.path`, kickd writes its log to standard error: text on a terminal, JSON when standard error goes to a pipe or a file.
 Each run logs a start record and a completion record at INFO.
@@ -116,7 +116,7 @@ The output of the command is logged at DEBUG, so `LOG_LEVEL=debug kickd run` sho
 - **Durations**: values such as `30s`, `5m` and `1h`. A bare number such as `30` is an error.
 - **Paths**: a leading `~` expands to the home directory, and `${VAR}` expands to the value of the environment variable `VAR` of kickd. A relative path, such as a `workdir` or the `path` of a file trigger, starts at the directory of the config file.
 - **Quotes**: the examples put strings in single quotes, which keep backslashes and double quotes as they are, so Windows paths and shell commands need no escapes. Double quotes appear only inside shell commands, where the shell reads them. Inside single quotes, a single quote is written twice, as in `'it''s'`.
-- **Environment variables on Windows**: the config file uses the `${USERPROFILE}` form on Windows too. The `%USERPROFILE%` form is expanded only by cmd, inside a `shell` string.
+- **Environment variables on Windows**: the config file uses the `${USERPROFILE}` form on Windows too. The `%USERPROFILE%` form is expanded only by cmd, inside a string command.
 - **Key names**: an unknown key is an error, so `kickd check` finds misspelled keys.
 
 ## Where commands run
@@ -135,7 +135,7 @@ events:
 ```
 
 - **Working directory**: `workdir` is the directory in which the command runs. Without it, the command runs in the directory of the config file, whether kickd runs as a service or in a terminal. A program or script given with a relative path, such as `./deploy.sh`, starts at the working directory.
-- **Programs**: a program name without a path, such as `ffmpeg`, is looked up in the `PATH` of the command's environment, for `command` as for `shell`. `env` sets that `PATH` for each event, and `${PATH}` in the value is the `PATH` of kickd.
+- **Programs**: a program name without a path, such as `ffmpeg`, is looked up in the `PATH` of the command's environment, for a string command as for a list. `env` sets that `PATH` for each event, and `${PATH}` in the value is the `PATH` of kickd.
 
 A service starts kickd with a shorter `PATH` than a terminal has.
 Under launchd on macOS, it is `/usr/bin:/bin:/usr/sbin:/sbin`.
@@ -162,8 +162,8 @@ A change to `database.path` takes effect only when the agent restarts.
 
 | Item | macOS and Linux | Windows |
 |---|---|---|
-| Shell that runs `shell` | `/bin/sh -c` | `cmd /S /C` |
-| Environment variables inside `shell` | `$KICKD_DATA_REF` | `%KICKD_DATA_REF%` |
+| Shell that runs a string command | `/bin/sh -c` | `cmd /S /C` |
+| Environment variables inside a string command | `$KICKD_DATA_REF` | `%KICKD_DATA_REF%` |
 | Separator in `KICKD_FILE_PATHS`, the list of changed files | `:` | `;` |
 | Example paths | `~/project`, `/srv/data` | `'C:\Data\Import'`, `C:/Data/Import` |
 
@@ -206,7 +206,7 @@ If kickd or the machine stops during the backup, the backup starts over when kic
 ```yaml
 events:
   - name: nightly-backup
-    shell: 'rsync -a "$HOME/notes/" "$HOME/backup/notes/"'
+    command: 'rsync -a "$HOME/notes/" "$HOME/backup/notes/"'
     timeout: 30m
     on_interrupt: rerun
     max_attempts: 3
