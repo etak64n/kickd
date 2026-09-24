@@ -1,3 +1,5 @@
+<div align="center">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
   <img alt="kickd" src="docs/images/logo-light.svg" width="360">
@@ -8,6 +10,8 @@
 [![Release](https://img.shields.io/github/v/release/etak64n/kickd)](https://github.com/etak64n/kickd/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/etak64n/kickd)](go.mod)
 [![License](https://img.shields.io/github/license/etak64n/kickd)](LICENSE)
+
+</div>
 
 kickd runs commands when something happens: a schedule comes due, an HTTP request arrives, files change in a directory, or someone fires the command from the command line.
 It is a single executable for macOS, Linux and Windows.

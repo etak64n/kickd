@@ -93,9 +93,18 @@ func TestOpsWithoutAgent(t *testing.T) {
 	}
 }
 
+// testLog passes log records to t.Log, which shows them when the test
+// fails.
+type testLog struct{ t *testing.T }
+
+func (w testLog) Write(p []byte) (int, error) {
+	w.t.Log(strings.TrimRight(string(p), "\n"))
+	return len(p), nil
+}
+
 func startAgent(t *testing.T, cfg string) func() {
 	t.Helper()
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError + 4}))
+	logger := slog.New(slog.NewTextHandler(testLog{t}, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- agent.Run(ctx, logger, agent.Options{ConfigPath: cfg, Version: "test"}) }()
