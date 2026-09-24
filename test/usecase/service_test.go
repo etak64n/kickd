@@ -341,6 +341,12 @@ func (m *machine) check() {
 		if !described && time.Since(stopped) > 3*time.Second && runtime.GOOS != "windows" {
 			described = true
 			lsof, _, _ := m.runSudo("lsof", "-nP", "-iTCP:8787")
+			netstat, _, _ := m.exec("netstat", "-an", "-p", "tcp")
+			for _, l := range strings.Split(netstat, "\n") {
+				if strings.Contains(l, ".8787 ") || strings.Contains(l, ":8787 ") {
+					lsof += "\nnetstat: " + l
+				}
+			}
 			ps, _, _ := m.exec("ps", "-ax", "-o", "pid,ppid,stat,etime,command")
 			var procs []string
 			for _, l := range strings.Split(ps, "\n") {
