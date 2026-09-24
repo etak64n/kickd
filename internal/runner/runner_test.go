@@ -381,6 +381,21 @@ func TestExecuteFindsProgramsInThePATHOfTheEvent(t *testing.T) {
 	}
 }
 
+// A stop of kickd that comes before the process starts interrupts the run,
+// so on_interrupt: rerun runs it again, instead of recording a failed start.
+func TestExecuteCanceledBeforeStart(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	res := r.Execute(ctx, helperJob("env"), fileEvent())
+	if res.Reason != "shutdown" || res.Error != "canceled" {
+		t.Fatalf("result = %+v", res)
+	}
+	if n, f := len(rec.find("Run interrupted")), len(rec.find("Run failed")); n != 1 || f != 0 {
+		t.Errorf("logged Run interrupted %d times and Run failed %d times", n, f)
+	}
+}
+
 func TestExecuteShell(t *testing.T) {
 	r, _, _ := newRunner(t)
 	job := Spec{Name: "sh", Shell: "echo hello from shell", LogOutput: true}

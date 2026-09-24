@@ -242,6 +242,9 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 		log.Debug("Running command", "command", logging.Mask(displayCommand(spec)), "workdir", spec.Workdir, "file", eventFile)
 	}
 	if err := cmd.Start(); err != nil {
+		if ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return r.canceledBeforeStart(log, ctx, start)
+		}
 		return r.startFailure(log, start, "exec", err)
 	}
 	waitErr := cmd.Wait()
@@ -313,6 +316,23 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 		attrs = append(attrs, logging.Err(waitErr))
 	}
 	log.Log(context.Background(), level, msg, attrs...)
+	return res
+}
+
+// canceledBeforeStart ends a run whose context was canceled before its
+// process started: a stop of kickd interrupts the run, and a cancel by the
+// user cancels it, as they would while the process runs.
+func (r *Runner) canceledBeforeStart(log *slog.Logger, ctx context.Context, start time.Time) event.Result {
+	res := event.Result{ExitCode: -1, Duration: time.Since(start), Error: "canceled", Reason: "shutdown"}
+	msg := "Run interrupted"
+	if errors.Is(context.Cause(ctx), event.ErrCanceledByUser) {
+		res.Reason, msg = "canceled_by_user", "Run canceled"
+		r.canceled.Add(1)
+	} else {
+		r.interrupted.Add(1)
+	}
+	r.processed.Add(1)
+	log.Warn(msg, "reason", res.Reason, "exitCode", res.ExitCode, "durationMs", res.Duration.Milliseconds())
 	return res
 }
 
