@@ -134,3 +134,7 @@ To keep kickd running in the background, install it as a service by following th
 - [How commands run](docs/internals/execution.md): processes, environment, output, stopping, exit status
 - [Platform differences](docs/internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows
 - [User accounts](docs/internals/users.md): which user runs the agent and its commands, who can fire events, and the files that kickd creates
+
+## License
+
+kickd is released under the [MIT License](LICENSE).
