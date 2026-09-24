@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="470" height="160" viewBox="0 0 470 160" role="img" aria-labelledby="t">
+  <title id="t">kickd</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.55" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon: three triggers converge on a play sign -->
+  <rect x="16" y="16" width="128" height="128" rx="30" fill="url(#g)"/>
+  <g stroke="#ffffff" stroke-linecap="round" fill="none">
+    <path d="M47 58 H66 M39 80 H66 M47 102 H66" stroke-width="8" opacity="0.9"/>
+    <path d="M80 54 L80 106 L118 80 Z" fill="#ffffff" stroke-width="10" stroke-linejoin="round"/>
+  </g>
+  <!-- Wordmark: kickd, drawn with strokes so that it does not depend on fonts -->
+  <g stroke="#1f2328" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M180 34 V118 M180 100 L214 70 M193 90 L217 118"/>
+    <path d="M242 76 V118"/>
+    <path d="M305.4 78.6 A24 24 0 1 0 305.4 109.4"/>
+    <path d="M334 34 V118 M334 100 L368 70 M347 90 L371 118"/>
+    <circle cx="416" cy="94" r="24"/>
+    <path d="M440 34 V118"/>
+  </g>
+  <circle cx="242" cy="50" r="9.5" fill="#1f2328"/>
+</svg>
