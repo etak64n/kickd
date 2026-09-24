@@ -20,7 +20,11 @@ import (
 )
 
 //go:embed example.yaml
-var example string
+var exampleFile string
+
+// example is exampleFile with Unix line endings, which a checkout on
+// Windows can turn into CRLF.
+var example = strings.ReplaceAll(exampleFile, "\r\n", "\n")
 
 // userBaseDir and systemBaseDir are the base_dir sections of Example: the
 // usual places for the files of a user's program, and of a service that
