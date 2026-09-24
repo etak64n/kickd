@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -45,19 +46,7 @@ func TestDocumentedConfigsLoad(t *testing.T) {
 			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			_, err := Load(path)
-			var ve *ValidationError
-			if errors.As(err, &ve) {
-				for _, p := range ve.Problems {
-					if !strings.Contains(p.Error(), "is not a directory") {
-						t.Errorf("%s, YAML block %d: %v", filepath.Base(f), i+1, p)
-					}
-				}
-				continue
-			}
-			if err != nil {
-				t.Errorf("%s, YAML block %d: %v", filepath.Base(f), i+1, err)
-			}
+			checkLoads(t, fmt.Sprintf("%s, YAML block %d", filepath.Base(f), i+1), path)
 		}
 	}
 	if checked < 5 {
@@ -76,4 +65,37 @@ func dedent(s string, n int) string {
 		lines[i] = l[trim:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// TestExamplesLoad checks every config file in the examples directory.
+func TestExamplesLoad(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join("..", "..", "examples", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) < 10 {
+		t.Fatalf("found %d example configs, want at least 10", len(files))
+	}
+	for _, f := range files {
+		checkLoads(t, filepath.Base(f), f)
+	}
+}
+
+// checkLoads loads a config and reports every problem except directories
+// that exist only on the machine the config was written for.
+func checkLoads(t *testing.T, name, path string) {
+	t.Helper()
+	_, err := Load(path)
+	var ve *ValidationError
+	if errors.As(err, &ve) {
+		for _, p := range ve.Problems {
+			if !strings.Contains(p.Error(), "is not a directory") {
+				t.Errorf("%s: %v", name, p)
+			}
+		}
+		return
+	}
+	if err != nil {
+		t.Errorf("%s: %v", name, err)
+	}
 }

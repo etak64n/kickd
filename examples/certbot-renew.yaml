@@ -1,0 +1,20 @@
+# Renew Let's Encrypt certificates and reload nginx when one changes.
+#
+# certbot renews only certificates that expire within 30 days, so running
+# it twice a day, as Let's Encrypt recommends, costs little. Many Linux
+# packages of certbot install a timer that does the same; use this event
+# on systems without it.
+#
+# Needs:   certbot and nginx
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event certbot-renew -c /etc/kickd/config.yaml
+
+events:
+  - name: certbot-renew
+    description: Renew certificates and reload nginx after a renewal
+    command: [certbot, renew, --quiet, --deploy-hook, "systemctl reload nginx"]
+    timeout: 10m
+    on_interrupt: rerun
+    triggers:
+      - type: cron
+        schedule: "17 3,15 * * *"

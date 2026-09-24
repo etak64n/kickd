@@ -1,0 +1,37 @@
+# Make scanned PDFs searchable and file them away.
+#
+# A network scanner saves PDFs into ~/Scans/Inbox. Once the folder has
+# been quiet for 10 seconds, ocrmypdf adds a text layer to every PDF there,
+# and the result moves to ~/Scans/Archive.
+#
+# Needs:   ocrmypdf (brew install ocrmypdf, or apt install ocrmypdf)
+# Service: kickd service install --user
+# By hand: kickd event ocr-scans
+
+events:
+  - name: ocr-scans
+    description: OCR new scans and move them to the archive
+    shell: |
+      set -u
+      cd "$HOME/Scans/Inbox" || exit 1
+      for f in *.pdf; do
+        [ -e "$f" ] || continue
+        tmp="$HOME/Scans/Archive/.ocr-$f"
+        # --skip-text leaves pages that already have text alone.
+        ocrmypdf --quiet --skip-text --rotate-pages "$f" "$tmp" &&
+          mv "$tmp" "$HOME/Scans/Archive/$f" && rm "$f"
+      done
+    env:
+      # launchd starts kickd with a short PATH; Homebrew lives here.
+      PATH: "/opt/homebrew/bin:/usr/local/bin:${PATH}"
+    timeout: 30m
+    # A scan that arrives during a run gets a run of its own.
+    concurrency: queue
+    # Finished files have left the inbox, so a rerun handles only the rest.
+    on_interrupt: rerun
+    triggers:
+      - type: file
+        path: ~/Scans/Inbox
+        include: ["*.pdf"]
+        changes: [create, write]
+        debounce: 10s

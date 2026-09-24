@@ -1,0 +1,37 @@
+# Back up /home with restic every night, and thin out old snapshots every
+# Sunday.
+#
+# restic reads the repository and the password from the environment. The
+# password lives in a file that only root can read.
+#
+# Needs:   restic, and a repository created with restic init
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event backup -c /etc/kickd/config.yaml
+
+events:
+  - name: backup
+    description: Back up /home to the restic repository
+    command: [restic, backup, --one-file-system, --exclude-caches, /home]
+    env:
+      RESTIC_REPOSITORY: /mnt/backup/restic
+      RESTIC_PASSWORD_FILE: /etc/restic/password
+    timeout: 4h
+    # A backup cut off by a reboot runs again at the next start. An extra
+    # snapshot does no harm.
+    on_interrupt: rerun
+    max_attempts: 3
+    triggers:
+      - type: cron
+        schedule: "30 2 * * *"
+
+  - name: prune
+    description: Keep 7 daily, 4 weekly and 12 monthly snapshots
+    command: [restic, forget, --keep-daily, "7", --keep-weekly, "4", --keep-monthly, "12", --prune]
+    env:
+      RESTIC_REPOSITORY: /mnt/backup/restic
+      RESTIC_PASSWORD_FILE: /etc/restic/password
+    timeout: 4h
+    triggers:
+      # restic locks the repository, so this runs hours after the backup.
+      - type: cron
+        schedule: "0 6 * * 0"

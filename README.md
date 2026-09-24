@@ -121,6 +121,7 @@ To keep kickd running in the background, install it as a service by following th
 - [Command-line reference](docs/cli.md): every subcommand, firing events with parameters, exit codes
 - [Webhooks](docs/webhook.md): authentication, request IDs, parameters, responses
 - [Configuration reference](docs/config-keys.md): every key of the config file and its default
+- [Examples](examples/README.md): complete config files for common tasks, such as OCR of scans, deploys from GitHub, backups and certificate renewal
 - [What a command receives](docs/payload.md): environment variables and the payload JSON
 - [Logging](docs/logging.md): formats, levels, keys, messages, rotation
 - [Known limitations](docs/limitations.md): what kickd does not do yet, and what has not been tested

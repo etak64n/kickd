@@ -1,0 +1,27 @@
+# Send a push notification when a file system is 90% full.
+#
+# The check runs every 10 minutes and notifies through ntfy.sh, which
+# forwards the message to the ntfy app on a phone. It notifies again at
+# every check until space is freed.
+#
+# The topic works like a password, so it stays out of this file: kickd
+# passes NTFY_TOPIC from its own environment. For a system-wide unit on
+# Linux, put the line NTFY_TOPIC=... into /etc/sysconfig/kickd.
+#
+# Needs:   curl
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event disk-alert -c /etc/kickd/config.yaml
+
+events:
+  - name: disk-alert
+    description: Notify when / or /srv is 90% full
+    shell: |
+      full=$(df -P / /srv | awk 'NR > 1 && $5 + 0 >= 90 { printf "%s is %s full. ", $6, $5 }')
+      [ -z "$full" ] && exit 0
+      curl -fsS -H "Title: Disk space on $(hostname)" -d "$full" "https://ntfy.sh/$NTFY_TOPIC"
+    env:
+      NTFY_TOPIC: "${NTFY_TOPIC}"
+    timeout: 1m
+    triggers:
+      - type: cron
+        schedule: "*/10 * * * *"

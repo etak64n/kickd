@@ -1,0 +1,29 @@
+# Sort macOS screenshots and screen recordings into one folder per month.
+#
+# macOS saves screenshots to the Desktop, which is a protected folder that
+# kickd can read only with Full Disk Access. Point screenshots at a folder
+# of their own first:
+#
+#   mkdir -p ~/Pictures/Screenshots
+#   defaults write com.apple.screencapture location ~/Pictures/Screenshots
+#
+# Service: kickd service install --user
+# By hand: kickd event sort-screenshots
+
+events:
+  - name: sort-screenshots
+    description: Move screenshots into folders such as 2026-09
+    shell: |
+      cd "$HOME/Pictures/Screenshots" || exit 1
+      for f in *.png *.mov; do
+        [ -e "$f" ] || continue
+        month=$(date -r "$f" +%Y-%m)
+        mkdir -p "$month" && mv -n "$f" "$month/"
+      done
+    concurrency: queue
+    triggers:
+      - type: file
+        path: ~/Pictures/Screenshots
+        include: ["*.png", "*.mov"]
+        changes: [create]
+        debounce: 5s

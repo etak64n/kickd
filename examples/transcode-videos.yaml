@@ -1,0 +1,41 @@
+# Convert camera clips to H.264 MP4 files that play everywhere.
+#
+# Copy clips into ~/Videos/Incoming. When no file has changed for 30
+# seconds, ffmpeg converts every clip into ~/Videos/Converted and moves the
+# original to ~/Videos/Originals.
+#
+# Needs:   ffmpeg (brew install ffmpeg, or apt install ffmpeg)
+# Service: kickd service install --user
+# By hand: kickd event transcode
+
+events:
+  - name: transcode
+    description: Convert new clips to MP4
+    shell: |
+      set -u
+      cd "$HOME/Videos/Incoming" || exit 1
+      for f in *.mov *.MOV; do
+        [ -e "$f" ] || continue
+        name="${f%.*}"
+        tmp="$HOME/Videos/Converted/.$name.mp4"
+        # -nostdin keeps ffmpeg from reading input meant for kickd.
+        ffmpeg -nostdin -loglevel error -y -i "$f" \
+          -c:v libx264 -crf 22 -preset medium -c:a aac -b:a 160k \
+          -movflags +faststart "$tmp" &&
+          mv "$tmp" "$HOME/Videos/Converted/$name.mp4" &&
+          mv "$f" "$HOME/Videos/Originals/"
+      done
+    env:
+      PATH: "/opt/homebrew/bin:/usr/local/bin:${PATH}"
+    timeout: 3h
+    concurrency: queue
+    # A clip is moved only after its MP4 is complete, so a rerun starts
+    # with the clips that are left.
+    on_interrupt: rerun
+    triggers:
+      - type: file
+        path: ~/Videos/Incoming
+        # Patterns are case sensitive, and cameras use both spellings.
+        include: ["*.mov", "*.MOV"]
+        changes: [create, write]
+        debounce: 30s

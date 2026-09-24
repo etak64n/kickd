@@ -1,0 +1,49 @@
+# Deploy an app when GitHub reports a push to main.
+#
+# In the repository settings on GitHub, add a webhook with:
+#   Payload URL:  https://deploy.example.com/hooks/github
+#   Content type: application/json
+#   Secret:       the value of secret below
+#   Events:       Just the push event
+# A reverse proxy with TLS forwards the requests to kickd on 127.0.0.1:8787.
+#
+# Needs:   git and jq on the server, /srv/app as a clone of the repository
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event deploy-app -c /etc/kickd/config.yaml
+
+log:
+  file: /var/log/kickd/kickd.log
+webhook:
+  listen: "127.0.0.1:8787"
+queue:
+  path: /var/lib/kickd/kickd.db
+
+events:
+  - name: deploy-app
+    description: Update /srv/app to origin/main and restart it
+    shell: |
+      set -eu
+      p="$KICKD_PAYLOAD_FILE"
+      if [ "$KICKD_TRIGGER" = webhook ]; then
+        # GitHub also sends a ping event, and pushes to other branches.
+        [ "$(jq -r '.webhook.headers["X-Github-Event"]' "$p")" = push ] || exit 0
+        [ "$(jq -r '.webhook.body | fromjson | .ref' "$p")" = refs/heads/main ] || exit 0
+      fi
+      cd /srv/app
+      git fetch --quiet origin main
+      git reset --hard --quiet origin/main
+      systemctl restart app
+    timeout: 10m
+    # Deploys run one at a time, in the order the pushes arrived.
+    concurrency: queue
+    # Resetting to origin/main and restarting gives the same result twice.
+    on_interrupt: rerun
+    triggers:
+      - type: webhook
+        path: /hooks/github
+        methods: [POST]
+        # kickd checks X-Hub-Signature-256, which GitHub computes with this
+        # secret. Generate one with: openssl rand -hex 32
+        secret: "replace-with-the-webhook-secret"
+        # GitHub waits at most 10 seconds for a response, so kickd answers
+        # with 202 at once instead of waiting for the deploy.

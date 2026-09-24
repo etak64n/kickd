@@ -1,0 +1,31 @@
+# Mirror a user's Documents folder to a second drive every night on
+# Windows.
+#
+# robocopy /MIR makes the target an exact copy, and deletes files in the
+# target that no longer exist in the source.
+#
+# robocopy exits with codes 0 to 7 when it succeeds, and 8 or more when it
+# fails. kickd treats every code except 0 as a failure, so the command
+# turns the codes below 8 into 0. "if errorlevel 8" tests the code when it
+# runs; %ERRORLEVEL% would expand before robocopy starts.
+#
+# The kickd service runs as SYSTEM, so the paths are absolute, and a local
+# drive is used: SYSTEM cannot use a network drive that a user mapped.
+#
+# Service: kickd service install -c C:\ProgramData\kickd\config.yaml
+#          (in PowerShell opened as administrator)
+# By hand: kickd event mirror-documents -c C:\ProgramData\kickd\config.yaml
+
+log:
+  file: 'C:\ProgramData\kickd\kickd.log'
+
+events:
+  - name: mirror-documents
+    description: Mirror C:\Users\alice\Documents to D:\Backup\Documents
+    shell: 'robocopy "C:\Users\alice\Documents" "D:\Backup\Documents" /MIR /R:2 /W:5 /NP /NFL /NDL & if errorlevel 8 (exit 1) else (exit 0)'
+    timeout: 3h
+    # A mirror reaches the same state when it runs again.
+    on_interrupt: rerun
+    triggers:
+      - type: cron
+        schedule: "0 1 * * *"

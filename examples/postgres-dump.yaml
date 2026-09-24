@@ -1,0 +1,41 @@
+# Dump a PostgreSQL database every night, or on demand for any database.
+#
+# The nightly run dumps the database "app". By hand, a parameter picks
+# another database. The command checks the name before it uses it,
+# because a parameter is input from whoever fires the event. Dumps older
+# than 14 days are deleted.
+#
+# kickd runs as root, and pg_dump runs as the postgres user through
+# runuser, so that PostgreSQL's peer authentication accepts it. Create the
+# directory once:
+#
+#   install -d -o postgres -m 700 /var/backups/postgres
+#
+# Needs:   PostgreSQL with pg_dump
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event pg-dump db=analytics -c /etc/kickd/config.yaml
+
+events:
+  - name: pg-dump
+    description: Dump one database to /var/backups/postgres
+    params:
+      - name: db
+        default: app
+        description: the database to dump
+    shell: |
+      set -eu
+      case "$KICKD_DATA_DB" in
+        # Letters, digits and _ only: no spaces, quotes, or a leading -.
+        ''|*[!A-Za-z0-9_]*) echo "invalid database name: $KICKD_DATA_DB" >&2; exit 2 ;;
+      esac
+      dir=/var/backups/postgres
+      out="$dir/$KICKD_DATA_DB-$(date +%Y%m%d-%H%M%S).dump"
+      runuser -u postgres -- pg_dump --format=custom --file="$out.tmp" "$KICKD_DATA_DB"
+      mv "$out.tmp" "$out"
+      find "$dir" -name '*.dump' -mtime +14 -delete
+    timeout: 2h
+    # Dumps write to a new file every time, so repeating one is safe.
+    on_interrupt: rerun
+    triggers:
+      - type: cron
+        schedule: "15 1 * * *"

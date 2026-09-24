@@ -1,0 +1,41 @@
+# Wake a machine on the home network from a phone.
+#
+# An iOS Shortcut, or an automation on Android, sends
+#   POST https://home.example.com/hooks/wake?host=desktop
+# with the header "Authorization: Bearer <token>". With wait: true, the
+# phone gets the output of wakeonlan in the response.
+#
+# The command accepts only the host names it knows, so the query cannot
+# make it send packets anywhere else.
+#
+# Needs:   wakeonlan (brew install wakeonlan, or apt install wakeonlan)
+# Service: kickd service install --user
+# By hand: kickd event wake host=nas
+
+webhook:
+  listen: "127.0.0.1:8787"
+
+events:
+  - name: wake
+    description: Send a Wake-on-LAN packet to a known machine
+    params:
+      - name: host
+        required: true
+        description: desktop or nas
+    shell: |
+      case "$KICKD_DATA_HOST" in
+        desktop) mac=aa:bb:cc:dd:ee:01 ;;
+        nas)     mac=aa:bb:cc:dd:ee:02 ;;
+        *) echo "unknown host: $KICKD_DATA_HOST" >&2; exit 2 ;;
+      esac
+      wakeonlan "$mac"
+    env:
+      PATH: "/opt/homebrew/bin:/usr/local/bin:${PATH}"
+    timeout: 30s
+    concurrency: parallel
+    triggers:
+      - type: webhook
+        path: /hooks/wake
+        methods: [POST]
+        token: "replace-with-a-long-random-token"
+        wait: true

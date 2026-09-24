@@ -1,0 +1,23 @@
+# Delete files older than 30 days from a Downloads folder every Sunday on
+# Windows.
+#
+# The command starts PowerShell directly, without cmd, so the pipeline
+# needs no extra quoting.
+#
+# Service: kickd service install -c C:\ProgramData\kickd\config.yaml
+#          (in PowerShell opened as administrator)
+# By hand: kickd event clean-downloads -c C:\ProgramData\kickd\config.yaml
+
+events:
+  - name: clean-downloads
+    description: Delete downloads that are older than 30 days
+    command:
+      - powershell
+      - -NoProfile
+      - -NonInteractive
+      - -Command
+      - 'Get-ChildItem -LiteralPath C:\Users\alice\Downloads -File -Recurse | Where-Object LastWriteTime -lt (Get-Date).AddDays(-30) | Remove-Item -Force'
+    timeout: 30m
+    triggers:
+      - type: cron
+        schedule: "0 9 * * 0"
