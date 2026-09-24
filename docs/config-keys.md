@@ -56,7 +56,7 @@ A kickd running as a service has the directory of its config file as its working
 |---|---|
 | `name` | The parameter name, required: up to 64 letters, digits and `_`, not starting with a digit. |
 | `required` | `true` makes the parameter mandatory. A required parameter cannot have a `default`, and its event cannot have cron or file triggers. |
-| `default` | The value used when the parameter is omitted. |
+| `default` | The value used when the parameter is omitted. Without a default, an omitted parameter reaches the command as an empty value. |
 | `description` | A description. |
 
 ## Cron trigger keys

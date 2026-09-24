@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -48,6 +49,16 @@ func helperMain() {
 		}
 		wd, _ := os.Getwd()
 		fmt.Println("CWD=" + wd)
+		os.Exit(0)
+	case "environ":
+		// Every KICKD_ variable that kickd sets, empty ones included.
+		for _, kv := range os.Environ() {
+			if strings.HasPrefix(kv, "KICKD_") && !strings.HasPrefix(kv, "KICKD_TEST_") && !strings.HasPrefix(kv, "KICKD_HELPER_") {
+				fmt.Println(kv)
+			}
+		}
+		b, _ := os.ReadFile(os.Getenv("KICKD_PAYLOAD_FILE"))
+		fmt.Println("EVENT_FILE=" + string(b))
 		os.Exit(0)
 	case "exit":
 		fmt.Println("some stdout")
@@ -241,6 +252,31 @@ func TestExecutePassesEventToCommand(t *testing.T) {
 	}
 	if cmd := rec.find("Running command"); len(cmd) != 1 || cmd[0]["level"] != slog.LevelDebug {
 		t.Errorf("Running command = %v", cmd)
+	}
+}
+
+// A run gets every variable and payload key, also those of the other kinds
+// of trigger, which are empty.
+func TestExecuteGivesEveryRunTheSameVariables(t *testing.T) {
+	r, _, _ := newRunner(t)
+	ev := event.Event{Name: "demo", Trigger: event.KindManual, TriggerID: "manual", Time: time.Now(), Source: "alice@laptop"}
+	res := r.Execute(context.Background(), helperJob("environ"), ev)
+	if res.ExitCode != 0 || res.Error != "" {
+		t.Fatalf("result = %+v", res)
+	}
+	lines := strings.Split(strings.ReplaceAll(res.Output, "\r\n", "\n"), "\n")
+	for _, want := range []string{
+		"KICKD_DATA={}", "KICKD_MANUAL_SOURCE=alice@laptop", "KICKD_CRON_SCHEDULE=", "KICKD_CRON_MISSED=",
+		"KICKD_WEBHOOK_PATH=", "KICKD_FILE_PATH=", "KICKD_FILE_COUNT=", "KICKD_FILE_PATHS=",
+	} {
+		if !slices.Contains(lines, want) {
+			t.Errorf("environment lacks %q:\n%s", want, res.Output)
+		}
+	}
+	for _, want := range []string{`"data":{}`, `"source":"alice@laptop"`, `"files":[]`, `"cron":null`, `"webhook":null`} {
+		if !strings.Contains(res.Output, want) {
+			t.Errorf("payload lacks %s:\n%s", want, res.Output)
+		}
 	}
 }
 

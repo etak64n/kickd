@@ -80,5 +80,6 @@ A parameter with `required: true` must be given, and a parameter with a `default
 An event without `params` accepts parameters of any name made of letters, digits and `_`.
 
 The command receives each parameter as an environment variable: `ref` arrives as `KICKD_DATA_REF`.
-`KICKD_EVENT_DATA` holds all parameters as one JSON object.
+A declared parameter that is left out and has no default arrives empty, so the command gets every declared parameter.
+`KICKD_DATA` holds all parameters as one JSON object.
 Cron and file triggers cannot pass parameters, so an event with a required parameter cannot have those triggers.

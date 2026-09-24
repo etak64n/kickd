@@ -232,8 +232,9 @@ type Param struct {
 	Default     string `yaml:"default" json:"default,omitempty"`
 }
 
-// Apply checks data against the declared params and fills in defaults.
-// Without declared params any key is accepted.
+// Apply checks data against the declared params and fills in the declared
+// params left out, with their defaults or empty. Without declared params any
+// key is accepted.
 func (e Event) Apply(data map[string]string) (map[string]string, error) {
 	out := make(map[string]string, len(data)+len(e.Params))
 	for k, v := range data {
@@ -257,7 +258,7 @@ func (e Event) Apply(data map[string]string) (map[string]string, error) {
 		switch {
 		case p.Required:
 			errs = append(errs, fmt.Errorf("event %q: parameter %s is required", e.Name, p.Name))
-		case p.Default != "":
+		default:
 			out[p.Name] = p.Default
 		}
 	}

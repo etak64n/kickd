@@ -426,8 +426,8 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			continue
 		}
 		ev.RequestID, ev.RunID, ev.Attempt = run.RequestID, run.ID, run.Attempt
-		// Rows written by "kickd event" already carry defaults; fill them in for any
-		// other writer too.
+		// Give the command every declared parameter. Rows written by "kickd
+		// event" already carry them; fill them in for any other writer too.
 		ev.Data = WithDefaults(ev.Data, spec.Defaults)
 		var summary func() []any
 		if a != nil {

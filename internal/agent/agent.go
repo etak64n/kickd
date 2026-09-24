@@ -314,11 +314,10 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 func specs(cfg *config.Config) []runner.Spec {
 	out := make([]runner.Spec, len(cfg.Events))
 	for i, e := range cfg.Events {
+		// Every declared parameter reaches the command, empty without a value.
 		defaults := map[string]string{}
 		for _, p := range e.Params {
-			if p.Default != "" {
-				defaults[p.Name] = p.Default
-			}
+			defaults[p.Name] = p.Default
 		}
 		out[i] = runner.Spec{
 			Name:        e.Name,

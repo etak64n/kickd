@@ -204,8 +204,15 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 		defer tcancel()
 	}
 
-	// Keep the event file consistent with the log, which is in UTC.
+	// Keep the event file consistent with the log, which is in UTC, and give
+	// it the same keys for every firing.
 	ev.Time = ev.Time.UTC()
+	if ev.Data == nil {
+		ev.Data = map[string]string{}
+	}
+	if ev.Files == nil {
+		ev.Files = []event.FileChange{}
+	}
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		return r.startFailure(log, start, "event_encode", err)

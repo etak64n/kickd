@@ -47,20 +47,20 @@ type Event struct {
 	// the request ID of the firing it repeats.
 	RequestID string `json:"requestId"`
 	// RunID is the row of the run in the database.
-	RunID int64 `json:"runId,omitempty"`
+	RunID int64 `json:"runId"`
 	// Attempt counts runs of this firing, starting at 1; reruns after an
 	// interruption increase it.
-	Attempt   int               `json:"attempt,omitempty"`
+	Attempt   int               `json:"attempt"`
 	Name      string            `json:"event"`
 	Trigger   string            `json:"trigger"`
 	TriggerID string            `json:"triggerId"`
 	Time      time.Time         `json:"time"`
-	Data      map[string]string `json:"data,omitempty"`
+	Data      map[string]string `json:"data"`
 	// Source is user@host of the "kickd event" command that fired the event.
-	Source  string       `json:"source,omitempty"`
-	Files   []FileChange `json:"files,omitempty"`
-	Cron    *CronInfo    `json:"cron,omitempty"`
-	Webhook *WebhookInfo `json:"webhook,omitempty"`
+	Source  string       `json:"source"`
+	Files   []FileChange `json:"files"`
+	Cron    *CronInfo    `json:"cron"`
+	Webhook *WebhookInfo `json:"webhook"`
 }
 
 // FileChange is one file system change collected by a file trigger.
@@ -91,28 +91,32 @@ type WebhookInfo struct {
 	Body       string            `json:"body"`
 }
 
-// Env returns the environment variables that describe the firing.
+// Env returns the environment variables that describe the firing. Every
+// firing gets the same names, whatever its event and its trigger: the
+// variables of another kind of trigger are empty.
 func (e Event) Env() []string {
-	env := []string{
-		"KICKD_REQUEST_ID=" + e.RequestID,
-		"KICKD_EVENT=" + e.Name,
-		"KICKD_TRIGGER=" + e.Trigger,
-		"KICKD_TRIGGER_ID=" + e.TriggerID,
-		"KICKD_TIME=" + e.Time.UTC().Format(time.RFC3339),
-	}
+	runID := ""
 	if e.RunID != 0 {
-		env = append(env, "KICKD_RUN_ID="+strconv.FormatInt(e.RunID, 10))
+		runID = strconv.FormatInt(e.RunID, 10)
 	}
 	attempt := e.Attempt
 	if attempt == 0 {
 		attempt = 1
 	}
-	env = append(env, "KICKD_ATTEMPT="+strconv.Itoa(attempt))
 	data, _ := json.Marshal(e.Data)
 	if e.Data == nil {
 		data = []byte("{}")
 	}
-	env = append(env, "KICKD_EVENT_DATA="+string(data))
+	env := []string{
+		"KICKD_EVENT=" + e.Name,
+		"KICKD_RUN_ID=" + runID,
+		"KICKD_REQUEST_ID=" + e.RequestID,
+		"KICKD_ATTEMPT=" + strconv.Itoa(attempt),
+		"KICKD_TIME=" + e.Time.UTC().Format(time.RFC3339),
+		"KICKD_TRIGGER=" + e.Trigger,
+		"KICKD_TRIGGER_ID=" + e.TriggerID,
+		"KICKD_DATA=" + string(data),
+	}
 	keys := make([]string, 0, len(e.Data))
 	for k := range e.Data {
 		keys = append(keys, k)
@@ -121,41 +125,44 @@ func (e Event) Env() []string {
 	for _, k := range keys {
 		env = append(env, "KICKD_DATA_"+strings.ToUpper(k)+"="+e.Data[k])
 	}
-	if e.Source != "" {
-		env = append(env, "KICKD_SOURCE="+e.Source)
+
+	var cronSchedule, cronScheduledAt, cronMissed string
+	if e.Cron != nil {
+		cronSchedule, cronMissed = e.Cron.Schedule, "0"
+		if !e.Cron.ScheduledAt.IsZero() {
+			cronScheduledAt = e.Cron.ScheduledAt.UTC().Format(time.RFC3339)
+		}
+		if e.Cron.Missed {
+			cronMissed = "1"
+		}
 	}
+	var method, path, remoteAddr string
+	if e.Webhook != nil {
+		method, path, remoteAddr = e.Webhook.Method, e.Webhook.Path, e.Webhook.RemoteAddr
+	}
+	var filePath, fileOp, fileCount, filePaths string
 	if len(e.Files) > 0 {
 		last := e.Files[len(e.Files)-1]
 		paths := make([]string, len(e.Files))
 		for i, f := range e.Files {
 			paths[i] = f.Path
 		}
-		env = append(env,
-			"KICKD_FILE_PATH="+last.Path,
-			"KICKD_FILE_OP="+last.Op,
-			"KICKD_FILE_COUNT="+strconv.Itoa(len(e.Files)),
-			"KICKD_FILE_PATHS="+strings.Join(paths, string(os.PathListSeparator)),
-		)
+		filePath, fileOp, fileCount = last.Path, last.Op, strconv.Itoa(len(e.Files))
+		filePaths = strings.Join(paths, string(os.PathListSeparator))
 	}
-	if e.Cron != nil {
-		env = append(env, "KICKD_CRON_SCHEDULE="+e.Cron.Schedule)
-		if !e.Cron.ScheduledAt.IsZero() {
-			env = append(env, "KICKD_CRON_SCHEDULED_AT="+e.Cron.ScheduledAt.UTC().Format(time.RFC3339))
-		}
-		missed := "0"
-		if e.Cron.Missed {
-			missed = "1"
-		}
-		env = append(env, "KICKD_CRON_MISSED="+missed)
-	}
-	if e.Webhook != nil {
-		env = append(env,
-			"KICKD_WEBHOOK_METHOD="+e.Webhook.Method,
-			"KICKD_WEBHOOK_PATH="+e.Webhook.Path,
-			"KICKD_WEBHOOK_REMOTE_ADDR="+e.Webhook.RemoteAddr,
-		)
-	}
-	return env
+	return append(env,
+		"KICKD_MANUAL_SOURCE="+e.Source,
+		"KICKD_CRON_SCHEDULE="+cronSchedule,
+		"KICKD_CRON_SCHEDULED_AT="+cronScheduledAt,
+		"KICKD_CRON_MISSED="+cronMissed,
+		"KICKD_WEBHOOK_METHOD="+method,
+		"KICKD_WEBHOOK_PATH="+path,
+		"KICKD_WEBHOOK_REMOTE_ADDR="+remoteAddr,
+		"KICKD_FILE_PATH="+filePath,
+		"KICKD_FILE_OP="+fileOp,
+		"KICKD_FILE_COUNT="+fileCount,
+		"KICKD_FILE_PATHS="+filePaths,
+	)
 }
 
 // DispatchStatus tells what happened to a firing handed to the queue.

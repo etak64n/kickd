@@ -225,6 +225,7 @@ events:
     params:
       - {name: ref, default: main}
       - {name: env, required: true}
+      - {name: note}
     triggers: [{type: webhook, path: /d}]
   - name: free
     command: [x]
@@ -235,6 +236,8 @@ events:
 	e, _ := cfg.EventByName("deploy")
 	if got, err := e.Apply(map[string]string{"env": "prod"}); err != nil || got["ref"] != "main" || got["env"] != "prod" {
 		t.Errorf("defaults = %v, %v", got, err)
+	} else if note, ok := got["note"]; !ok || note != "" {
+		t.Errorf("a declared parameter without a value = %q, %v; want it present and empty", note, ok)
 	}
 	if _, err := e.Apply(map[string]string{"ref": "x"}); err == nil || !strings.Contains(err.Error(), "env is required") {
 		t.Errorf("missing required: %v", err)

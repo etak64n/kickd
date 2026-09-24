@@ -31,7 +31,7 @@ The command also inherits the environment of the agent, so `HOME` or `USERPROFIL
 
 The user who fires an event does not matter.
 `kickd event` only writes a run into the database, and the agent runs the command later as its own user.
-A run records who fired it in `source`, which the command reads as `KICKD_SOURCE`: the user and host of the `kickd event` process.
+A run records who fired it in `source`, which the command reads as `KICKD_MANUAL_SOURCE`: the user and host of the `kickd event` process.
 Under `sudo`, that user is root.
 
 For example, with kickd installed as a system-wide unit on Linux, `sudo kickd event deploy` makes root run the deploy command, and so does a webhook request from another machine.

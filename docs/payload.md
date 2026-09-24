@@ -6,47 +6,60 @@ In kickd, a named command in the config file is an **event**, and each firing of
 The information about one run that kickd passes to the command is called the **payload**.
 kickd passes the payload in environment variables and in a JSON file.
 
-Every command receives these environment variables:
+## Environment variables
 
-| Variable | Contents |
-|---|---|
-| `KICKD_EVENT` | The event name |
-| `KICKD_REQUEST_ID` | The request ID of the firing. kickd's log records of the firing carry the same value, so a command that writes it into its own logs links the two. |
-| `KICKD_RUN_ID` | The run ID, which `kickd show` accepts |
-| `KICKD_ATTEMPT` | The attempt number: 1 for the first run, one higher for each rerun after an interruption |
-| `KICKD_TRIGGER` | The kind of trigger: `manual`, `cron`, `webhook` or `file`. `manual` means `kickd event`. |
-| `KICKD_TRIGGER_ID` | The trigger, in the form `manual`, `cron:0 3 * * *`, `webhook:/hooks/x` or `file:/path` |
-| `KICKD_TIME` | When the event fired, in UTC, in RFC 3339 format |
-| `KICKD_EVENT_DATA` | All parameters, the named values passed with the firing, as one JSON object |
-| `KICKD_DATA_<NAME>` | One variable for each parameter, with the name in upper case: `ref` arrives as `KICKD_DATA_REF` |
-| `KICKD_PAYLOAD_FILE` | The path of a JSON file that holds the whole payload. kickd deletes the file when the command ends. |
+Every command receives the same environment variables, whatever its event and its trigger.
+A variable about another kind of trigger is set to an empty string, so a script can read any of them without checking that it exists, even under `set -u`.
+The name of a variable about one kind of trigger starts with that kind: `KICKD_MANUAL_`, `KICKD_CRON_`, `KICKD_WEBHOOK_` or `KICKD_FILE_`.
 
-Depending on the trigger, these variables are also set:
+| Variable | Filled for | Contents |
+|---|---|---|
+| `KICKD_EVENT` | Every run | The event name |
+| `KICKD_RUN_ID` | Every run | The run ID, which `kickd show` accepts |
+| `KICKD_REQUEST_ID` | Every run | The request ID of the firing. kickd's log records of the firing carry the same value, so a command that writes it into its own logs links the two. |
+| `KICKD_ATTEMPT` | Every run | The attempt number: 1 for the first run, one higher for each rerun after an interruption |
+| `KICKD_TIME` | Every run | When the event fired, in UTC, in RFC 3339 format |
+| `KICKD_TRIGGER` | Every run | The kind of trigger: `manual`, `cron`, `webhook` or `file`. `manual` means `kickd event`. |
+| `KICKD_TRIGGER_ID` | Every run | The trigger, in the form `manual`, `cron:0 3 * * *`, `webhook:/hooks/x` or `file:/path` |
+| `KICKD_PAYLOAD_FILE` | Every run | The path of a JSON file that holds the whole payload. kickd deletes the file when the command ends. |
+| `KICKD_DATA` | Every run | All parameters, the named values passed with the firing, as one JSON object: `{}` for an event without parameters |
+| `KICKD_DATA_<NAME>` | Every run | One variable for each parameter, with the name in upper case: `ref` arrives as `KICKD_DATA_REF` |
+| `KICKD_MANUAL_SOURCE` | `manual` | The user and host that ran `kickd event` |
+| `KICKD_CRON_SCHEDULE` | `cron` | The cron expression that fired |
+| `KICKD_CRON_SCHEDULED_AT` | `cron` | The scheduled time that the run stands for, in UTC, in RFC 3339 format. When several scheduled times passed at once, the latest of them |
+| `KICKD_CRON_MISSED` | `cron` | `1` when that time passed while the machine slept or kickd was stopped, so the run makes up for it, and `0` otherwise |
+| `KICKD_WEBHOOK_METHOD` | `webhook` | The HTTP method of the request |
+| `KICKD_WEBHOOK_PATH` | `webhook` | The URL path of the request |
+| `KICKD_WEBHOOK_REMOTE_ADDR` | `webhook` | The address the request came from |
+| `KICKD_FILE_PATH` | `file` | The file that changed last |
+| `KICKD_FILE_OP` | `file` | The kind of the last change |
+| `KICKD_FILE_COUNT` | `file` | The number of changes combined into this firing |
+| `KICKD_FILE_PATHS` | `file` | The paths of those changes, joined with `:` on macOS and Linux and with `;` on Windows |
 
-| Variable | Contents |
-|---|---|
-| `KICKD_SOURCE` | For `kickd event`, the user and host that fired the event |
-| `KICKD_FILE_PATH` | The file that changed last |
-| `KICKD_FILE_OP` | The kind of the last change |
-| `KICKD_FILE_COUNT` | The number of changes combined into this firing |
-| `KICKD_FILE_PATHS` | The paths of those changes, joined with `:` on macOS and Linux and with `;` on Windows |
-| `KICKD_CRON_SCHEDULE` | The cron expression that fired |
-| `KICKD_CRON_SCHEDULED_AT` | The scheduled time that the run stands for, in UTC, in RFC 3339 format. When several scheduled times passed at once, the latest of them |
-| `KICKD_CRON_MISSED` | `1` when that time passed while the machine slept or kickd was stopped, so the run makes up for it, and `0` otherwise |
-| `KICKD_WEBHOOK_METHOD` | The HTTP method of the request |
-| `KICKD_WEBHOOK_PATH` | The URL path of the request |
-| `KICKD_WEBHOOK_REMOTE_ADDR` | The address the request came from |
+An event with `params` gets a `KICKD_DATA_<NAME>` variable for every declared parameter, whatever the trigger.
+A parameter that the firing leaves out takes its `default`, and without a default it is empty.
+An event without `params` accepts parameters of any name, so it gets a variable for each parameter that the firing passes.
 
-With `stdin: payload` in the event, the command also receives the payload JSON on standard input.
+## The payload JSON
 
-The payload of a file firing holds `files`, a list of the combined changes, each with `path` and `op`.
-The payload of a cron firing holds `cron.schedule`, the cron expression that fired, and `cron.scheduledAt` and `cron.missed`, the same values as `KICKD_CRON_SCHEDULED_AT` and `KICKD_CRON_MISSED`.
+The JSON file at `KICKD_PAYLOAD_FILE` holds the same keys for every run.
+With `stdin: payload` in the event, the command also receives the JSON on standard input.
 
-The payload of a webhook firing holds the request body, headers and query.
-A header or query parameter with several values keeps only its first value.
+`data` holds the parameters, as `KICKD_DATA` does.
+Four keys hold the details of one kind of trigger each, and they are empty for the other kinds: `source` is `""`, `files` is `[]`, and `cron` and `webhook` are `null`.
+
+| Key | Filled for | Contents |
+|---|---|---|
+| `source` | `manual` | The user and host that ran `kickd event` |
+| `files` | `file` | The changes combined into the firing, each with `path` and `op` |
+| `cron` | `cron` | `schedule`, `scheduledAt` and `missed`, the same values as the `KICKD_CRON_` variables |
+| `webhook` | `webhook` | `method`, `path` and `remoteAddr`, and the `headers`, `query` and `body` of the request |
+
+In `webhook`, a header or query parameter with several values keeps only its first value.
 The body is stored as a JSON string, so bytes that are not valid UTF-8 are replaced with U+FFFD.
 kickd removes the headers `Authorization` and `X-Kickd-Token` and the query parameter `token`, which carry credentials.
-A webhook payload looks like this:
+
+The payload of a webhook firing looks like this:
 
 ```json
 {
@@ -58,6 +71,9 @@ A webhook payload looks like this:
   "triggerId": "webhook:/hooks/deploy",
   "time": "2026-09-23T08:41:12.345678Z",
   "data": {"ref": "v1.2"},
+  "source": "",
+  "files": [],
+  "cron": null,
   "webhook": {
     "method": "POST",
     "path": "/hooks/deploy",
@@ -69,7 +85,7 @@ A webhook payload looks like this:
 }
 ```
 
-The payload of `kickd event` holds, in `source`, the user and host that fired the event:
+The payload of `kickd event` has the same keys, with the details in `source`:
 
 ```json
 {
@@ -81,7 +97,10 @@ The payload of `kickd event` holds, in `source`, the user and host that fired th
   "triggerId": "manual",
   "time": "2026-09-23T14:20:07.123456Z",
   "data": {"ref": "v1.2"},
-  "source": "alice@laptop"
+  "source": "alice@laptop",
+  "files": [],
+  "cron": null,
+  "webhook": null
 }
 ```
 
