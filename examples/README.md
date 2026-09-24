@@ -8,12 +8,11 @@ The comments at the top of each file say what the example needs and how to insta
 
 | File | What it does | Automatic triggers | Runs on |
 |---|---|---|---|
-| [scan-inbox.yaml](scan-inbox.yaml) | Adds a text layer to scanned PDFs with ocrmypdf and files them away | File | macOS, Linux |
-| [transcode-videos.yaml](transcode-videos.yaml) | Converts camera clips to MP4 with ffmpeg | File | macOS, Linux |
-| [notes-git-sync.yaml](notes-git-sync.yaml) | Commits, pulls and pushes a folder of notes | File, cron | macOS, Linux |
-| [mac-screenshots.yaml](mac-screenshots.yaml) | Sorts screenshots into one folder per month | File | macOS |
 | [github-deploy.yaml](github-deploy.yaml) | Deploys an app when GitHub reports a push to main | Webhook | Linux |
-| [wake-on-lan.yaml](wake-on-lan.yaml) | Wakes a machine on the home network from a phone | Webhook | macOS, Linux |
+| [restart-service.yaml](restart-service.yaml) | Restarts a known service when a monitoring tool or a pipeline asks | Webhook | Linux |
+| [rebuild-on-change.yaml](rebuild-on-change.yaml) | Runs make when the sources of a project change | File | macOS, Linux |
+| [git-autocommit.yaml](git-autocommit.yaml) | Commits, pulls and pushes a folder kept in Git | File, cron | macOS, Linux |
+| [transcode-videos.yaml](transcode-videos.yaml) | Converts video clips to MP4 with ffmpeg | File | macOS, Linux |
 | [restic-backup.yaml](restic-backup.yaml) | Backs up /home with restic, and thins out old snapshots | Cron | Linux |
 | [certbot-renew.yaml](certbot-renew.yaml) | Renews Let's Encrypt certificates and reloads nginx | Cron | Linux |
 | [disk-space-alert.yaml](disk-space-alert.yaml) | Sends a push notification through ntfy when a disk is 90% full | Cron | Linux |

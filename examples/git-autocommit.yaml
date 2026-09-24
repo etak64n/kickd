@@ -1,0 +1,34 @@
+# Keep a folder in a Git repository: commit and push after every edit.
+#
+# Changes are committed and pushed once the folder has been quiet for 30
+# seconds. Every 10 minutes the same event also pulls what other machines
+# pushed. Files that a pull changes fire the event once more, and that run
+# finds nothing to commit.
+#
+# Needs:   git, and ~/wiki as a clone with a remote that accepts pushes
+# Service: kickd service install --user
+# By hand: kickd event git-sync
+
+events:
+  - name: git-sync
+    description: Commit, pull and push ~/wiki
+    workdir: ~/wiki
+    shell: |
+      set -e
+      git add -A
+      # git commit fails when nothing changed, so commit only staged changes.
+      git diff --cached --quiet || git commit --quiet -m "Update $(date '+%Y-%m-%d %H:%M')"
+      git pull --rebase --quiet
+      git push --quiet
+    timeout: 5m
+    concurrency: queue
+    triggers:
+      - type: file
+        path: ~/wiki
+        recursive: true
+        # A commit writes to .git; excluding it keeps a commit from firing
+        # the event again.
+        exclude: [".git"]
+        debounce: 30s
+      - type: cron
+        schedule: "*/10 * * * *"

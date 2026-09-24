@@ -1,0 +1,40 @@
+# Restart a service when another system asks for it, such as a monitoring
+# tool that sees the service fail, or a CI pipeline after a deploy.
+#
+# The caller sends
+#   POST https://ops.example.com/hooks/restart?service=web
+# with the header "Authorization: Bearer <token>". With wait: true, the
+# response carries the exit code and the output of systemctl.
+#
+# The command restarts only the services it knows, so the query cannot
+# make it restart anything else.
+#
+# Service: sudo kickd service install -c /etc/kickd/config.yaml
+# By hand: sudo kickd event restart service=worker -c /etc/kickd/config.yaml
+
+webhook:
+  listen: "127.0.0.1:8787"
+
+events:
+  - name: restart
+    description: Restart one of the known services
+    params:
+      - name: service
+        required: true
+        description: web or worker
+    shell: |
+      case "$KICKD_DATA_SERVICE" in
+        web)    unit=nginx.service ;;
+        worker) unit=app-worker.service ;;
+        *) echo "unknown service: $KICKD_DATA_SERVICE" >&2; exit 2 ;;
+      esac
+      systemctl restart "$unit"
+      systemctl --no-pager --lines=0 status "$unit"
+    timeout: 2m
+    concurrency: queue
+    triggers:
+      - type: webhook
+        path: /hooks/restart
+        methods: [POST]
+        token: "replace-with-a-long-random-token"
+        wait: true

@@ -1,10 +1,11 @@
-# Convert camera clips to H.264 MP4 files that play everywhere.
+# Convert video clips to H.264 MP4 files that play everywhere.
 #
 # Copy clips into ~/Videos/Incoming. When no file has changed for 30
 # seconds, ffmpeg converts every clip into ~/Videos/Converted and moves the
 # original to ~/Videos/Originals.
 #
-# Needs:   ffmpeg (brew install ffmpeg, or apt install ffmpeg)
+# Needs:   ffmpeg. A service starts with a short PATH, so if kickd cannot
+#          find ffmpeg, write its absolute path in the command.
 # Service: kickd service install --user
 # By hand: kickd event transcode
 
@@ -25,8 +26,6 @@ events:
           mv "$tmp" "$HOME/Videos/Converted/$name.mp4" &&
           mv "$f" "$HOME/Videos/Originals/"
       done
-    env:
-      PATH: "/opt/homebrew/bin:/usr/local/bin:${PATH}"
     timeout: 3h
     concurrency: queue
     # A clip is moved only after its MP4 is complete, so a rerun starts

@@ -100,7 +100,7 @@ It is written for a kickd that runs as the user: a LaunchAgent on macOS, or a pe
 ```yaml
 events:
   - name: archive-pdf
-    shell: 'for f in "$HOME"/Inbox/*.pdf; do [ -e "$f" ] && mv "$f" "$HOME"/Archive/; done'
+    shell: 'for f in "$HOME"/Inbox/*.pdf; do [ -e "$f" ] || continue; mv "$f" "$HOME"/Archive/; done'
     triggers:
       - type: file
         path: ~/Inbox

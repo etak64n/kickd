@@ -24,6 +24,64 @@ Each firing is first written as a **run** to a SQLite database called the **queu
 The long-running kickd process, called the **agent**, takes runs from the queue in order and starts the event's command for each one.
 The queue is a file, so runs that are still waiting survive a restart of the agent or of the machine.
 
+## The config file
+
+A config file is YAML with four sections: `log`, `webhook`, `queue` and `events`.
+Only `events` is required, and every other key has a default.
+This file defines one event for each kind of trigger:
+
+```yaml
+log:
+  file: kickd.log            # JSON Lines; without a file, kickd logs to standard error
+webhook:
+  listen: "127.0.0.1:8787"   # the HTTP server for webhook triggers
+queue:
+  path: kickd.db             # the SQLite database that records every run
+  retention: 168h            # how long finished runs stay in the history
+
+events:
+  # Cron: every night at 3:00, Tokyo time.
+  - name: backup
+    shell: 'rsync -a "$HOME/work/" "$HOME/backup/work/"'
+    timeout: 1h
+    on_interrupt: rerun      # run again when a stop or a crash cut the run off
+    triggers:
+      - type: cron
+        schedule: "0 3 * * *"
+        timezone: Asia/Tokyo
+
+  # Webhook: POST /hooks/deploy?ref=v1.2 with "Authorization: Bearer <token>".
+  - name: deploy
+    command: ["./deploy.sh"]
+    workdir: ~/app
+    concurrency: queue       # deploys wait for each other and run in order
+    params:
+      - name: ref            # the command reads it as $KICKD_DATA_REF
+        default: main
+    triggers:
+      - type: webhook
+        path: /hooks/deploy
+        methods: [POST]
+        token: "replace-with-a-long-random-string"
+
+  # File changes: 5 seconds after the last new PDF in ~/Inbox.
+  - name: archive-pdf
+    shell: 'for f in "$HOME"/Inbox/*.pdf; do [ -e "$f" ] || continue; mv "$f" "$HOME"/Archive/; done'
+    triggers:
+      - type: file
+        path: ~/Inbox
+        include: ["*.pdf"]
+        changes: [create, write]
+        debounce: 5s
+
+  # No triggers: runs only with "kickd event cleanup".
+  - name: cleanup
+    shell: 'find "$HOME/tmp" -type f -mtime +7 -delete'
+```
+
+`kickd check` validates a config file and lists its events and triggers.
+The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
+
 ## Features
 
 - **Recovery after a stop or crash**: each event chooses whether a run that was cut off starts again or is given up.

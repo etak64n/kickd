@@ -1,0 +1,25 @@
+# Rebuild a project when its sources change, such as a documentation site
+# or generated code.
+#
+# kickd runs make once the sources have been quiet for 2 seconds. With
+# concurrency: queue, a change during a build waits and runs after it, so
+# the last change is always built. The trigger watches only src, so the
+# files that the build writes do not fire it again.
+#
+# Needs:   make, and a Makefile with a build target in ~/project
+# Service: kickd service install --user
+# By hand: kickd event rebuild
+
+events:
+  - name: rebuild
+    description: Run make build after source changes
+    command: [make, build]
+    workdir: ~/project
+    timeout: 10m
+    concurrency: queue
+    triggers:
+      - type: file
+        path: ~/project/src
+        recursive: true
+        exclude: [".git", "node_modules"]
+        debounce: 2s
