@@ -13,6 +13,28 @@ go vet ./...               # static checks
 
 GitHub Actions runs `go vet` and the tests on Linux, macOS and Windows for every push to `main` and every pull request.
 On Linux, it also runs the tests with the race detector, builds kickd for every platform, and runs the tests with the oldest Go version that `go.mod` allows.
+On all three OSes, it also runs the use-case tests, with every kind of command required, and the service tests.
+
+## Use-case tests
+
+The use-case tests in `test/usecase` run the kickd executable the way its users do.
+Each test writes the config of the README with `kickd init`, replaces the commands with small scripts, starts the agent, and fires the events through their triggers.
+The tests check the triggers, the `concurrency` and `on_interrupt` settings, timeouts, `kickd cancel`, reloading, and commands of many kinds: commands of the OS in a string, and programs in sh, Python, Node.js, Ruby, Perl, Rust, PowerShell and cmd.
+They build only with the tag `usecase`:
+
+```sh
+go test -tags usecase ./test/usecase
+```
+
+A kind of command whose program is not installed is skipped, and with `KICKD_USECASE_ALL=1` it fails the test instead.
+
+The service tests install kickd as a service of the whole system and as a per-user service, the way the installation guides do.
+They write the config, the log and the database to the places of the OS, such as `/etc/kickd`, and need sudo on macOS and Linux and an administrator on Windows.
+So they run only with `KICKD_SERVICE_TEST=1`, on a machine that can be thrown away, such as a runner of GitHub Actions:
+
+```sh
+KICKD_SERVICE_TEST=1 go test -tags usecase -run TestService ./test/usecase
+```
 
 Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
 
@@ -37,6 +59,7 @@ internal/agent/     Builds the triggers and the queue consumer from the config, 
 internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
 internal/licenses/  The license texts that kickd licenses prints
+test/usecase/       The use-case tests: the kickd executable with the README config, commands of many kinds, and services
 scripts/            build-all.sh, the cross build for every platform; third-party-licenses.sh, the list of licenses
 .github/workflows/  ci.yml, the tests on every OS; vulncheck.yml, the vulnerability check; release.yml, the release workflow
 ```

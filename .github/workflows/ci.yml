@@ -52,6 +52,36 @@ jobs:
         if: runner.os == 'Linux'
         run: go list -deps ./cmd/kickd | grep -qx time/tzdata
 
+  # Runs the kickd executable the way its users do, on each OS: the README
+  # config with commands of many kinds, and kickd installed as a service.
+  usecase:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Vet
+        run: go vet -tags usecase ./test/usecase
+
+      - name: Use cases
+        run: go test -tags usecase -count=1 -v -run TestUseCase ./test/usecase
+        env:
+          KICKD_USECASE_ALL: '1'
+
+      # The runner is a throwaway machine, so the tests may install services.
+      - name: Services
+        run: go test -tags usecase -count=1 -v -run TestService ./test/usecase
+        env:
+          KICKD_SERVICE_TEST: '1'
+
   # go.mod promises that Go 1.25 builds kickd.
   minimum-go:
     runs-on: ubuntu-latest
