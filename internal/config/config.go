@@ -203,6 +203,9 @@ type Trigger struct {
 	// cron
 	Schedule string `yaml:"schedule"`
 	Timezone string `yaml:"timezone"`
+	// Missed is run or skip: what to do with scheduled times that passed
+	// while the machine slept or kickd was stopped.
+	Missed string `yaml:"missed"`
 
 	// webhook
 	Methods []string `yaml:"methods"`
@@ -317,6 +320,11 @@ func (c *Config) applyDefaults() {
 				}
 				if len(t.Changes) == 0 {
 					t.Changes = slices.Clone(trigger.DefaultFileOps)
+				}
+			case TriggerCron:
+				t.Missed = strings.ToLower(strings.TrimSpace(t.Missed))
+				if t.Missed == "" {
+					t.Missed = trigger.MissedRun
 				}
 			case TriggerWebhook:
 				for m := range t.Methods {
@@ -434,6 +442,9 @@ func (c *Config) validate() error {
 				} else if _, err := trigger.ParseSchedule(t.Schedule, t.Timezone); err != nil {
 					fail("%s: schedule %q: %v", twhere, t.Schedule, err)
 				}
+				if t.Missed != trigger.MissedRun && t.Missed != trigger.MissedSkip {
+					fail("%s: missed %q must be run or skip", twhere, t.Missed)
+				}
 				if hasRequired {
 					fail("%s: a cron trigger cannot supply required parameters", twhere)
 				}
@@ -460,7 +471,7 @@ func (c *Config) validate() error {
 					}
 				}
 				if t.Recursive || len(t.Include) > 0 || len(t.Exclude) > 0 || len(t.Changes) > 0 || t.Debounce != 0 ||
-					t.Schedule != "" || t.Timezone != "" {
+					t.Schedule != "" || t.Timezone != "" || t.Missed != "" {
 					fail("%s: file and cron fields are not allowed on a webhook trigger", twhere)
 				}
 			case TriggerFile:
@@ -480,7 +491,7 @@ func (c *Config) validate() error {
 				if hasRequired {
 					fail("%s: a file trigger cannot supply required parameters", twhere)
 				}
-				if t.Schedule != "" || t.Timezone != "" || t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
+				if t.Schedule != "" || t.Timezone != "" || t.Missed != "" || t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
 					fail("%s: cron and webhook fields are not allowed on a file trigger", twhere)
 				}
 			case "":

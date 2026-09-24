@@ -68,6 +68,8 @@ The same two records in text format:
 | `Config warning` | WARN | The config has a problem that does not stop the agent | `event`, `reason`, `detail` |
 | `File watch started` | INFO | A file trigger started watching a directory | `event`, `file`, `recursive`, `count` |
 | `Cron schedule added` | INFO | A cron trigger was registered | `event`, `schedule`, `nextRunAt` |
+| `Missed schedule caught up` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and one run makes up for them, as `missed: run` says | `event`, `schedule`, `scheduledAt`, `count`, `detail` |
+| `Missed schedule skipped` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and kickd skips them, as `missed: skip` says | `event`, `schedule`, `scheduledAt`, `count`, `nextRunAt` |
 | `Webhook server listening` | INFO | The webhook server started listening | `listen`, `count` |
 | `Run started` | INFO | The command of a run started | `event`, `trigger`, `triggerId`, `runId`, `attempt`, `source` |
 | `Run completed` | INFO | The command exited with code 0 | `exitCode`, `durationMs`, `skipped` |

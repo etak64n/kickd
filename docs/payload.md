@@ -31,6 +31,8 @@ Depending on the trigger, these variables are also set:
 | `KICKD_FILE_COUNT` | The number of changes combined into this firing |
 | `KICKD_FILE_PATHS` | The paths of those changes, joined with `:` on macOS and Linux and with `;` on Windows |
 | `KICKD_CRON_SCHEDULE` | The cron expression that fired |
+| `KICKD_CRON_SCHEDULED_AT` | The scheduled time that the run stands for, in UTC, in RFC 3339 format. When several scheduled times passed at once, the latest of them |
+| `KICKD_CRON_MISSED` | `1` when that time passed while the machine slept or kickd was stopped, so the run makes up for it, and `0` otherwise |
 | `KICKD_WEBHOOK_METHOD` | The HTTP method of the request |
 | `KICKD_WEBHOOK_PATH` | The URL path of the request |
 | `KICKD_WEBHOOK_REMOTE_ADDR` | The address the request came from |
@@ -38,7 +40,7 @@ Depending on the trigger, these variables are also set:
 With `stdin: payload` in the event, the command also receives the payload JSON on standard input.
 
 The payload of a file firing holds `files`, a list of the combined changes, each with `path` and `op`.
-The payload of a cron firing holds `cron.schedule`, the cron expression that fired.
+The payload of a cron firing holds `cron.schedule`, the cron expression that fired, and `cron.scheduledAt` and `cron.missed`, the same values as `KICKD_CRON_SCHEDULED_AT` and `KICKD_CRON_MISSED`.
 
 The payload of a webhook firing holds the request body, headers and query.
 A header or query parameter with several values keeps only its first value.

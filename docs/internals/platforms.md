@@ -79,6 +79,13 @@ macOS guards some locations, such as the Desktop, Documents and Downloads folder
 macOS checks the access of a command against the permission of kickd, the program that started it, so kickd needs Full Disk Access to watch or process those locations.
 A kickd started by launchd cannot show the dialog that asks for permission, so an access without permission can hang instead of failing.
 
+## Sleep
+
+Go timers measure time on a clock that stops while the machine sleeps, on macOS and Linux alike.
+A cron trigger that waited for its next time with one long timer would therefore run late by as long as the machine slept.
+kickd waits at most one second at a time and then looks at the wall clock, so a cron trigger finds the scheduled times that passed during sleep within a second after the machine wakes.
+The `missed` key of the trigger decides whether those times run.
+
 ## Time zones
 
 The `timezone` of a cron trigger names a zone of the IANA time zone database, such as `Asia/Tokyo`.

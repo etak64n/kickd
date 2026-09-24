@@ -104,7 +104,7 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 		for _, w := range cfg.Warnings() {
 			log.Warn("Config warning", "event", w.Event, "reason", w.Reason, "detail", w.Detail)
 		}
-		errCh, stop := startTriggers(ctx, cfg, disp, log)
+		errCh, stop := startTriggers(ctx, cfg, disp, store, log)
 		msg := "Config loaded"
 		if !first {
 			msg = "Config reloaded"
@@ -216,9 +216,9 @@ func causeAttrs(cause error) []any {
 
 // startTriggers builds the triggers of cfg and runs them until stop is
 // called with a cause. Fatal trigger errors arrive on the returned channel.
-func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Dispatcher, log *slog.Logger) (<-chan error, func(error)) {
+func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Dispatcher, state trigger.CronState, log *slog.Logger) (<-chan error, func(error)) {
 	ctx, cancel := context.WithCancelCause(parent)
-	cronSched := trigger.NewCronScheduler(log)
+	cronSched := trigger.NewCronScheduler(log, state)
 	var hook *trigger.WebhookServer
 	type runnable struct {
 		name string
@@ -228,10 +228,11 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 
 	for _, e := range cfg.Events {
 		h := disp.Handler(e.Name)
-		for _, tc := range e.Triggers {
+		for k, tc := range e.Triggers {
 			switch tc.Type {
 			case config.TriggerCron:
-				if err := cronSched.Add(e.Name, tc.Schedule, tc.Timezone, h); err != nil {
+				ct := trigger.CronTrigger{Event: e.Name, Index: k, Schedule: tc.Schedule, Timezone: tc.Timezone, Missed: tc.Missed}
+				if err := cronSched.Add(ct, h); err != nil {
 					log.Error("Trigger rejected", "event", e.Name, "trigger", event.KindCron, logging.Err(err))
 				}
 			case config.TriggerWebhook:

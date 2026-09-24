@@ -248,3 +248,38 @@ func TestResolve(t *testing.T) {
 		t.Errorf("env = %q", got)
 	}
 }
+
+func TestCronMissed(t *testing.T) {
+	dir := t.TempDir()
+	load := func(missed string) (*Config, error) {
+		body := "events:\n  - name: a\n    shell: x\n    triggers:\n      - type: cron\n        schedule: \"0 3 * * *\"\n"
+		if missed != "" {
+			body += "        missed: " + missed + "\n"
+		}
+		path := filepath.Join(dir, "kickd.yaml")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+	for missed, want := range map[string]string{"": "run", "skip": "skip", "SKIP": "skip", "run": "run"} {
+		cfg, err := load(missed)
+		if err != nil {
+			t.Fatalf("missed %q: %v", missed, err)
+		}
+		if got := cfg.Events[0].Triggers[0].Missed; got != want {
+			t.Errorf("missed %q: got %q, want %q", missed, got, want)
+		}
+	}
+	if _, err := load("later"); err == nil || !strings.Contains(err.Error(), "missed \"later\" must be run or skip") {
+		t.Errorf("an unknown value must fail: %v", err)
+	}
+	path := filepath.Join(dir, "hook.yaml")
+	body := "events:\n  - name: a\n    shell: x\n    triggers:\n      - {type: webhook, path: /h, missed: run}\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "not allowed on a webhook trigger") {
+		t.Errorf("missed on a webhook trigger must fail: %v", err)
+	}
+}

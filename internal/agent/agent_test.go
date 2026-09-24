@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/etak64n/kickd/internal/event"
 	"github.com/etak64n/kickd/internal/queue"
+	"github.com/etak64n/kickd/internal/trigger"
 )
 
 func waitForFile(t *testing.T, p string, want string, d time.Duration) {
@@ -215,4 +217,42 @@ func TestAgentRerunsAfterRestart(t *testing.T) {
 		t.Fatalf("rerun = %+v", r)
 	}
 	waitForFile(t, filepath.Join(dir, "attempts.txt"), "attempt=2", 5*time.Second)
+}
+
+// A cron trigger that came due while kickd was stopped runs once when kickd
+// starts again with missed: run, and does not run with missed: skip.
+func TestAgentHandlesCronMissedWhileStopped(t *testing.T) {
+	// An hourly schedule 30 minutes away from now: its latest time is well
+	// past the one minute that still counts as on time.
+	minute := (time.Now().UTC().Minute() + 30) % 60
+	schedule := fmt.Sprintf("%d * * * *", minute)
+	for _, missed := range []string{"run", "skip"} {
+		t.Run(missed, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "kickd.yaml")
+			out := filepath.Join(dir, "cron.txt")
+			writeFile(t, cfgPath, "events:\n  - name: hourly\n"+helperEvent("append-cron", out)+
+				"    triggers:\n      - {type: cron, schedule: \""+schedule+"\", timezone: UTC, missed: "+missed+"}\n")
+			store, err := queue.Open(filepath.Join(dir, "kickd.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			key := trigger.CronStateKey(trigger.CronTrigger{Event: "hourly", Index: 0, Schedule: schedule, Timezone: "UTC"})
+			if err := store.SetLastCron(context.Background(), key, time.Now().Add(-3*time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			store.Close()
+
+			cancel, done := startAgent(t, cfgPath)
+			defer stopAgent(t, cancel, done)
+			if missed == "run" {
+				waitForFile(t, out, "missed=1 scheduledAt=", 10*time.Second)
+				return
+			}
+			time.Sleep(2 * time.Second)
+			if b, err := os.ReadFile(out); err == nil {
+				t.Fatalf("missed: skip must not run a missed time, got %q", b)
+			}
+		})
+	}
 }

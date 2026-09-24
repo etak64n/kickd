@@ -72,6 +72,12 @@ type FileChange struct {
 // CronInfo carries the schedule that fired.
 type CronInfo struct {
 	Schedule string `json:"schedule"`
+	// ScheduledAt is the scheduled time that the run stands for. When
+	// several scheduled times passed at once, it is the latest of them.
+	ScheduledAt time.Time `json:"scheduledAt"`
+	// Missed reports that ScheduledAt passed while the machine slept or
+	// kickd was stopped, and the run makes up for it.
+	Missed bool `json:"missed"`
 }
 
 // WebhookInfo carries the HTTP request that fired the event.
@@ -133,6 +139,14 @@ func (e Event) Env() []string {
 	}
 	if e.Cron != nil {
 		env = append(env, "KICKD_CRON_SCHEDULE="+e.Cron.Schedule)
+		if !e.Cron.ScheduledAt.IsZero() {
+			env = append(env, "KICKD_CRON_SCHEDULED_AT="+e.Cron.ScheduledAt.UTC().Format(time.RFC3339))
+		}
+		missed := "0"
+		if e.Cron.Missed {
+			missed = "1"
+		}
+		env = append(env, "KICKD_CRON_MISSED="+missed)
 	}
 	if e.Webhook != nil {
 		env = append(env,

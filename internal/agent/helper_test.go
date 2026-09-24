@@ -20,6 +20,8 @@ func TestMain(m *testing.M) {
 		appendLine(os.Getenv("HELPER_TEXT"))
 	case "append-event":
 		appendLine(fmt.Sprintf("ref=%s event=%s trigger=%s", os.Getenv("KICKD_DATA_REF"), os.Getenv("KICKD_EVENT"), os.Getenv("KICKD_TRIGGER")))
+	case "append-cron":
+		appendLine(fmt.Sprintf("missed=%s scheduledAt=%s", os.Getenv("KICKD_CRON_MISSED"), os.Getenv("KICKD_CRON_SCHEDULED_AT")))
 	case "attempt":
 		appendLine("attempt=" + os.Getenv("KICKD_ATTEMPT"))
 		if n, _ := strconv.Atoi(os.Getenv("KICKD_ATTEMPT")); n < 2 {

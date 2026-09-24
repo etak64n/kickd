@@ -24,8 +24,12 @@ Once it is in the queue, it stays there until the agent settles it.
 |---|---|---|
 | `kickd event` | Before `kickd event` returns | Recorded, and run when the agent starts |
 | Webhook | Before the 202 response, or before the wait starts with `wait: true` | Refused, because no server is listening. The caller has to retry. |
-| Cron | When the schedule comes due | Not recorded. kickd does not make up schedules that passed while it was stopped. |
+| Cron | When the schedule comes due | Recorded once when kickd starts, with `missed: run`, the default. Not recorded with `missed: skip`. |
 | File | When the debounce time has passed after the last change | Not recorded. Changes made while the agent is stopped are not detected. |
+
+A cron trigger remembers, in the queue, when it was last handled.
+A start compares that time with the schedule, and a check of the wall clock every second finds the scheduled times that passed while the machine slept.
+Either way, all the times that passed become one firing, or none with `missed: skip`.
 
 A file trigger collects changes in memory until its debounce time passes.
 Changes that it has collected when the agent stops, or when the config reloads, are discarded.

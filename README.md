@@ -49,6 +49,7 @@ events:
       - type: cron
         schedule: "0 3 * * *"
         timezone: Asia/Tokyo
+        missed: run          # after sleep or downtime, run once for the missed times
 
   # Webhook: POST /hooks/deploy?ref=v1.2 with "Authorization: Bearer <token>".
   - name: deploy

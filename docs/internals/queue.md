@@ -45,6 +45,7 @@ kickd retries the setup for up to 30 seconds in that case.
 On macOS and Linux, kickd creates a new database file with the permission 0600, readable and writable only by its owner, before SQLite opens it, because runs hold payloads and command output.
 SQLite gives the `-wal` and `-shm` files that it creates next to the database the permissions of the database file, so they are private as well.
 The version of the table layout is stored in SQLite's `user_version` field, and a kickd that finds a newer version than it knows refuses to open the database.
+An upgrade adds what each later version needs, so the runs recorded by an earlier version stay.
 
 ## Tables
 
@@ -63,6 +64,9 @@ The `runs` table holds one row per run:
 | `created_at`, `started_at`, `finished_at`, `duration_ms` | Times, in milliseconds since 1970 |
 
 The `agent` table holds a single row about the agent: its process ID, version, host, start time, last heartbeat and stop time.
+
+The `cron_state` table holds, for each cron trigger, the time kickd last handled it.
+A start compares that time with the schedule of the trigger, to find the scheduled times that passed while kickd was stopped.
 
 ## Adding a run
 

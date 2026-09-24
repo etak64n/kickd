@@ -47,9 +47,10 @@ func Final(status string) bool {
 // ErrNotFound is returned when a run does not exist.
 var ErrNotFound = errors.New("not found")
 
-const schemaVersion = 2
+const schemaVersion = 3
 
-var schema = []string{
+// schemaV2 creates the tables of version 2, the first released version.
+var schemaV2 = []string{
 	// Version 1 (never released) kept an inbox of named events.
 	`DROP TABLE IF EXISTS events`,
 	`DROP TABLE IF EXISTS runs`,
@@ -90,6 +91,15 @@ var schema = []string{
 		started_at   INTEGER NOT NULL,
 		heartbeat_at INTEGER NOT NULL,
 		stopped_at   INTEGER
+	)`,
+}
+
+// schemaV3 adds the state of cron triggers: when kickd last handled each
+// one, so that a start finds the scheduled times missed while stopped.
+var schemaV3 = []string{
+	`CREATE TABLE IF NOT EXISTS cron_state (
+		trigger_key TEXT    PRIMARY KEY,
+		last_at     INTEGER NOT NULL
 	)`,
 }
 
@@ -208,9 +218,20 @@ func (s *Store) migrate(ctx context.Context) error {
 	case v > schemaVersion:
 		return fmt.Errorf("schema version %d is newer than this program supports (%d)", v, schemaVersion)
 	}
-	for _, stmt := range schema {
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return err
+	// Each step upgrades from the version before it, so a database of an
+	// earlier release keeps its runs.
+	steps := []struct {
+		version int
+		stmts   []string
+	}{{2, schemaV2}, {3, schemaV3}}
+	for _, step := range steps {
+		if v >= step.version {
+			continue
+		}
+		for _, stmt := range step.stmts {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
@@ -660,4 +681,24 @@ func (s *Store) AgentInfo(ctx context.Context) (Agent, bool, error) {
 	}
 	a.StartedAt, a.HeartbeatAt, a.StoppedAt = time.UnixMilli(started), time.UnixMilli(heartbeat), fromMs(stopped)
 	return a, true, nil
+}
+
+// LastCron returns when kickd last handled the cron trigger with key.
+func (s *Store) LastCron(ctx context.Context, key string) (time.Time, bool, error) {
+	var at int64
+	err := s.db.QueryRowContext(ctx, `SELECT last_at FROM cron_state WHERE trigger_key = ?`, key).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return time.UnixMilli(at), true, nil
+}
+
+// SetLastCron records when kickd last handled the cron trigger with key.
+func (s *Store) SetLastCron(ctx context.Context, key string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO cron_state (trigger_key, last_at) VALUES (?, ?)
+		ON CONFLICT (trigger_key) DO UPDATE SET last_at = excluded.last_at`, key, ms(at))
+	return err
 }

@@ -59,6 +59,7 @@ A kickd running as a service has the directory of its config file as its working
 | `type` | `cron`, required |
 | `schedule` | A cron expression with five fields: minute, hour, day of month, month and day of week. A six-field form with a leading seconds field, and forms such as `@hourly`, `@daily` and `@every 10m`, also work. Required. |
 | `timezone` | A time zone name such as `Asia/Tokyo`. Without it, the local time of the machine applies. |
+| `missed` | What happens to scheduled times that passed while the machine slept or kickd was stopped: `run` (default) runs once right after the machine wakes or kickd starts, however many times passed; `skip` waits for the next scheduled time. A scheduled time counts as missed when kickd notices it more than a minute late. |
 
 ## Webhook trigger keys
 

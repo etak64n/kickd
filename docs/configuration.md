@@ -143,6 +143,9 @@ events:
 - `timeout` stops the command when it runs longer than 30 minutes.
 - `on_interrupt: rerun` starts a run again when a stop or crash cut it off, and `max_attempts` limits how many times one firing runs, counting the first run.
 
+If the machine sleeps, or kickd is stopped, at 3:30, the backup runs once as soon as the machine wakes or kickd starts, because the `missed` key of cron triggers defaults to `run`.
+With `missed: skip`, the backup waits for the next night instead.
+
 rsync gives the same result when it runs twice, which makes it safe to rerun.
 
 ## Example: a deploy fired by a webhook or by hand

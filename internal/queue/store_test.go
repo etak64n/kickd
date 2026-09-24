@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -289,5 +290,61 @@ func TestQueuedRunsLeavesOutWaitingEvents(t *testing.T) {
 	}
 	if all, _ := s.QueuedRuns(ctx, 10, nil); len(all) != 4 {
 		t.Fatalf("without exceptions: %d runs, want 4", len(all))
+	}
+}
+
+func TestCronState(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "kickd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if _, ok, err := s.LastCron(ctx, "backup|0|UTC|0 3 * * *"); err != nil || ok {
+		t.Fatalf("an unknown trigger has no state: ok=%v err=%v", ok, err)
+	}
+	at := time.Date(2026, 9, 24, 3, 0, 0, 400_000_000, time.UTC)
+	for _, v := range []time.Time{at.Add(-time.Hour), at} {
+		if err := s.SetLastCron(ctx, "backup|0|UTC|0 3 * * *", v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, ok, err := s.LastCron(ctx, "backup|0|UTC|0 3 * * *")
+	if err != nil || !ok || !got.Equal(at) {
+		t.Fatalf("LastCron = %v %v %v, want %v", got, ok, err, at)
+	}
+}
+
+// A database of kickd v0.1, schema version 2, keeps its runs when a newer
+// kickd opens it.
+func TestOpenUpgradesVersion2(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kickd.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range append(schemaV2, "PRAGMA user_version = 2",
+		`INSERT INTO runs (request_id, event, trigger_kind, trigger_id, payload, status, created_at) VALUES ('old', 'e', 'manual', 'manual', '{}', 'succeeded', 1)`) {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	var v int
+	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil || v != schemaVersion {
+		t.Fatalf("user_version = %d, %v; want %d", v, err, schemaVersion)
+	}
+	if runs, err := s.RunsForRequest(ctx, "old"); err != nil || len(runs) != 1 {
+		t.Fatalf("the run of version 2 must survive: %+v, %v", runs, err)
+	}
+	if err := s.SetLastCron(ctx, "k", time.Now()); err != nil {
+		t.Fatalf("the cron state table must exist: %v", err)
 	}
 }

@@ -65,7 +65,7 @@ Restarting the triggers has three effects:
 
 - The webhook server closes its listener and opens a new one, so a request that arrives in between is refused.
 - Each file trigger discards the changes it has collected but not yet fired.
-- The cron schedules restart from the time of the reload.
+- Each cron trigger continues from the time it was last handled, which the queue keeps, so a scheduled time that falls in the reload still runs.
 
 ## Stopping
 

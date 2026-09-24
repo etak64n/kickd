@@ -252,11 +252,12 @@ func describeTrigger(t config.Trigger) string {
 		}
 		return s + ")"
 	case config.TriggerCron:
-		s := "cron     " + t.Schedule
+		var details []string
 		if t.Timezone != "" {
-			s += " (" + t.Timezone + ")"
+			details = append(details, t.Timezone)
 		}
-		return s
+		details = append(details, "missed="+t.Missed)
+		return "cron     " + t.Schedule + " (" + strings.Join(details, ", ") + ")"
 	case config.TriggerWebhook:
 		methods := "ANY"
 		if len(t.Methods) > 0 {
