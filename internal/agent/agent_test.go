@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,29 +51,62 @@ func startAgentWith(t *testing.T, cfgPath string, log *slog.Logger) (context.Can
 }
 
 // watchLogger returns a logger that drops its records, and a channel that
-// is closed once a file trigger of an event watches its directory.
-func watchLogger() (*slog.Logger, <-chan struct{}) {
-	h := &watchHandler{started: make(chan struct{})}
-	return slog.New(h), h.started
+// is closed once a file trigger of an event watches its directory. The
+// watcher of the config file logs the same message at DEBUG.
+func watchLogger() (*slog.Logger, <-chan struct{}) { return messageLogger("File watch started") }
+
+// messageLogger returns a logger that drops its records, and a channel that
+// is closed once a record with the message msg arrives at INFO.
+func messageLogger(msg string) (*slog.Logger, <-chan struct{}) {
+	h := &messageHandler{msg: msg, seen: make(chan struct{})}
+	return slog.New(h), h.seen
 }
 
-type watchHandler struct {
-	once    sync.Once
-	started chan struct{}
+type messageHandler struct {
+	msg  string
+	once sync.Once
+	seen chan struct{}
 }
 
-func (h *watchHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *messageHandler) Enabled(context.Context, slog.Level) bool { return true }
 
-func (h *watchHandler) Handle(_ context.Context, r slog.Record) error {
-	// The watcher of the config file logs the same message at DEBUG.
-	if r.Message == "File watch started" && r.Level == slog.LevelInfo {
-		h.once.Do(func() { close(h.started) })
+func (h *messageHandler) Handle(_ context.Context, r slog.Record) error {
+	if r.Message == h.msg && r.Level == slog.LevelInfo {
+		h.once.Do(func() { close(h.seen) })
 	}
 	return nil
 }
 
-func (h *watchHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
-func (h *watchHandler) WithGroup(string) slog.Handler      { return h }
+func (h *messageHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *messageHandler) WithGroup(string) slog.Handler      { return h }
+
+// With webhook.enabled false, the agent starts without the HTTP server, so
+// nothing listens on the address of the webhook triggers.
+func TestAgentWithWebhooksDisabled(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	writeFile(t, cfgPath, "webhook:\n  enabled: false\n  listen: '"+addr+"'\nevents:\n  - name: hook\n"+
+		helperEvent("append", filepath.Join(dir, "out.txt"), "HELPER_TEXT", "hook")+
+		"    triggers: [{type: webhook, path: '/hooks/hook', token: t}]\n")
+	log, disabled := messageLogger("Webhook triggers disabled")
+	cancel, done := startAgentWith(t, cfgPath, log)
+	select {
+	case <-disabled:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent did not report the disabled webhook triggers")
+	}
+	if c, err := net.DialTimeout("tcp", addr, time.Second); err == nil {
+		c.Close()
+		t.Error("something listens on the webhook address")
+	}
+	stopAgent(t, cancel, done)
+}
 
 func stopAgent(t *testing.T, cancel context.CancelFunc, done chan error) {
 	t.Helper()

@@ -71,7 +71,7 @@ Under launchd and on Windows, those commands keep running without the agent.
 
 ## Permissions and privacy
 
-On macOS and Linux, `kickd init` creates the config file with the permission 0600, and a new queue database, with its `-wal` and `-shm` files, gets 0600 as well, because both can hold secrets and command output.
+On macOS and Linux, `kickd init` creates the config file with the permission 0600, and a new database, with its `-wal` and `-shm` files, gets 0600 as well, because both can hold secrets and command output.
 The log file is created with the permissions that the umask allows, usually 0644, so other users can read it.
 On Windows, the files take the permissions of their folder, and files that an administrator creates under `C:\ProgramData` cannot be changed by other users.
 

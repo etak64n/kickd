@@ -30,7 +30,7 @@ A command starts as a child process of the agent and runs as the same user: with
 The command also inherits the environment of the agent, so `HOME` or `USERPROFILE` points to the home directory of that user, when the user has one.
 
 The user who fires an event does not matter.
-`kickd event` only writes a run into the queue, and the agent runs the command later as its own user.
+`kickd event` only writes a run into the database, and the agent runs the command later as its own user.
 A run records who fired it in `source`, which the command reads as `KICKD_SOURCE`: the user and host of the `kickd event` process.
 Under `sudo`, that user is root.
 
@@ -40,7 +40,7 @@ For example, with kickd installed as a system-wide unit on Linux, `sudo kickd ev
 
 Every trigger except cron lets someone other than the user of the agent make the agent run a command as that user:
 
-- **`kickd event`**: anyone who can read the config file and read and write the queue database. The database belongs to the user whose kickd process created it, and on macOS and Linux only that user and root can open it.
+- **`kickd event`**: anyone who can read the config file and read and write the database. The database belongs to the user whose kickd process created it, and on macOS and Linux only that user and root can open it.
 - **Webhook**: anyone who can reach the webhook server and knows the `token` or `secret` of the trigger. When the trigger has neither, anyone who can reach the server.
 - **File**: anyone who can create, change, remove or rename files in the watched directory.
 - **Cron**: nobody, because the schedule fires by itself.
@@ -55,7 +55,7 @@ On Windows, cmd expands `%VAR%` before it parses the line, so a value that conta
 | File | Owner | Permissions on macOS and Linux |
 |---|---|---|
 | Config file written by `kickd init` | The user who ran `kickd init` | 0600 |
-| Queue database, with its `-wal` and `-shm` files | The user whose kickd process created it | 0600 |
+| Database, with its `-wal` and `-shm` files | The user whose kickd process created it | 0600 |
 | Log file | The user of the agent | Allowed by the umask, usually 0644 |
 | Payload file of a run | The user of the agent | 0600 |
 | Files that a command writes | The user of the agent | Chosen by the command |
@@ -75,7 +75,7 @@ kickd does not set this up, and these settings have not been tested with kickd:
 - **launchd**: a `UserName` key in the definition file of a LaunchDaemon.
 - **Windows**: the Log On tab of the service in the Services list.
 
-The user then needs read access to the config file, and read and write access to the queue database and its directory.
+The user then needs read access to the config file, and read and write access to the database and its directory.
 Uninstalling the service and installing it again with kickd removes such a change.
 
 A command of an agent that runs as root can also switch users by itself, for example with `sudo -u alice ./task.sh` on macOS or `runuser -u alice -- ./task.sh` on Linux.

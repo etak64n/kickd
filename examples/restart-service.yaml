@@ -12,8 +12,15 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event restart service=worker -c /etc/kickd/config.yaml
 
+# The database is /var/lib/kickd/kickd.db. Without log.path, the log goes
+# to journald.
+base_dir:
+  linux: '/var/lib/kickd'
 webhook:
-  listen: "127.0.0.1:8787"
+  enabled: true
+  listen: '127.0.0.1:8787'
+database:
+  path: 'kickd.db'
 
 events:
   - name: restart
@@ -36,5 +43,5 @@ events:
       - type: webhook
         path: /hooks/restart
         methods: [POST]
-        token: "replace-with-a-long-random-token"
+        token: 'replace-with-a-long-random-token'
         wait: true

@@ -134,7 +134,7 @@ func (c *cli) load(flagValue string) (*config.Config, error) {
 }
 
 func (c *cli) open(cfg *config.Config) (*queue.Store, error) {
-	st, err := queue.Open(cfg.Queue.Path)
+	st, err := queue.Open(cfg.Database.Path)
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			return nil, fmt.Errorf("%w (kickd may run as another user; try sudo, or an administrator shell on Windows)", err)
@@ -470,7 +470,7 @@ func (c *cli) show(args []string) error {
 	defer st.Close()
 	r, err := st.GetRun(context.Background(), id)
 	if errors.Is(err, queue.ErrNotFound) {
-		return fmt.Errorf("run %d not found (finished runs are kept for %s)", id, cfg.Queue.Retention)
+		return fmt.Errorf("run %d not found (finished runs are kept for %s)", id, cfg.Database.Retention)
 	}
 	if err != nil {
 		return err

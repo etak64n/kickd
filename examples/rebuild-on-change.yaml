@@ -10,6 +10,16 @@
 # Service: kickd service install --user
 # By hand: kickd event rebuild
 
+# The log and the database go to ~/Library/Application Support/kickd on
+# macOS and to ~/.local/state/kickd on Linux.
+base_dir:
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
+
 events:
   - name: rebuild
     description: Run make build after source changes
@@ -21,5 +31,5 @@ events:
       - type: file
         path: ~/project/src
         recursive: true
-        exclude: [".git", "node_modules"]
+        exclude: ['.git', 'node_modules']
         debounce: 2s

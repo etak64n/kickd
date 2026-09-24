@@ -6,7 +6,7 @@ kickd reads one YAML config file.
 The file defines **events**, which are named commands.
 An event can list **triggers**, which fire the event automatically: a cron schedule, a webhook, or changes in a directory.
 Every event can also be fired from the command line with `kickd event NAME`.
-Each firing is recorded as a **run** in the **queue**, a SQLite database, and the long-running kickd process, the **agent**, starts the event's command for each run.
+Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, the **agent**, starts the event's command for each run.
 
 ## Where kickd looks for the config file
 
@@ -29,6 +29,40 @@ Without `-c`, `kickd init` writes an example config there:
 A kickd installed as a service reads the config file whose absolute path was recorded when the service was installed.
 After moving the config file, uninstall the service and install it again.
 
+## Where the log and the database go
+
+kickd writes two files of its own: the log, and the **database**, a SQLite file that records every run.
+The `base_dir` section gives a directory for each OS, and a relative `log.path` or `database.path` starts at the directory for the OS that kickd runs on:
+
+```yaml
+base_dir:
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+  windows: '~\AppData\Local\kickd'
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
+events:
+  - name: hello
+    shell: 'echo hello from kickd'
+```
+
+On a Mac, this file puts the log at `~/Library/Application Support/kickd/kickd.log` and the database next to it.
+Without a `base_dir` entry for the OS, the two files start at the directory of the config file, as every other relative path in the file does.
+Without `log.path`, kickd writes its log to standard error, and without `database.path`, the database is `kickd.db`.
+
+`kickd init` fills in `base_dir` with the usual places of the OS.
+A config file inside the home directory is taken for a user's kickd, and one outside it, such as `/etc/kickd/config.yaml`, for a service of the whole system:
+
+| OS | For a user | For the whole system |
+|---|---|---|
+| macOS | `~/Library/Application Support/kickd` | `/Library/Application Support/kickd` |
+| Linux | `~/.local/state/kickd` | `/var/lib/kickd` |
+| Windows | `~\AppData\Local\kickd` | `C:\ProgramData\kickd` |
+
+`kickd check` prints the resolved paths of the log and the database.
+
 ## Defining events
 
 Events are listed under `events`.
@@ -37,13 +71,13 @@ This config defines two events:
 ```yaml
 events:
   - name: hello
-    shell: "echo hello from kickd"
+    shell: 'echo hello from kickd'
 
   - name: archive
     shell: 'tar czf "$HOME/backup/notes-$(date +%Y%m%d).tgz" -C "$HOME" notes'
     triggers:
       - type: cron
-        schedule: "30 3 * * *"
+        schedule: '30 3 * * *'
         timezone: Asia/Tokyo
 ```
 
@@ -55,14 +89,15 @@ An event gives its command in one of two ways:
 - **shell**: a string run by the system shell, `/bin/sh -c` on macOS and Linux and `cmd /S /C` on Windows. Pipes, redirections and variables work as in the shell.
 - **command**: a list of the program and its arguments, started directly without a shell. kickd passes every element as it is, so `~`, `*` and `$VAR` stay unexpanded.
 
-Without a `log` section, kickd writes its log to standard error: text on a terminal, JSON when standard error goes to a pipe or a file.
+Without `log.path`, kickd writes its log to standard error: text on a terminal, JSON when standard error goes to a pipe or a file.
 Each run logs a start record and a completion record at INFO.
 The output of the command is logged at DEBUG, so `LOG_LEVEL=debug kickd run` shows it.
 
 ## Writing values
 
-- **Durations**: strings such as `"30s"`, `"5m"` and `"1h"`. A bare number such as `30` is an error.
-- **Paths**: in `log.file`, `queue.path`, `workdir` and the `path` of file triggers, a leading `~` expands to the home directory, and `${VAR}` expands to the value of the environment variable `VAR` of kickd. Relative paths are relative to the directory of the config file.
+- **Durations**: values such as `30s`, `5m` and `1h`. A bare number such as `30` is an error.
+- **Paths**: a leading `~` expands to the home directory, and `${VAR}` expands to the value of the environment variable `VAR` of kickd. A relative `log.path` or `database.path` starts at the `base_dir` of the OS, and every other relative path, such as a `workdir` or the `path` of a file trigger, starts at the directory of the config file.
+- **Quotes**: the examples put strings in single quotes, which keep backslashes and double quotes as they are, so Windows paths and shell commands need no escapes. Double quotes appear only inside shell commands, where the shell reads them. Inside single quotes, a single quote is written twice, as in `'it''s'`.
 - **Environment variables on Windows**: the config file uses the `${USERPROFILE}` form on Windows too. The `%USERPROFILE%` form is expanded only by cmd, inside a `shell` string.
 - **Key names**: an unknown key is an error, so `kickd check` finds misspelled keys.
 
@@ -79,7 +114,7 @@ Waiting runs of events that the new config no longer defines are recorded as `dr
 
 When the new config has errors, the agent logs them and keeps running with the previous config.
 It switches to the new config when a valid version is saved.
-A change to `queue.path` takes effect only when the agent restarts.
+A change to where the database goes, through `database.path` or `base_dir`, takes effect only when the agent restarts.
 
 ## Differences between operating systems
 
@@ -107,7 +142,7 @@ events:
       - type: file
         path: ~/project/src
         recursive: true
-        exclude: ["*.swp", "*~"]
+        exclude: ['*.swp', '*~']
         debounce: 2s
 ```
 
@@ -135,7 +170,7 @@ events:
     max_attempts: 3
     triggers:
       - type: cron
-        schedule: "30 3 * * *"
+        schedule: '30 3 * * *'
         timezone: Asia/Tokyo
 ```
 
@@ -155,10 +190,10 @@ This event fires on a POST to `/hooks/deploy` and on `kickd event deploy`.
 
 ```yaml
 webhook:
-  listen: "127.0.0.1:8787"
+  listen: '127.0.0.1:8787'
 events:
   - name: deploy
-    command: ["/home/me/app/deploy.sh"]
+    command: ['/home/me/app/deploy.sh']
     workdir: /home/me/app
     concurrency: queue
     params:
@@ -168,7 +203,7 @@ events:
       - type: webhook
         path: /hooks/deploy
         methods: [POST]
-        token: "replace-with-a-long-random-string"
+        token: 'replace-with-a-long-random-string'
         wait: true
 ```
 
@@ -191,7 +226,7 @@ This event runs a PowerShell script when a CSV file arrives in `C:\Data\Import`.
 
 ```yaml
 log:
-  file: 'C:\ProgramData\kickd\kickd.log'
+  path: 'C:\ProgramData\kickd\kickd.log'
 events:
   - name: import-csv
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\Scripts\import.ps1']

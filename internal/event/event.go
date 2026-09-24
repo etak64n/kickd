@@ -46,7 +46,7 @@ type Event struct {
 	// RequestID identifies the firing. A rerun after an interruption keeps
 	// the request ID of the firing it repeats.
 	RequestID string `json:"requestId"`
-	// RunID is the row of the run in the queue database.
+	// RunID is the row of the run in the database.
 	RunID int64 `json:"runId,omitempty"`
 	// Attempt counts runs of this firing, starting at 1; reruns after an
 	// interruption increase it.

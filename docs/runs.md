@@ -1,16 +1,17 @@
-# The queue
+# Runs
 
 [Documentation index](../README.md#documentation)
 
 In kickd, a named command in the config file is an **event**, and asking kickd to run an event is **firing** it.
-Every firing is recorded as a **run** in a SQLite database called the **queue**.
-The long-running kickd process, the **agent**, takes runs from the queue and starts the event's command for each one.
+Every firing is recorded as a **run** in the **database**, a SQLite file.
+The long-running kickd process, the **agent**, starts the event's command for each run.
+A run that has not started yet waits in the **queue**.
 
 ## From firing to run
 
-When an event fires, kickd writes a run with the status `queued` to the queue, and the agent starts it.
+When an event fires, kickd writes a run with the status `queued` to the database, and the agent starts it.
 Cron, webhook and file triggers run inside the agent and wake it at once, so their runs start within milliseconds.
-`kickd event` writes to the queue from a process of its own, so it works even while the agent is not running; the agent notices its run within 0.2 seconds.
+`kickd event` writes to the database from a process of its own, so it works even while the agent is not running; the agent notices its run within 0.2 seconds.
 
 Runs of different events never wait for each other.
 The event's `concurrency` setting decides what happens to a run when the same event is already running:
@@ -38,11 +39,12 @@ A run is always in one of these statuses:
 
 ## Run history
 
-Finished runs stay in the queue for `queue.retention`, 7 days by default.
+Finished runs stay in the database for `database.retention`, 7 days by default.
 The history holds the status and exit code of each run, and the first 64 KB of its output when the event's `log_output` is `true`, the default.
 `kickd runs` lists the history, and `kickd show` displays one run.
 
-By default, the queue is `kickd.db` in the directory of the config file.
+The database is `kickd.db` in the `base_dir` of the OS, or in the directory of the config file when `base_dir` names no directory for the OS.
+`database.path` names another file, and `kickd check` prints where the database is.
 The agent and the other kickd commands must run as users that can read and write this database.
 
 ## Interrupted runs
@@ -61,7 +63,7 @@ When a firing reaches the limit, its run is recorded as `abandoned` and the agen
 The agent tells two kinds of stop apart:
 
 - **Clean stop**: the agent stops the running commands and records their runs as `interrupted`. A command that exits with code 0 during the stop is recorded as interrupted as well.
-- **Crash**: when the agent is killed or the machine loses power, the run stays `running` in the queue. When the agent starts again, it treats such runs as interrupted.
+- **Crash**: when the agent is killed or the machine loses power, the run stays `running` in the database. When the agent starts again, it treats such runs as interrupted.
 
 In the log, the `reason` of an interrupted run is `agent_stopped` after a clean stop and `agent_crashed` after a crash.
 

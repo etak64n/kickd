@@ -2,7 +2,7 @@
 
 [Documentation index](../../README.md#documentation)
 
-In kickd, a named command in the config file is an **event**, and each firing of an event becomes a **run** in a SQLite database called the **queue**.
+In kickd, a named command in the config file is an **event**, and each firing of an event becomes a **run** in the **database**, a SQLite file.
 The long-running kickd process, the **agent**, starts the command of each run.
 
 A command is **idempotent** when running it twice with the same input leaves the same result as running it once.
@@ -17,8 +17,8 @@ Two terms describe how many times a system performs a piece of work:
 
 ## When a firing is recorded
 
-A firing can be lost before it reaches the queue.
-Once it is in the queue, it stays there until the agent settles it.
+A firing can be lost before it reaches the database.
+Once it is in the database, it stays there until the agent settles it.
 
 | Trigger | Recorded | Firings while the agent is stopped |
 |---|---|---|
@@ -27,7 +27,7 @@ Once it is in the queue, it stays there until the agent settles it.
 | Cron | When the schedule comes due | Recorded once when kickd starts, with `missed: run`, the default. Not recorded with `missed: skip`. |
 | File | When the debounce time has passed after the last change | Not recorded. Changes made while the agent is stopped are not detected. |
 
-A cron trigger remembers, in the queue, when it was last handled.
+A cron trigger remembers, in the database, when it was last handled.
 A start compares that time with the schedule, and a check of the wall clock every second finds the scheduled times that passed while the machine slept.
 Either way, all the times that passed become one firing, or none with `missed: skip`.
 
@@ -35,7 +35,7 @@ A file trigger collects changes in memory until its debounce time passes.
 Changes that it has collected when the agent stops, or when the config reloads, are discarded.
 During a config reload, the webhook server also closes its listener and opens a new one, and a request that arrives in between is refused.
 
-The queue runs SQLite in WAL mode with `synchronous=NORMAL`.
+The database uses SQLite in WAL mode with `synchronous=NORMAL`.
 A recorded firing survives a crash of kickd, and a crash of the process that recorded it.
 A crash of the operating system or a power loss can undo the commits of the last moments before it, including a firing that `kickd event` already reported as queued.
 
@@ -125,7 +125,7 @@ touch "$done_dir/$KICKD_REQUEST_ID"
 ```
 
 A crash between `mv` and `touch` makes the rerun build the report again, which is harmless, because the rerun builds the same report.
-The markers can be deleted once their runs are older than `queue.retention`, because kickd no longer reruns them.
+The markers can be deleted once their runs are older than `database.retention`, because kickd no longer reruns them.
 
 For work that must never happen twice, such as charging a card or sending an email, keep `on_interrupt: abandon`.
 Another way is to make the receiving system reject repeats, for example with an idempotency key made from `KICKD_REQUEST_ID`.

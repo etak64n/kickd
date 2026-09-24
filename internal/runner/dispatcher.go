@@ -565,7 +565,7 @@ func (d *Dispatcher) prune(ctx context.Context) {
 		return
 	}
 	if n > 0 {
-		d.log.Debug("Queue pruned", "count", n, "retentionSec", int64(d.retention.Seconds()))
+		d.log.Debug("Database pruned", "count", n, "retentionSec", int64(d.retention.Seconds()))
 	}
 }
 
@@ -583,7 +583,7 @@ func (d *Dispatcher) queueError(log *slog.Logger, op string, err error) {
 	}
 	d.limitMu.Unlock()
 	if allowed {
-		log.Error("Queue operation failed", "detail", op, "file", d.store.Path(), logging.Err(err))
+		log.Error("Database operation failed", "detail", op, "file", d.store.Path(), logging.Err(err))
 	}
 }
 

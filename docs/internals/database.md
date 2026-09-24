@@ -1,9 +1,9 @@
-# Queue internals
+# Database internals
 
 [Documentation index](../../README.md#documentation)
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
-The runs are kept in a SQLite database called the **queue**.
+The runs are kept in the **database**, a SQLite file, and the runs that have not started yet form the **queue**.
 The long-running kickd process, the **agent**, consumes the queue.
 The other kickd subcommands read and write it from their own processes.
 
@@ -141,7 +141,7 @@ A crash during recovery therefore leaves either both changes or neither.
 
 ## Retention
 
-When the agent starts, and every hour after that, the agent deletes finished runs whose finish time is older than `queue.retention`.
+When the agent starts, and every hour after that, the agent deletes finished runs whose finish time is older than `database.retention`.
 Queued, running and interrupted runs are never deleted.
 
 ## Output storage
@@ -152,5 +152,5 @@ With `log_output: false`, the output is not stored.
 
 ## Database errors
 
-When a database operation fails, the agent logs `Queue operation failed`, with the operation in `detail`.
+When a database operation fails, the agent logs `Database operation failed`, with the operation in `detail`.
 It logs each operation at most once a minute, so a broken disk does not flood the log, and it tries again at the next scan.

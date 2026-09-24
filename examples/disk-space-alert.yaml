@@ -12,6 +12,13 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event disk-alert -c /etc/kickd/config.yaml
 
+# The database is /var/lib/kickd/kickd.db. Without log.path, the log goes
+# to journald.
+base_dir:
+  linux: '/var/lib/kickd'
+database:
+  path: 'kickd.db'
+
 events:
   - name: disk-alert
     description: Notify when / or /srv is 90% full
@@ -20,8 +27,8 @@ events:
       [ -z "$full" ] && exit 0
       curl -fsS -H "Title: Disk space on $(hostname)" -d "$full" "https://ntfy.sh/$NTFY_TOPIC"
     env:
-      NTFY_TOPIC: "${NTFY_TOPIC}"
+      NTFY_TOPIC: '${NTFY_TOPIC}'
     timeout: 1m
     triggers:
       - type: cron
-        schedule: "*/10 * * * *"
+        schedule: '*/10 * * * *'

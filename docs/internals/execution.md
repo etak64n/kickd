@@ -95,4 +95,4 @@ When the agent starts again, it treats their runs as interrupted, and under `on_
 
 When the service manager stops kickd, the agent stops every running command and waits for the commands to exit, for at most 30 seconds.
 If they have not exited by then, the agent logs `Agent stop timed out` and exits.
-The runs of those commands stay `running` in the queue, and the next start treats them as cut off by a crash.
+The runs of those commands stay `running` in the database, and the next start treats them as cut off by a crash.

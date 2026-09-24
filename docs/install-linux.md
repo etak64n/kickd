@@ -51,23 +51,32 @@ The example config defines three events.
 Delete the events that are not needed, and change the paths to match the machine.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
-kickd records every run in a SQLite database called the **queue**.
-By default, the queue is `kickd.db` in the directory of the config file, which is `/etc/kickd/kickd.db` here.
-Linux keeps data that changes under `/var/lib` by convention, so move the queue there in the config file.
-kickd creates the directory when it opens the queue.
+kickd records every run in its **database**, a SQLite file.
+The config file is outside the home directory, so `kickd init` sets the `base_dir` of Linux to `/var/lib/kickd`, where Linux keeps data that changes:
 
 ```yaml
-queue:
-  path: /var/lib/kickd/kickd.db
+base_dir:
+  linux: '/var/lib/kickd'
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
 ```
 
-The database belongs to root, so run `kickd event` and the other queue commands with `sudo` as well.
+The database is `/var/lib/kickd/kickd.db`, and the log is `/var/lib/kickd/kickd.log`.
+kickd creates the directory when it first opens the files.
+The database belongs to root, so run `kickd event` and the other commands that read or write it with `sudo` as well.
 
 systemd collects the standard error of units with **journald**, and `journalctl` reads what journald collected.
-With an empty `log.file`, kickd writes its log to standard error, so `file: ""` sends the log to journald.
+Without `log.path`, kickd writes its log to standard error, so deleting the `path` line of `log` sends the log to journald.
 The records sent to journald are JSON.
 With `format: text`, they are tab-separated text.
-With the example's `file: kickd.log`, the log goes to `/etc/kickd/kickd.log`.
+To keep a log file in the usual place for logs instead, give an absolute path:
+
+```yaml
+log:
+  path: '/var/log/kickd/kickd.log'
+```
 
 systemd sets `HOME` only for units with a `User=` setting, and the unit that kickd writes has none.
 Without `HOME`, `~` in the config file is not expanded.
@@ -82,7 +91,7 @@ sudo kickd run -c /etc/kickd/config.yaml
 
 Ctrl+C stops it.
 In the foreground, log records appear in the terminal as text.
-When `log.file` is set, the same records are also written to that file as JSON.
+When `log.path` is set, the same records are also written to that file as JSON.
 
 ## 4. Run kickd as a system-wide unit
 

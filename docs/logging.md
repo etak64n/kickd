@@ -14,7 +14,7 @@ kickd writes logs in two formats:
 - **Text**: five columns separated by tabs: timestamp, requestId, level, message, and the remaining keys as one JSON object, or `-` when there are none. It suits people reading a terminal.
 
 The default `log.format`, `auto`, picks the format by destination: text for a terminal, JSON for files and pipes.
-When `kickd run` runs in a terminal, it also shows every record there as text, even when `log.file` is set.
+When `kickd run` runs in a terminal, it also shows every record there as text, even when `log.path` is set.
 
 On a terminal, each level has a color: INFO is cyan, WARN yellow, ERROR and FATAL red, and DEBUG and TRACE gray.
 The environment variable `NO_COLOR` turns colors off.
@@ -59,7 +59,7 @@ The same two records in text format:
 | message | Level | When | Main keys |
 |---|---|---|---|
 | `Agent starting` | INFO | The agent started | `version`, `pid`, `file` |
-| `Queue opened` | INFO | The agent opened the queue database | `file`, `count` |
+| `Database opened` | INFO | The agent opened the database | `file`, `count` |
 | `Interrupted run requeued` | WARN | An interrupted run will run again, as `on_interrupt: rerun` says | `runId`, `reason`, `attempt`, `maxAttempts` |
 | `Interrupted run abandoned` | WARN | An interrupted run will not run again. ERROR when the run reached `max_attempts` | `runId`, `reason`, `attempt` |
 | `Config loaded` | INFO | The agent loaded its config at startup | `file`, `eventCount`, `triggerCount` |
@@ -71,6 +71,7 @@ The same two records in text format:
 | `Missed schedule caught up` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and one run makes up for them, as `missed: run` says | `event`, `schedule`, `scheduledAt`, `count`, `detail` |
 | `Missed schedule skipped` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and kickd skips them, as `missed: skip` says | `event`, `schedule`, `scheduledAt`, `count`, `nextRunAt` |
 | `Webhook server listening` | INFO | The webhook server started listening | `listen`, `count` |
+| `Webhook triggers disabled` | INFO | `webhook.enabled` is `false`, so the webhook server does not start and the webhook triggers do not fire | `count` |
 | `Run started` | INFO | The command of a run started | `event`, `trigger`, `triggerId`, `runId`, `attempt`, `source` |
 | `Run completed` | INFO | The command exited with code 0 | `exitCode`, `durationMs`, `skipped` |
 | `Run failed` | ERROR | The command failed | `reason`, `exitCode`, `signal`, `durationMs`, `stderrTail` |
@@ -84,7 +85,8 @@ The same two records in text format:
 | `Webhook authentication failed` | WARN | The token or signature of a webhook request did not match | `reason`, `authMethod`, `remoteAddr` |
 | `Webhook rejected` | WARN | A webhook request had a method that is not allowed, a body over the limit, or a missing required parameter | `reason`, `detail` |
 | `Request completed` | INFO | The webhook server sent a response | `method`, `path`, `status`, `durationMs` |
-| `Queue operation failed` | ERROR | Reading or writing the queue database failed | `detail`, `file`, `errorType`, `errorMessage` |
+| `Database operation failed` | ERROR | Reading or writing the database failed | `detail`, `file`, `errorType`, `errorMessage` |
+| `Database path change needs a restart` | WARN | A reloaded config moves the database, which takes effect only when the agent restarts | `file`, `detail` |
 | `Agent stopping` | INFO | The agent began to stop | `signal` or `reason`, `inFlightJobs` |
 | `Agent stopped` | INFO | The agent stopped | `uptimeSec`, `processed`, `succeeded`, `failed`, `skipped`, `canceled`, `interrupted` |
 | `Config load failed` | FATAL | The config had errors at startup, so the agent could not start | `file`, `errorType`, `errorMessage`, `exitCode` |
@@ -128,6 +130,6 @@ A failed run adds the end of its standard error to the log, and at the DEBUG lev
 
 ## Log file rotation
 
-When the file set by `log.file` grows past `log.max_size_mb`, kickd renames it to `kickd.log.1`.
+When the file set by `log.path` grows past `log.max_size_mb`, kickd renames it to `kickd.log.1`.
 The previous `.1` becomes `.2`, `.2` becomes `.3`, and so on, and files beyond `log.max_backups` are deleted.
 If renaming fails, kickd keeps writing to the same file and reports the failure on standard error.

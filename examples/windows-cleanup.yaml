@@ -8,6 +8,15 @@
 #          (in PowerShell opened as administrator)
 # By hand: kickd event clean-downloads -c C:\ProgramData\kickd\config.yaml
 
+# The log and the database go to C:\ProgramData\kickd, next to the config
+# file.
+base_dir:
+  windows: 'C:\ProgramData\kickd'
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
+
 events:
   - name: clean-downloads
     description: Delete downloads that are older than 30 days
@@ -20,4 +29,4 @@ events:
     timeout: 30m
     triggers:
       - type: cron
-        schedule: "0 9 * * 0"
+        schedule: '0 9 * * 0'

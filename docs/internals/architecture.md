@@ -7,7 +7,8 @@ kickd is one Go executable.
 The other subcommands, such as `kickd event` and `kickd runs`, are short-lived processes that read and write the same database as the agent.
 
 In kickd, a named command in the config file is an **event**, and a **trigger** fires an event.
-Each firing becomes a **run**, one execution of the event's command, recorded in a SQLite database called the **queue**.
+Each firing becomes a **run**, one execution of the event's command, recorded in the **database**, a SQLite file.
+The runs that have not started yet form the **queue**.
 
 ## Parts of the agent
 
@@ -17,7 +18,7 @@ The agent is built from these parts, each in a Go package under `internal/`:
 |---|---|---|
 | Config | `config` | Loads the YAML file, validates it, and fills in defaults |
 | Triggers | `trigger` | Turn cron schedules, HTTP requests and file changes into firings |
-| Queue | `queue` | Stores every run in the SQLite database |
+| Database | `queue` | Stores every run in the SQLite database |
 | Dispatcher | `runner` | Takes queued runs in order, applies each event's concurrency policy, and starts runs |
 | Runner | `runner` | Starts the command of a run as a process, collects its output, and stops it when needed |
 
@@ -30,10 +31,10 @@ The `agent` package connects the parts and reloads the config, and the `logging`
 Every firing takes the same path, whatever fired it:
 
 1. A trigger, or `kickd event`, builds the **payload**: the event name, the parameters, and the details of the trigger.
-2. The payload is inserted into the queue as a run with the status `queued`. From this point, the firing survives a restart of the agent.
+2. The payload is inserted into the database as a run with the status `queued`. From this point, the firing survives a restart of the agent.
 3. The dispatcher reads the queued runs, oldest first. For each run, the event's `concurrency` setting decides whether the run starts, is skipped, or keeps waiting.
 4. The runner starts the command in a new process and waits for it to exit.
-5. The dispatcher writes the outcome to the queue: the status, the exit code, the duration and the start of the output.
+5. The dispatcher writes the outcome to the database: the status, the exit code, the duration and the start of the output.
 
 Triggers run inside the agent, so a trigger inserts its run through the dispatcher and wakes it at once.
 `kickd event` runs in a process of its own and inserts the run into the database directly.
@@ -65,7 +66,7 @@ Restarting the triggers has three effects:
 
 - The webhook server closes its listener and opens a new one, so a request that arrives in between is refused.
 - Each file trigger discards the changes it has collected but not yet fired.
-- Each cron trigger continues from the time it was last handled, which the queue keeps, so a scheduled time that falls in the reload still runs.
+- Each cron trigger continues from the time it was last handled, which the database keeps, so a scheduled time that falls in the reload still runs.
 
 ## Stopping
 

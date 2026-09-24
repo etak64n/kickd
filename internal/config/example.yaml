@@ -1,61 +1,69 @@
 # kickd configuration.
-# Every event has a name. "kickd event NAME" fires any event; triggers
-# (cron, webhook, file) fire it automatically. Each firing is first stored
-# in the queue database, and kickd consumes the queue.
-# Durations are strings such as "30s", "5m", "1h". Relative paths are
-# resolved against the directory of this file; "~" expands to the home dir.
+# Every event has a name. kickd event NAME fires any event, and triggers
+# (cron, webhook, file) fire it automatically. kickd records every firing
+# as a run in its database, then starts the command of the run.
+# ~ is the home directory. Strings are in single quotes, which keep
+# backslashes and double quotes as they are.
+
+# kickd keeps its log and its database in the directory for the OS that it
+# runs on. A relative log.path or database.path starts there. Other
+# relative paths, and all paths without base_dir, start at the directory
+# of this file. kickd check shows where the files go.
+base_dir:
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+  windows: '~\AppData\Local\kickd'
 
 log:
-  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides)
-  format: auto         # auto | json | text; auto = text on a terminal, json otherwise (LOG_FORMAT overrides)
-  file: kickd.log      # empty = stderr; rotated once it exceeds max_size_mb
-  max_size_mb: 10
-  max_backups: 5       # rotated generations to keep (kickd.log.1 ... kickd.log.5)
+  path: 'kickd.log'    # in base_dir; without a path, kickd logs to standard error
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
+  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
+  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
+  max_backups: 5       # how many renamed files to keep
 
 webhook:
-  listen: "127.0.0.1:8787"   # the HTTP server starts only when an event has a webhook trigger
+  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
+  listen: '127.0.0.1:8787'   # the server starts only when an event has a webhook trigger
   max_body_bytes: 1048576
 
-queue:
-  path: kickd.db       # SQLite file holding queued, running and finished runs
-  retention: 168h      # how long finished runs stay in the history
+database:
+  path: 'kickd.db'        # in base_dir: the SQLite file that records every run, waiting, running and finished
+  retention: 168h         # how long finished runs stay in the history
 
 events:
-  # Sync a folder after files stop changing for 2 seconds.
-  - name: sync-notes
-    shell: "rsync -a --delete ~/Notes/ ~/Backup/Notes/"   # command: [...] runs without a shell
-    timeout: 5m
-    concurrency: skip        # skip | queue | parallel: what to do with a firing while the event runs
-    on_interrupt: rerun      # abandon | rerun: what to do on restart with a run cut off by a stop or crash
+  # Build a project 2 seconds after its sources stop changing.
+  - name: build
+    command: ['make', 'build']   # shell: '...' runs a string through the shell instead
+    workdir: '~/project'
+    timeout: 10m
+    concurrency: queue       # skip | queue | parallel: what a firing does while the event runs
+    on_interrupt: rerun      # abandon | rerun: what happens to a run that a stop or a crash cut off
     max_attempts: 3          # with rerun: give up after this many runs of one firing
     triggers:
       - type: file
-        path: ~/Notes
+        path: '~/project/src'
         recursive: true
-        include: ["*.md", "*.txt"]      # base name patterns; "a/*.md" matches a relative path
-        exclude: [".git", ".obsidian"]  # matched against every path component
-        changes: [create, write, remove, rename]   # chmod is off by default
+        exclude: ['.git', 'node_modules']   # matched against every part of the path
         debounce: 2s
 
-  # A nightly report; also "kickd event nightly-report".
+  # A nightly report. kickd event nightly-report also runs it.
   - name: nightly-report
-    shell: "python3 report.py >> report.log 2>&1"
-    workdir: ~/reports
+    shell: 'python3 report.py >> report.log 2>&1'
+    workdir: '~/reports'
     env:
       REPORT_MODE: nightly
     triggers:
       - type: cron
-        schedule: "0 3 * * *"       # minute hour day month weekday (a leading seconds field is optional)
-        timezone: Asia/Tokyo        # empty = local time
+        schedule: '0 3 * * *'   # minute hour day month weekday; a leading seconds field is optional
+        timezone: Asia/Tokyo    # without it, local time
 
-  # Deploy on demand or from GitHub: "kickd event deploy ref=v1.2", or
-  # POST /hooks/deploy?ref=v1.2. The payload JSON (parameters, request
-  # body, headers) is at $KICKD_PAYLOAD_FILE and, with "stdin: payload",
-  # on standard input.
+  # Deploy with kickd event deploy ref=v1.2, or with POST /hooks/deploy?ref=v1.2.
+  # The payload JSON (parameters, request body, headers) is in the file
+  # $KICKD_PAYLOAD_FILE and, with stdin: payload, on standard input.
   - name: deploy
-    description: Deploy the app
-    command: ["./deploy.sh"]
-    workdir: ~/app
+    description: 'Deploy the app'
+    command: ['./deploy.sh']
+    workdir: '~/app'
     stdin: payload
     concurrency: queue
     params:                  # optional; when given, only these keys are accepted
@@ -63,8 +71,8 @@ events:
         default: main
     triggers:
       - type: webhook
-        path: /hooks/deploy
+        path: '/hooks/deploy'
         methods: [POST]
-        secret: "change-me"        # HMAC-SHA256 in X-Hub-Signature-256 (GitHub compatible)
-        # token: "change-me"       # or a bearer token / X-Kickd-Token header / ?token=
+        secret: 'change-me'        # HMAC-SHA256 in X-Hub-Signature-256, as GitHub sends it
+        # token: 'change-me'       # or a bearer token, the X-Kickd-Token header or ?token=
         # wait: true               # respond after the run finishes, with its exit code and output

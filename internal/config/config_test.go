@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -27,15 +28,63 @@ func noLogEnv(t *testing.T) {
 
 func TestExampleDecodes(t *testing.T) {
 	// The example refers to directories that only exist on a real machine,
-	// so only check that every key is known.
-	dec := yaml.NewDecoder(strings.NewReader(Example))
-	dec.KnownFields(true)
-	var cfg Config
-	if err := dec.Decode(&cfg); err != nil {
-		t.Fatalf("example config does not decode: %v", err)
+	// so only check that every key is known and that every OS has a base.
+	for _, system := range []bool{false, true} {
+		dec := yaml.NewDecoder(strings.NewReader(Example(system)))
+		dec.KnownFields(true)
+		var cfg Config
+		if err := dec.Decode(&cfg); err != nil {
+			t.Fatalf("example config does not decode: %v", err)
+		}
+		if len(cfg.Events) != 3 {
+			t.Fatalf("events = %d, want 3", len(cfg.Events))
+		}
+		for _, goos := range []string{"darwin", "linux", "windows"} {
+			b := cfg.BaseDir.For(goos)
+			if b == "" || system == strings.HasPrefix(b, "~") {
+				t.Errorf("system %v: base_dir for %s is %q", system, goos, b)
+			}
+		}
 	}
-	if len(cfg.Events) != 3 {
-		t.Fatalf("events = %d, want 3", len(cfg.Events))
+}
+
+// The log and the database start at the base_dir of the running OS, and
+// other relative paths still start at the directory of the file.
+func TestBaseDir(t *testing.T) {
+	noLogEnv(t)
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "work"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(dir, "state")
+	body := "base_dir:\n  macos: '" + base + "'\n  linux: '" + base + "'\n  windows: '" + base + "'\n" +
+		"log:\n  path: 'logs/kickd.log'\n" +
+		"events:\n  - name: a\n    command: ['true']\n    workdir: 'work'\n"
+	cfg, err := Parse([]byte(body), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(base, "logs", "kickd.log"); cfg.Log.Path != want {
+		t.Errorf("log.path = %q, want %q", cfg.Log.Path, want)
+	}
+	if want := filepath.Join(base, DefaultDatabasePath); cfg.Database.Path != want {
+		t.Errorf("database.path = %q, want %q", cfg.Database.Path, want)
+	}
+	if want := filepath.Join(dir, "work"); cfg.Events[0].Workdir != want {
+		t.Errorf("workdir = %q, want %q", cfg.Events[0].Workdir, want)
+	}
+	// An absolute path stays, and a base for another OS only does not apply.
+	abs := filepath.Join(dir, "elsewhere.db")
+	other := map[string]string{"darwin": "linux", "linux": "windows", "windows": "macos"}[runtime.GOOS]
+	body = "base_dir:\n  " + other + ": '" + base + "'\n" +
+		"database:\n  path: '" + abs + "'\n" +
+		"log:\n  path: 'kickd.log'\n" +
+		"events:\n  - name: a\n    command: ['true']\n"
+	if cfg, err = Parse([]byte(body), dir); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Database.Path != abs || cfg.Log.Path != filepath.Join(dir, "kickd.log") || cfg.Base != dir {
+		t.Errorf("database %q, log %q, base %q", cfg.Database.Path, cfg.Log.Path, cfg.Base)
 	}
 }
 
@@ -50,8 +99,8 @@ func TestLoadAppliesDefaultsAndResolvesPaths(t *testing.T) {
 	t.Setenv("USERPROFILE", dir)
 	path := write(t, dir, "kickd.yaml", `
 log:
-  file: logs/kickd.log
-queue:
+  path: logs/kickd.log
+database:
   path: state/q.db
 events:
   - name: a
@@ -75,11 +124,14 @@ events:
 	if cfg.Log.Level != "info" || cfg.Log.Format != "auto" || cfg.Log.MaxSizeMB != 10 || cfg.Log.MaxBackups != 5 {
 		t.Errorf("log defaults not applied: %+v", cfg.Log)
 	}
-	if want := filepath.Join(dir, "logs", "kickd.log"); cfg.Log.File != want {
-		t.Errorf("log.file = %q, want %q", cfg.Log.File, want)
+	if want := filepath.Join(dir, "logs", "kickd.log"); cfg.Log.Path != want {
+		t.Errorf("log.path = %q, want %q", cfg.Log.Path, want)
 	}
-	if want := filepath.Join(dir, "state", "q.db"); cfg.Queue.Path != want || cfg.Queue.Retention != DefaultRetention {
-		t.Errorf("queue = %+v", cfg.Queue)
+	if want := filepath.Join(dir, "state", "q.db"); cfg.Database.Path != want || cfg.Database.Retention != DefaultRetention {
+		t.Errorf("database = %+v", cfg.Database)
+	}
+	if !cfg.Webhook.IsEnabled() || !cfg.WebhookServer() {
+		t.Errorf("webhook triggers should be enabled by default")
 	}
 	e := cfg.Events[0]
 	if e.Concurrency != "skip" || e.OnInterrupt != "abandon" || e.MaxAttempts != 3 || e.Stdin != "none" || !e.LogsOutput() {
@@ -140,7 +192,9 @@ func TestParseErrors(t *testing.T) {
 		{"bad param", "events:\n  - name: a\n    params: [{name: 1x}]" + ok, "parameter name"},
 		{"required with default", "events:\n  - name: a\n    params: [{name: p, required: true, default: d}]" + ok, "cannot be required and have a default"},
 		{"required param with cron", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: cron, schedule: '@hourly'}]", "cannot supply required parameters"},
-		{"negative retention", "queue: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
+		{"negative retention", "database: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
+		{"old log key", "log:\n  file: kickd.log\nevents:\n  - name: a" + ok, "line 2: log.file is now log.path"},
+		{"old queue section", "queue:\n  path: kickd.db\nevents:\n  - name: a" + ok, "line 1: the queue section is now called database"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -216,6 +270,12 @@ events:
 	cfg.Webhook.Listen = "127.0.0.1:9000"
 	if w := cfg.Warnings(); len(w) != 0 {
 		t.Fatalf("loopback should not warn: %v", w)
+	}
+	cfg.Webhook.Listen = "0.0.0.0:9000"
+	off := false
+	cfg.Webhook.Enabled = &off
+	if w := cfg.Warnings(); len(w) != 0 || cfg.WebhookServer() {
+		t.Fatalf("a disabled server should not warn or run: %v", w)
 	}
 }
 

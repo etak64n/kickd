@@ -103,7 +103,7 @@ var schemaV3 = []string{
 	)`,
 }
 
-// Store is an open queue database.
+// Store is an open kickd database: the record of every run.
 type Store struct {
 	db   *sql.DB
 	path string

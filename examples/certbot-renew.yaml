@@ -9,12 +9,19 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event certbot-renew -c /etc/kickd/config.yaml
 
+# The database is /var/lib/kickd/kickd.db. Without log.path, the log goes
+# to journald.
+base_dir:
+  linux: '/var/lib/kickd'
+database:
+  path: 'kickd.db'
+
 events:
   - name: certbot-renew
     description: Renew certificates and reload nginx after a renewal
-    command: [certbot, renew, --quiet, --deploy-hook, "systemctl reload nginx"]
+    command: [certbot, renew, --quiet, --deploy-hook, 'systemctl reload nginx']
     timeout: 10m
     on_interrupt: rerun
     triggers:
       - type: cron
-        schedule: "17 3,15 * * *"
+        schedule: '17 3,15 * * *'

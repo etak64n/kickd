@@ -51,6 +51,7 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 ## 2. Create the config file
 
 `kickd init` writes an example config to `~/Library/Application Support/kickd/config.yaml`.
+Its `base_dir` puts the log and the database of kickd in the same folder, as `kickd.log` and `kickd.db`.
 The example defines three events.
 Delete the events that are not needed, and change the paths to match the Mac.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
@@ -62,7 +63,7 @@ kickd check
 ```
 
 `kickd check` prints every error in the config file.
-When there are none, it prints each event and its triggers.
+When there are none, it prints where the log and the database go, and each event and its triggers.
 
 ## 3. Try it in the foreground
 
@@ -74,7 +75,7 @@ kickd run
 ```
 
 In the foreground, log records appear in the terminal as text, colored by level.
-With the example config, the same records are also written as JSON to `kickd.log` in the directory of the config file.
+With the example config, the same records are also written as JSON to `~/Library/Application Support/kickd/kickd.log`.
 
 ## 4. Run kickd as a LaunchAgent
 
@@ -114,11 +115,11 @@ events:
   - name: to-m4a
     shell: 'ffmpeg -i "$KICKD_FILE_PATH" "${KICKD_FILE_PATH%.*}.m4a"'
     env:
-      PATH: "/opt/homebrew/bin:${PATH}"
+      PATH: '/opt/homebrew/bin:${PATH}'
     triggers:
       - type: file
         path: ~/Movies/Recordings
-        include: ["*.mov"]
+        include: ['*.mov']
 ```
 
 `env` adds environment variables for the command, and `${PATH}` in its values expands to the `PATH` of kickd itself.
@@ -144,7 +145,7 @@ Before relying on a watch there, put a file in the folder and check that the eve
 
 ## Logs of the service
 
-The service writes its log as JSON to the file set by `log.file` in the config file.
+The service writes its log as JSON to the file set by `log.path`, which is `~/Library/Application Support/kickd/kickd.log` with the example config.
 When the file grows past `log.max_size_mb`, kickd renames it to `kickd.log.1` and keeps up to `log.max_backups` old files.
 If kickd fails before it opens the log file, launchd writes that output to `~/kickd.err.log`.
 launchd also creates `~/kickd.out.log`.
@@ -168,7 +169,7 @@ kickd service uninstall --user
 ```
 
 `uninstall` stops kickd and deletes the definition file.
-The config file, the queue database and the logs stay.
+The config file, the database and the logs stay.
 
 ## Running without a login
 
@@ -178,6 +179,7 @@ A LaunchDaemon runs as root from the time the Mac starts, and its definition fil
 
 A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
 Write absolute paths in the config file, and give the config file with `-c` when installing.
+A config file outside the home folder gets absolute paths from `kickd init`: its `base_dir` puts the log and the database in `/Library/Application Support/kickd`.
 
 ```sh
 sudo kickd init -c "/Library/Application Support/kickd/config.yaml"

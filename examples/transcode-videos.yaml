@@ -9,6 +9,16 @@
 # Service: kickd service install --user
 # By hand: kickd event transcode
 
+# The log and the database go to ~/Library/Application Support/kickd on
+# macOS and to ~/.local/state/kickd on Linux.
+base_dir:
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
+
 events:
   - name: transcode
     description: Convert new clips to MP4
@@ -35,6 +45,6 @@ events:
       - type: file
         path: ~/Videos/Incoming
         # Patterns are case sensitive, and cameras use both spellings.
-        include: ["*.mov", "*.MOV"]
+        include: ['*.mov', '*.MOV']
         changes: [create, write]
         debounce: 30s

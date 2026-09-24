@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -124,13 +125,13 @@ func cmdRun(args []string) error {
 	logger, closer, err := logging.New(logging.Options{
 		Level:      cfg.Log.Level,
 		Format:     cfg.Log.Format,
-		File:       cfg.Log.File,
+		File:       cfg.Log.Path,
 		MaxSizeMB:  cfg.Log.MaxSizeMB,
 		MaxBackups: cfg.Log.MaxBackups,
 		Console:    interactive,
 	})
 	if err != nil {
-		fatal(procID, logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format}, "Log file open failed", err, "file", cfg.Log.File)
+		fatal(procID, logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format}, "Log file open failed", err, "file", cfg.Log.Path)
 		return errLogged
 	}
 	defer closer.Close()
@@ -198,12 +199,22 @@ func cmdCheck(args []string) error {
 		triggers += len(e.Triggers)
 	}
 	fmt.Printf("OK: %s (%d events, %d triggers)\n", cfg.Path, len(cfg.Events), triggers)
-	fmt.Printf("log: level=%s%s format=%s%s file=%s max_size_mb=%d max_backups=%d\n",
-		cfg.Log.Level, fromEnv(cfg.Log.LevelFrom), cfg.Log.Format, fromEnv(cfg.Log.FormatFrom),
-		orDash(cfg.Log.File), cfg.Log.MaxSizeMB, cfg.Log.MaxBackups)
-	fmt.Printf("queue: %s (retention %s)\n", cfg.Queue.Path, cfg.Queue.Retention)
-	if cfg.HasWebhook() {
+	if b := cfg.BaseDir.For(runtime.GOOS); b != "" {
+		fmt.Printf("base_dir: %s\n", cfg.Base)
+	}
+	logPath := cfg.Log.Path
+	if logPath == "" {
+		logPath = "standard error"
+	}
+	fmt.Printf("log: %s (level=%s%s format=%s%s max_size_mb=%d max_backups=%d)\n",
+		logPath, cfg.Log.Level, fromEnv(cfg.Log.LevelFrom), cfg.Log.Format, fromEnv(cfg.Log.FormatFrom),
+		cfg.Log.MaxSizeMB, cfg.Log.MaxBackups)
+	fmt.Printf("database: %s (retention %s)\n", cfg.Database.Path, cfg.Database.Retention)
+	switch {
+	case cfg.WebhookServer():
 		fmt.Printf("webhook: listen=%s\n", cfg.Webhook.Listen)
+	case cfg.HasWebhook():
+		fmt.Println("webhook: disabled by webhook.enabled, so webhook triggers do not fire")
 	}
 	for _, e := range cfg.Events {
 		cmd := e.Shell
@@ -319,11 +330,34 @@ func cmdInit(args []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(config.Example), 0o600); err != nil {
+	system := initForSystem(path)
+	if err := os.WriteFile(path, []byte(config.Example(system)), 0o600); err != nil {
 		return err
 	}
-	fmt.Printf("wrote %s\nEdit it, then run: kickd check -c %s\n", path, path)
+	kind := "a user"
+	if system {
+		kind = "a system-wide service"
+	}
+	fmt.Printf("wrote %s\n", path)
+	fmt.Printf("base_dir lists the usual places for the files of %s; kickd check shows where the log and the database go.\n", kind)
+	fmt.Printf("Edit it, then run: kickd check -c %s\n", path)
 	return nil
+}
+
+// initForSystem reports whether a config file at path is for a service of
+// the whole system: a file outside the home directory, such as
+// /etc/kickd/config.yaml or C:\ProgramData\kickd\config.yaml.
+func initForSystem(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return true
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return true
+	}
+	rel, err := filepath.Rel(home, abs)
+	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func cmdService(args []string) error {

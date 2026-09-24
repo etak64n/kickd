@@ -67,13 +67,14 @@ The example config defines three events.
 Their commands are written for macOS and Linux, so replace them with commands that work on Windows.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
-kickd records every run in a SQLite database called the **queue**.
-The queue is created next to the config file, as `C:\ProgramData\kickd\kickd.db`.
-A database created by the service belongs to administrators and SYSTEM, so run `kickd event` and the other queue commands in an administrator PowerShell as well.
+kickd records every run in its **database**, a SQLite file.
+The config file is outside the home folder, so `kickd init` sets the `base_dir` of Windows to `C:\ProgramData\kickd`.
+The database is then `C:\ProgramData\kickd\kickd.db`, and the log `C:\ProgramData\kickd\kickd.log`, next to the config file.
+A database created by the service belongs to administrators and SYSTEM, so run `kickd event` and the other commands that read or write it in an administrator PowerShell as well.
 
-In a double-quoted YAML string, a backslash (`\`) starts an escape sequence.
-`"C:\Data\Import"` fails to load with `found unknown escape character`.
-Write Windows paths in single quotes, without quotes, or with forward slashes:
+Write Windows paths in single quotes, as the examples do: in single quotes, a backslash (`\`) is an ordinary character.
+In double quotes, a backslash starts an escape sequence, so a double-quoted `C:\Data\Import` fails to load with `found unknown escape character`.
+A path without quotes, or with forward slashes, also works:
 
 ```yaml
 # Any one of these forms works.

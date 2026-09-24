@@ -222,14 +222,28 @@ func TestEventDataFlag(t *testing.T) {
 }
 
 func TestInitWritesTheExampleOnce(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "config.yaml")
-	if err := cmdInit([]string{"-c", path}); err != nil {
-		t.Fatal(err)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // the home directory on Windows
+	// A config in the home directory is a user's; one outside it is for
+	// the whole system, as /etc/kickd/config.yaml is.
+	user := filepath.Join(home, "kickd", "config.yaml")
+	system := filepath.Join(t.TempDir(), "etc", "kickd", "config.yaml")
+	for _, c := range []struct {
+		path   string
+		system bool
+	}{{user, false}, {system, true}} {
+		if err := cmdInit([]string{"-c", c.path}); err != nil {
+			t.Fatal(err)
+		}
+		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.Example(c.system) {
+			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
+		}
 	}
-	b, err := os.ReadFile(path)
-	if err != nil || string(b) != config.Example {
-		t.Fatalf("init wrote %d bytes, err %v", len(b), err)
+	if config.Example(true) == config.Example(false) || !strings.Contains(config.Example(true), "/var/lib/kickd") {
+		t.Fatal("the system example must have its own base_dir")
 	}
+	path := user
 	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("config permissions %o, want 600", st.Mode().Perm())
 	}

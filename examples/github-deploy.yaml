@@ -11,12 +11,17 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event deploy-app -c /etc/kickd/config.yaml
 
+# The database is /var/lib/kickd/kickd.db, and the log
+# /var/log/kickd/kickd.log.
+base_dir:
+  linux: '/var/lib/kickd'
 log:
-  file: /var/log/kickd/kickd.log
+  path: '/var/log/kickd/kickd.log'
 webhook:
-  listen: "127.0.0.1:8787"
-queue:
-  path: /var/lib/kickd/kickd.db
+  enabled: true
+  listen: '127.0.0.1:8787'
+database:
+  path: 'kickd.db'
 
 events:
   - name: deploy-app
@@ -44,6 +49,6 @@ events:
         methods: [POST]
         # kickd checks X-Hub-Signature-256, which GitHub computes with this
         # secret. Generate one with: openssl rand -hex 32
-        secret: "replace-with-the-webhook-secret"
+        secret: 'replace-with-the-webhook-secret'
         # GitHub waits at most 10 seconds for a response, so kickd answers
         # with 202 at once instead of waiting for the deploy.

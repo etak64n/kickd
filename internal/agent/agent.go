@@ -58,14 +58,14 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 	if err != nil {
 		return err
 	}
-	store, err := openQueue(ctx, log, cfg.Queue.Path)
+	store, err := openQueue(ctx, log, cfg.Database.Path)
 	if err != nil {
 		return err
 	}
 	defer store.Close()
 
 	rn := runner.New(ctx, base, procID)
-	disp := runner.NewDispatcher(rn, store, log, cfg.Queue.Retention)
+	disp := runner.NewDispatcher(rn, store, log, cfg.Database.Retention)
 	disp.Configure(specs(cfg))
 	if err := disp.Recover(ctx); err != nil {
 		return fmt.Errorf("recover interrupted runs: %w", err)
@@ -93,7 +93,7 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 		stopLoop()
 		<-loopDone
 		if err := store.AgentStopped(context.Background()); err != nil {
-			log.Warn("Queue operation failed", "detail", "agent_stopped", "file", store.Path(), logging.Err(err))
+			log.Warn("Database operation failed", "detail", "agent_stopped", "file", store.Path(), logging.Err(err))
 		}
 		logStopped(log, rn, started)
 		return nil
@@ -132,9 +132,9 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 			stop(event.ErrReload)
 		}
 		first = false
-		if next.Queue.Path != cfg.Queue.Path {
-			log.Warn("Queue path change needs a restart", "file", cfg.Queue.Path, "detail", next.Queue.Path)
-			next.Queue.Path = cfg.Queue.Path
+		if next.Database.Path != cfg.Database.Path {
+			log.Warn("Database path change needs a restart", "file", cfg.Database.Path, "detail", next.Database.Path)
+			next.Database.Path = cfg.Database.Path
 		}
 		cfg = next
 		disp.Configure(specs(cfg))
@@ -170,7 +170,7 @@ func waitForValidConfig(ctx context.Context, log *slog.Logger, path string, relo
 	return next
 }
 
-// openQueue opens the queue database.
+// openQueue opens the database.
 func openQueue(ctx context.Context, log *slog.Logger, path string) (*queue.Store, error) {
 	store, err := queue.Open(path)
 	if err != nil {
@@ -181,7 +181,7 @@ func openQueue(ctx context.Context, log *slog.Logger, path string) (*queue.Store
 		store.Close()
 		return nil, err
 	}
-	log.Info("Queue opened", "file", store.Path(), "count", queued)
+	log.Info("Database opened", "file", store.Path(), "count", queued)
 	return store, nil
 }
 
@@ -220,6 +220,7 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 	ctx, cancel := context.WithCancelCause(parent)
 	cronSched := trigger.NewCronScheduler(log, state)
 	var hook *trigger.WebhookServer
+	disabledHooks := 0
 	type runnable struct {
 		name string
 		run  func(context.Context) error
@@ -236,6 +237,10 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 					log.Error("Trigger rejected", "event", e.Name, "trigger", event.KindCron, logging.Err(err))
 				}
 			case config.TriggerWebhook:
+				if !cfg.Webhook.IsEnabled() {
+					disabledHooks++
+					continue
+				}
 				if hook == nil {
 					hook = trigger.NewWebhookServer(cfg.Webhook.Listen, cfg.Webhook.MaxBodyBytes, log)
 				}
@@ -273,6 +278,9 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 	}
 	if cronSched.Len() > 0 {
 		runnables = append(runnables, runnable{event.KindCron, cronSched.Run})
+	}
+	if disabledHooks > 0 {
+		log.Info("Webhook triggers disabled", "count", disabledHooks, "detail", "webhook.enabled is false, so the HTTP server does not start")
 	}
 	if hook != nil {
 		runnables = append(runnables, runnable{event.KindWebhook, hook.Run})

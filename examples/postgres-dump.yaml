@@ -15,6 +15,13 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event pg-dump db=analytics -c /etc/kickd/config.yaml
 
+# The database is /var/lib/kickd/kickd.db. Without log.path, the log goes
+# to journald.
+base_dir:
+  linux: '/var/lib/kickd'
+database:
+  path: 'kickd.db'
+
 events:
   - name: pg-dump
     description: Dump one database to /var/backups/postgres
@@ -38,4 +45,4 @@ events:
     on_interrupt: rerun
     triggers:
       - type: cron
-        schedule: "15 1 * * *"
+        schedule: '15 1 * * *'

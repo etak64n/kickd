@@ -33,40 +33,46 @@ kickd has four kinds of trigger:
 - **Webhook**: the event fires when an HTTP request arrives at a path that kickd listens on.
 - **File**: the event fires when files are created, written, removed or renamed in a directory.
 
-Each firing is first written as a **run** to a SQLite database called the **queue**.
-The long-running kickd process, called the **agent**, takes runs from the queue in order and starts the event's command for each one.
-The queue is a file, so runs that are still waiting survive a restart of the agent or of the machine.
+Each firing is first recorded as a **run** in the **database**, a SQLite file.
+The long-running kickd process, called the **agent**, starts the command of each run.
+A run that has not started yet, such as one that waits for the previous run of its event, waits in the **queue**.
+The database is a file, so waiting runs survive a restart of the agent or of the machine.
 
 ## The config file
 
-A config file is YAML with four sections: `log`, `webhook`, `queue` and `events`.
+A config file is YAML with five sections: `base_dir`, `log`, `webhook`, `database` and `events`.
 Only `events` is required, and every other key has a default.
 This file defines one event for each kind of trigger:
 
 ```yaml
+base_dir:                    # where the log and the database go on each OS
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+  windows: '~\AppData\Local\kickd'
 log:
-  file: kickd.log            # JSON Lines; without a file, kickd logs to standard error
+  path: 'kickd.log'          # base_dir/kickd.log; without a path, kickd logs to standard error
 webhook:
-  listen: "127.0.0.1:8787"   # the HTTP server for webhook triggers
-queue:
-  path: kickd.db             # the SQLite database that records every run
+  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
+  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+database:
+  path: 'kickd.db'           # base_dir/kickd.db, the SQLite file that records every run
   retention: 168h            # how long finished runs stay in the history
 
 events:
   # Cron: every night at 3:00, Tokyo time.
   - name: backup
-    shell: 'rsync -a "$HOME/work/" "$HOME/backup/work/"'
+    shell: 'rsync -a ~/work/ ~/backup/work/'
     timeout: 1h
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
-        schedule: "0 3 * * *"
+        schedule: '0 3 * * *'
         timezone: Asia/Tokyo
         missed: run          # after sleep or downtime, run once for the missed times
 
   # Webhook: POST /hooks/deploy?ref=v1.2 with "Authorization: Bearer <token>".
   - name: deploy
-    command: ["./deploy.sh"]
+    command: ['./deploy.sh']
     workdir: ~/app
     concurrency: queue       # deploys wait for each other and run in order
     params:
@@ -76,11 +82,11 @@ events:
       - type: webhook
         path: /hooks/deploy
         methods: [POST]
-        token: "replace-with-a-long-random-string"
+        token: 'replace-with-a-long-random-string'
 
   # File changes: 2 seconds after the last change in ~/app/src or below.
   - name: build
-    command: ["make", "build"]
+    command: ['make', 'build']
     workdir: ~/app
     concurrency: queue       # changes during a build are built after it
     triggers:
@@ -95,10 +101,13 @@ events:
     workdir: ~/app
     params:
       - name: message
-        default: "Hello from kickd"
+        default: 'Hello from kickd'
 ```
 
-`kickd check` validates a config file and lists its events and triggers.
+A relative `log.path` or `database.path` starts at the `base_dir` of the OS that kickd runs on, and every other relative path starts at the directory of the config file.
+Strings are in single quotes, which keep backslashes and double quotes as they are; double quotes appear only inside shell commands.
+
+`kickd check` validates a config file, lists its events and triggers, and prints where the log and the database go.
 The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
 
 ## Features
@@ -150,11 +159,12 @@ The installation guides for macOS, Linux and Windows cover each OS in detail, in
 With `kickd` installed, these steps define an event, run the agent and fire the event.
 
 1. Create a config file named `kickd.yaml` that defines one event, `hello`.
+   Without `base_dir`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
 
    ```yaml
    events:
      - name: hello
-       shell: "echo hello from kickd"
+       shell: 'echo hello from kickd'
    ```
 
 2. Start the agent in the foreground.
@@ -193,7 +203,7 @@ To keep kickd running in the background, install it as a service by following th
 - [Installing on Linux](docs/install-linux.md): the executable, the config file, running as a systemd unit, per-user units
 - [Installing on Windows](docs/install-windows.md): the executable, the config file, running as a Windows service, the SYSTEM account
 - [Configuration](docs/configuration.md): where the config file lives, defining events, applying changes, examples
-- [The queue](docs/queue.md): how firings become runs, run statuses, interrupted runs
+- [Runs](docs/runs.md): how firings become runs, run statuses, interrupted runs, the database
 - [Command-line reference](docs/cli.md): every subcommand, firing events with parameters, exit codes
 - [Webhooks](docs/webhook.md): authentication, request IDs, parameters, responses
 - [Configuration reference](docs/config-keys.md): every key of the config file and its default
@@ -206,7 +216,7 @@ To keep kickd running in the background, install it as a service by following th
 ### Internals
 
 - [Architecture](docs/internals/architecture.md): the parts of the agent, the path of a firing, reloading and stopping
-- [Queue internals](docs/internals/queue.md): the SQLite database, locking between processes, consumption, recovery at startup
+- [Database internals](docs/internals/database.md): the SQLite database, locking between processes, consumption of the queue, recovery at startup
 - [Delivery guarantees and idempotency](docs/internals/idempotency.md): when a firing can be lost or repeated, and how to write commands that tolerate repeats
 - [How commands run](docs/internals/execution.md): processes, environment, output, stopping, exit status
 - [Platform differences](docs/internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows

@@ -4,14 +4,15 @@
 
 kickd is one executable with subcommands.
 `kickd run` starts the long-running kickd process, called the **agent**.
-The other subcommands prepare the setup, or work with the queue.
+The other subcommands prepare the setup, or work with the runs.
 
 In kickd, a named command in the config file is an **event**.
-Each firing of an event is recorded as a **run** in the **queue**, a SQLite database that the agent consumes.
+Each firing of an event is recorded as a **run** in the **database**, a SQLite file, and the agent starts the command of each run.
+A run that has not started yet waits in the **queue**.
 
 Every subcommand reads the config file.
 The file is the first of these that applies: `-c` or `--config`, the environment variable `KICKD_CONFIG`, `kickd/config.yaml` in the user's config directory, and `kickd.yaml` in the current directory.
-The queue subcommands read and write the database named in the config file directly, the same database that the agent uses.
+The subcommands that work with runs read and write the database of the config file directly, the same database that the agent uses.
 
 ## Subcommands
 
@@ -57,7 +58,7 @@ kickd event deploy ref=v1.2
 kickd event deploy --data '{"ref":"v1.2"}'
 ```
 
-`kickd event` writes the run to the queue and prints its run ID.
+`kickd event` writes the run to the database and prints its run ID.
 A run fired while the agent is stopped stays in the queue and starts when the agent starts.
 
 With `--wait`, `kickd event` waits for the run to finish and prints a table of the result.

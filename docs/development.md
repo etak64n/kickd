@@ -28,9 +28,9 @@ git push origin v0.2.0
 ## Source layout
 
 ```
-cmd/kickd/          The kickd command: the agent (run), queue commands (event, events, queue, runs, show, cancel, status), setup (check, init, service)
+cmd/kickd/          The kickd command: the agent (run), run commands (event, events, queue, runs, show, cancel, status), setup (check, init, service)
 internal/config/    Loading, defaults and validation of the config, and the example config example.yaml
-internal/queue/     The SQLite queue: run records, recovery of interrupted runs, the heartbeat of the agent
+internal/queue/     The SQLite database: run records, recovery of interrupted runs, the heartbeat of the agent
 internal/runner/    Running commands, and consuming the queue: concurrency, reruns of interrupted runs
 internal/trigger/   Cron schedules (gocron), webhooks (net/http), file watching (fsnotify)
 internal/agent/     Builds the triggers and the queue consumer from the config, and reloads the config

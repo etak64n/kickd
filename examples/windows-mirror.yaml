@@ -16,8 +16,14 @@
 #          (in PowerShell opened as administrator)
 # By hand: kickd event mirror-documents -c C:\ProgramData\kickd\config.yaml
 
+# The log and the database go to C:\ProgramData\kickd, next to the config
+# file.
+base_dir:
+  windows: 'C:\ProgramData\kickd'
 log:
-  file: 'C:\ProgramData\kickd\kickd.log'
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
 
 events:
   - name: mirror-documents
@@ -28,4 +34,4 @@ events:
     on_interrupt: rerun
     triggers:
       - type: cron
-        schedule: "0 1 * * *"
+        schedule: '0 1 * * *'

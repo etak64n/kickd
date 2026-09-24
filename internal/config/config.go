@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -18,10 +19,34 @@ import (
 	"github.com/etak64n/kickd/internal/trigger"
 )
 
-// Example is the annotated configuration written by "kickd init".
-//
 //go:embed example.yaml
-var Example string
+var example string
+
+// userBaseDir and systemBaseDir are the base_dir sections of Example: the
+// usual places for the files of a user's program, and of a service that
+// runs for the whole system.
+const (
+	userBaseDir = `base_dir:
+  macos: '~/Library/Application Support/kickd'
+  linux: '~/.local/state/kickd'
+  windows: '~\AppData\Local\kickd'
+`
+	systemBaseDir = `base_dir:
+  macos: '/Library/Application Support/kickd'
+  linux: '/var/lib/kickd'
+  windows: 'C:\ProgramData\kickd'
+`
+)
+
+// Example returns the annotated configuration that "kickd init" writes,
+// with the base directories of a system-wide service when system is true,
+// and those of a user otherwise.
+func Example(system bool) string {
+	if !system {
+		return example
+	}
+	return strings.Replace(example, userBaseDir, systemBaseDir, 1)
+}
 
 // Concurrency policies.
 const (
@@ -52,15 +77,15 @@ const (
 
 // Defaults applied when a field is left empty.
 const (
-	DefaultListen      = "127.0.0.1:8787"
-	DefaultDebounce    = time.Second
-	DefaultLogLevel    = "info"
-	DefaultLogFormat   = "auto"
-	DefaultLogSizeMB   = 10
-	DefaultLogBackups  = 5
-	DefaultQueuePath   = "kickd.db"
-	DefaultRetention   = 7 * 24 * time.Hour
-	DefaultMaxAttempts = 3
+	DefaultListen       = "127.0.0.1:8787"
+	DefaultDebounce     = time.Second
+	DefaultLogLevel     = "info"
+	DefaultLogFormat    = "auto"
+	DefaultLogSizeMB    = 10
+	DefaultLogBackups   = 5
+	DefaultDatabasePath = "kickd.db"
+	DefaultRetention    = 7 * 24 * time.Hour
+	DefaultMaxAttempts  = 3
 )
 
 // Environment variables that override the log settings of the file, as
@@ -79,22 +104,49 @@ var (
 
 // Config is the root of the configuration file.
 type Config struct {
-	Log     Log     `yaml:"log"`
-	Webhook Webhook `yaml:"webhook"`
-	Queue   Queue   `yaml:"queue"`
-	Events  []Event `yaml:"events"`
+	BaseDir  BaseDir  `yaml:"base_dir"`
+	Log      Log      `yaml:"log"`
+	Webhook  Webhook  `yaml:"webhook"`
+	Database Database `yaml:"database"`
+	Events   []Event  `yaml:"events"`
 
 	// Path is the absolute path of the loaded file and Dir its directory.
-	// Relative paths in the file are resolved against Dir.
+	// Relative paths in the file are resolved against Dir, except those of
+	// kickd's own files, which start at Base.
 	Path string `yaml:"-"`
 	Dir  string `yaml:"-"`
+	// Base is the base_dir of the running OS, resolved, or Dir when
+	// base_dir names none.
+	Base string `yaml:"-"`
+}
+
+// BaseDir is where kickd keeps its own files on each OS: a relative
+// log.path or database.path starts there.
+type BaseDir struct {
+	MacOS   string `yaml:"macos"`
+	Linux   string `yaml:"linux"`
+	Windows string `yaml:"windows"`
+}
+
+// For returns the base directory for the OS goos, as runtime.GOOS names
+// it, or "" when the file gives none.
+func (b BaseDir) For(goos string) string {
+	switch goos {
+	case "darwin":
+		return b.MacOS
+	case "linux":
+		return b.Linux
+	case "windows":
+		return b.Windows
+	}
+	return ""
 }
 
 // Log configures the agent log.
 type Log struct {
 	Level      string `yaml:"level"`
 	Format     string `yaml:"format"`
-	File       string `yaml:"file"`
+	Path       string `yaml:"path"` // empty: standard error
 	MaxSizeMB  int    `yaml:"max_size_mb"`
 	MaxBackups int    `yaml:"max_backups"`
 
@@ -106,13 +158,18 @@ type Log struct {
 
 // Webhook configures the shared HTTP server used by webhook triggers.
 type Webhook struct {
+	Enabled      *bool  `yaml:"enabled"`
 	Listen       string `yaml:"listen"`
 	MaxBodyBytes int64  `yaml:"max_body_bytes"`
 }
 
-// Queue configures the SQLite database that holds every firing: queued,
-// running and finished runs.
-type Queue struct {
+// IsEnabled reports whether webhook triggers may fire: webhook.enabled is
+// true unless the file sets it to false.
+func (w Webhook) IsEnabled() bool { return w.Enabled == nil || *w.Enabled }
+
+// Database configures the SQLite database that records every run:
+// waiting, running and finished.
+type Database struct {
 	Path      string        `yaml:"path"`
 	Retention time.Duration `yaml:"retention"`
 }
@@ -241,6 +298,9 @@ func Load(path string) (*Config, error) {
 
 // Parse decodes data, resolving relative paths against dir.
 func Parse(data []byte, dir string) (*Config, error) {
+	if err := renamedKeys(data); err != nil {
+		return nil, err
+	}
 	var cfg Config
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
@@ -280,19 +340,23 @@ func (c *Config) applyDefaults() {
 	if c.Log.MaxBackups == 0 {
 		c.Log.MaxBackups = DefaultLogBackups
 	}
-	c.Log.File = c.resolve(c.Log.File)
+	c.Base = c.Dir
+	if b := c.BaseDir.For(runtime.GOOS); b != "" {
+		c.Base = c.resolve(b)
+	}
+	c.Log.Path = c.resolveOwn(c.Log.Path)
 	if c.Webhook.Listen == "" {
 		c.Webhook.Listen = DefaultListen
 	}
 	if c.Webhook.MaxBodyBytes == 0 {
 		c.Webhook.MaxBodyBytes = trigger.DefaultMaxBody
 	}
-	if c.Queue.Path == "" {
-		c.Queue.Path = DefaultQueuePath
+	if c.Database.Path == "" {
+		c.Database.Path = DefaultDatabasePath
 	}
-	c.Queue.Path = c.resolve(c.Queue.Path)
-	if c.Queue.Retention == 0 {
-		c.Queue.Retention = DefaultRetention
+	c.Database.Path = c.resolveOwn(c.Database.Path)
+	if c.Database.Retention == 0 {
+		c.Database.Retention = DefaultRetention
 	}
 	for i := range c.Events {
 		e := &c.Events[i]
@@ -337,7 +401,15 @@ func (c *Config) applyDefaults() {
 
 // resolve expands "~" and environment variables and makes p absolute,
 // relative to the config directory.
-func (c *Config) resolve(p string) string {
+func (c *Config) resolve(p string) string { return resolveFrom(c.Dir, p) }
+
+// resolveOwn resolves the path of one of kickd's own files, the log or the
+// database, which start at the base directory.
+func (c *Config) resolveOwn(p string) string { return resolveFrom(c.Base, p) }
+
+// resolveFrom expands environment variables and a leading ~ in p, and
+// makes a relative result relative to dir.
+func resolveFrom(dir, p string) string {
 	if p == "" {
 		return ""
 	}
@@ -348,7 +420,7 @@ func (c *Config) resolve(p string) string {
 		}
 	}
 	if !filepath.IsAbs(p) {
-		p = filepath.Join(c.Dir, p)
+		p = filepath.Join(dir, p)
 	}
 	return filepath.Clean(p)
 }
@@ -369,8 +441,8 @@ func (c *Config) validate() error {
 	if c.Log.MaxBackups < 0 {
 		fail("log.max_backups must not be negative")
 	}
-	if c.Queue.Retention < 0 {
-		fail("queue.retention must not be negative")
+	if c.Database.Retention < 0 {
+		fail("database.retention must not be negative")
 	}
 	if len(c.Events) == 0 {
 		fail("events: at least one event is required")
@@ -522,6 +594,11 @@ func (e *ValidationError) Error() string {
 
 func (e *ValidationError) Unwrap() []error { return e.Problems }
 
+// WebhookServer reports whether kickd runs the HTTP server of webhook
+// triggers: when an event has a webhook trigger and webhook.enabled is not
+// false.
+func (c *Config) WebhookServer() bool { return c.HasWebhook() && c.Webhook.IsEnabled() }
+
 // HasWebhook reports whether any event has a webhook trigger.
 func (c *Config) HasWebhook() bool {
 	for _, e := range c.Events {
@@ -563,7 +640,7 @@ type Warning struct {
 // Warnings returns advice that does not block loading.
 func (c *Config) Warnings() []Warning {
 	var out []Warning
-	if !c.HasWebhook() {
+	if !c.WebhookServer() {
 		return out
 	}
 	host, _, err := net.SplitHostPort(c.Webhook.Listen)
@@ -585,6 +662,34 @@ func (c *Config) Warnings() []Warning {
 		}
 	}
 	return out
+}
+
+// renamedKeys reports keys that earlier versions of kickd used, with the
+// names that replaced them, so that an old file fails with a fix.
+func renamedKeys(data []byte) error {
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) != nil || len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return nil // the decoder reports syntax errors and empty files
+	}
+	var errs []error
+	top := root.Content[0].Content
+	for i := 0; i+1 < len(top); i += 2 {
+		key, value := top[i], top[i+1]
+		switch {
+		case key.Value == "queue":
+			errs = append(errs, fmt.Errorf("line %d: the queue section is now called database", key.Line))
+		case key.Value == "log" && value.Kind == yaml.MappingNode:
+			for j := 0; j+1 < len(value.Content); j += 2 {
+				if k := value.Content[j]; k.Value == "file" {
+					errs = append(errs, fmt.Errorf("line %d: log.file is now log.path", k.Line))
+				}
+			}
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return &ValidationError{Problems: errs}
 }
 
 // DefaultPath is the config file used when nothing else is specified:
