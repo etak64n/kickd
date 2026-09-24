@@ -365,9 +365,19 @@ func nullID(id int64) any {
 	return id
 }
 
-// QueuedRuns returns queued runs, oldest first.
-func (s *Store) QueuedRuns(ctx context.Context, limit int) ([]Run, error) {
-	return queryRuns(ctx, s.db, `SELECT `+runColumns+` FROM runs WHERE status = ? ORDER BY id LIMIT ?`, StatusQueued, limit)
+// QueuedRuns returns queued runs, oldest first, leaving out the runs of the
+// events named in except.
+func (s *Store) QueuedRuns(ctx context.Context, limit int, except []string) ([]Run, error) {
+	q := `SELECT ` + runColumns + ` FROM runs WHERE status = ?`
+	args := []any{StatusQueued}
+	if len(except) > 0 {
+		q += ` AND event NOT IN (` + strings.TrimSuffix(strings.Repeat("?, ", len(except)), ", ") + `)`
+		for _, e := range except {
+			args = append(args, e)
+		}
+	}
+	args = append(args, limit)
+	return queryRuns(ctx, s.db, q+` ORDER BY id LIMIT ?`, args...)
 }
 
 // CountQueued returns the number of queued runs of an event.

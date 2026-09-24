@@ -97,6 +97,10 @@ This check keeps the agent and the subcommands consistent without holding a lock
 
 A queued run of an event that the config no longer defines becomes `dropped`, with the reason `event_removed`.
 
+The scan leaves out the runs of events that already run under `concurrency: queue`, because those runs cannot start yet.
+A long backlog of one event therefore never hides the runs of other events behind it, however many runs wait.
+When a scan reads all 500 places and starts or settles at least one run, the agent scans again at once, so the runs after the first 500 start without delay.
+
 ## Canceling a run
 
 `kickd cancel` only changes the database:

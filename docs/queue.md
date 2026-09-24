@@ -8,10 +8,11 @@ The long-running kickd process, the **agent**, takes runs from the queue and sta
 
 ## From firing to run
 
-When an event fires, kickd writes a run with the status `queued` to the queue.
-`kickd event` writes to the queue directly, so it works even while the agent is not running.
-The agent checks the queue every 0.2 seconds and takes runs oldest first.
+When an event fires, kickd writes a run with the status `queued` to the queue, and the agent starts it.
+Cron, webhook and file triggers run inside the agent and wake it at once, so their runs start within milliseconds.
+`kickd event` writes to the queue from a process of its own, so it works even while the agent is not running; the agent notices its run within 0.2 seconds.
 
+Runs of different events never wait for each other.
 The event's `concurrency` setting decides what happens to a run when the same event is already running:
 
 - **skip** (the default): the run is recorded as `skipped`, and its command does not start.

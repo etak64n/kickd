@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -407,5 +408,86 @@ func TestLogOutputFalseKeepsOutputOutOfTheQueue(t *testing.T) {
 	}
 	if run := runOf(t, env.store, "quiet"); run.Output != "" {
 		t.Errorf("stored output = %q, want none with log_output: false", run.Output)
+	}
+}
+
+// setBatch shrinks the number of queued runs that one scan reads.
+func setBatch(t *testing.T, n int) {
+	old := scheduleBatch
+	scheduleBatch = n
+	t.Cleanup(func() { scheduleBatch = old })
+}
+
+// enqueueQuietly adds queued runs without waking the loop, so that the
+// next scan finds them all at once.
+func enqueueQuietly(t *testing.T, s *queue.Store, name string, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		ev := fired(name)
+		ev.RequestID = fmt.Sprintf("%s-%d", name, i)
+		payload, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := s.Enqueue(context.Background(), queue.Run{RequestID: ev.RequestID, Event: name, Trigger: ev.Trigger,
+			TriggerID: ev.TriggerID, Payload: payload, Attempt: 1, CreatedAt: ev.Time}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A backlog of an event that waits under concurrency: queue must not hide
+// the runs of other events, even when it is longer than one scan.
+func TestQueueBacklogDoesNotDelayOtherEvents(t *testing.T) {
+	setBatch(t, 5)
+	slow := helperJob("sleep")
+	slow.Name, slow.Concurrency = "slow", PolicyQueue
+	quick := helperJob("short")
+	quick.Name = "quick"
+	env := newDispatcher(t, slow, quick)
+
+	first := fired("slow")
+	first.RequestID = "slow-running"
+	env.d.Handler("slow").Dispatch(first)
+	waitRun(t, env.store, runOf(t, env.store, "slow-running").ID, queue.StatusRunning)
+	enqueueQuietly(t, env.store, "slow", 12)
+
+	ev := fired("quick")
+	ev.RequestID = "quick"
+	env.d.Handler("quick").Dispatch(ev)
+	id := runOf(t, env.store, "quick").ID
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		r, err := env.store.GetRun(context.Background(), id)
+		if err == nil && r.Status != queue.StatusQueued {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the run of another event is still queued behind the backlog: %+v, %v", r, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// More runnable runs than one scan reads must all start at once.
+func TestFullScanIsFollowedAtOnce(t *testing.T) {
+	setBatch(t, 3)
+	wide := helperJob("sleep")
+	wide.Name, wide.Concurrency = "wide", PolicyParallel
+	env := newDispatcher(t, wide)
+	enqueueQuietly(t, env.store, "wide", 6)
+	ev := fired("wide")
+	ev.RequestID = "wide-wake"
+	env.d.Handler("wide").Dispatch(ev) // wakes the loop, which finds 7 runs
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		_, running, err := env.store.Counts(context.Background())
+		if err == nil && running == 7 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d of 7 runs started, err %v", running, err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

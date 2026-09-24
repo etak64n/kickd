@@ -56,7 +56,7 @@ func TestEnqueueLifecycle(t *testing.T) {
 	s, _ := openTemp(t)
 	a, _ := fire(s, t, "backup", "r1", 0)
 	b, _ := fire(s, t, "backup", "r2", 0)
-	queued, err := s.QueuedRuns(ctx, 10)
+	queued, err := s.QueuedRuns(ctx, 10, nil)
 	if err != nil || len(queued) != 2 || queued[0].ID != a || queued[1].ID != b || queued[0].Attempt != 1 {
 		t.Fatalf("queued = %+v, err = %v", queued, err)
 	}
@@ -265,5 +265,29 @@ func TestHeartbeat(t *testing.T) {
 	s.AgentStopped(ctx)
 	if a, _, _ := s.AgentInfo(ctx); a.Alive(15 * time.Second) {
 		t.Error("stopped agent must not be alive")
+	}
+}
+
+func TestQueuedRunsLeavesOutWaitingEvents(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "kickd.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	for _, name := range []string{"a", "b", "a", "c"} {
+		if _, _, err := s.Enqueue(ctx, Run{RequestID: "r-" + name, Event: name, Trigger: "manual", TriggerID: "manual", Payload: []byte("{}")}, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runs, err := s.QueuedRuns(ctx, 10, []string{"a", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Event != "b" {
+		t.Fatalf("runs = %+v, want only the run of b", runs)
+	}
+	if all, _ := s.QueuedRuns(ctx, 10, nil); len(all) != 4 {
+		t.Fatalf("without exceptions: %d runs, want 4", len(all))
 	}
 }

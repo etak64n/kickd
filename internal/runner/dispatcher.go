@@ -27,8 +27,10 @@ const (
 	fullScanEvery  = 5 * time.Second
 	heartbeatEvery = 5 * time.Second
 	pruneEvery     = time.Hour
-	scheduleBatch  = 500
 )
+
+// scheduleBatch is how many queued runs one scan reads. Tests shrink it.
+var scheduleBatch = 500
 
 // HeartbeatWindow is how old a heartbeat may be before "kickd status" reports that
 // kickd is not running.
@@ -346,12 +348,32 @@ func (d *Dispatcher) processCancels(ctx context.Context) {
 // schedule consumes queued rows, oldest first. skip settles a row as
 // skipped while its event runs; queue leaves it for later; parallel
 // starts it at once.
+//
+// Rows of an event that runs under the queue policy cannot start yet, so
+// the scan leaves them out: a long backlog of one event must not hide the
+// rows of other events behind it. A scan that fills its batch and makes
+// progress wakes the loop again, so that the rows after the batch start
+// at once too.
 func (d *Dispatcher) schedule(ctx context.Context) {
-	runs, err := d.store.QueuedRuns(ctx, scheduleBatch)
+	d.mu.Lock()
+	var waiting []string
+	for name, n := range d.running {
+		if n > 0 && d.specs[name].Concurrency == PolicyQueue {
+			waiting = append(waiting, name)
+		}
+	}
+	d.mu.Unlock()
+	runs, err := d.store.QueuedRuns(ctx, scheduleBatch, waiting)
 	if err != nil {
 		d.queueError(d.log, "queued_runs", err)
 		return
 	}
+	progressed := false
+	defer func() {
+		if progressed && len(runs) == scheduleBatch {
+			d.poke()
+		}
+	}()
 	for _, run := range runs {
 		if d.r.ctx.Err() != nil {
 			return
@@ -365,11 +387,13 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 				d.log.Warn("Queued run dropped", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "reason", "event_removed")
 				done()
 			}
+			progressed = true
 			continue
 		case spec.Concurrency == PolicySkip && d.running[run.Event] > 0:
 			a := d.active[run.Event]
 			d.mu.Unlock()
 			d.skip(ctx, run, a)
+			progressed = true
 			continue
 		case spec.Concurrency == PolicyQueue && d.running[run.Event] > 0:
 			d.mu.Unlock()
@@ -384,6 +408,7 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			continue
 		}
 		d.running[run.Event]++
+		progressed = true
 		var a *activeRun
 		if spec.Concurrency != PolicyParallel {
 			a = &activeRun{runID: run.ID, requestID: run.RequestID, start: time.Now()}
