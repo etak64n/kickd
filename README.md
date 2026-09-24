@@ -17,7 +17,7 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
+![kickd runs as a long-running process on macOS, Linux or Windows, and the service manager of the OS (launchd, systemd or Windows services) starts it and restarts it. Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event as a child process: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
 
 ## How kickd works
 
@@ -62,7 +62,9 @@ events:
   # Cron: every night at 3:00, Tokyo time.
   - name: backup
     command: 'rsync -a ~/work/ ~/backup/work/'
-    timeout: 1h
+    workdir: '~'
+    timeout: 1h              # the longest time the command may run
+    concurrency: skip        # a firing while the backup runs is skipped
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
@@ -70,14 +72,13 @@ events:
         timezone: Asia/Tokyo
         missed: run          # after sleep or downtime, run once for the missed times
 
-  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
+  # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
     command: ['./deploy.sh']
     workdir: '~/app'
+    timeout: 10m
     concurrency: queue       # deploys wait for each other and run in order
-    params:
-      - name: ref            # the command reads it as $KICKD_DATA_REF
-        default: main
+    on_interrupt: abandon    # a deploy that a stop or a crash cut off does not run again
     triggers:
       - type: webhook
         path: '/hooks/deploy'
@@ -88,20 +89,22 @@ events:
   - name: build
     command: ['make', 'build']
     workdir: '~/app'
+    timeout: 10m
     concurrency: queue       # changes during a build are built after it
+    on_interrupt: abandon    # the next change starts a new build
     triggers:
       - type: file
         path: '~/app/src'
         recursive: true      # also watch subdirectories
         debounce: 2s
 
-  # No triggers: runs only by hand, as with kickd event notify message=hello.
+  # No triggers: runs only by hand, with kickd event notify.
   - name: notify
-    command: './notify.sh "$KICKD_DATA_MESSAGE"'
+    command: ['./notify.sh']
     workdir: '~/app'
-    params:
-      - name: message
-        default: 'Hello from kickd'
+    timeout: 1m
+    concurrency: parallel    # notifications do not wait for each other
+    on_interrupt: abandon
 ```
 
 </details>
@@ -123,7 +126,9 @@ events:
   # Cron: every night at 3:00, Tokyo time.
   - name: backup
     command: 'rsync -a ~/work/ ~/backup/work/'
-    timeout: 1h
+    workdir: '~'
+    timeout: 1h              # the longest time the command may run
+    concurrency: skip        # a firing while the backup runs is skipped
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
@@ -131,14 +136,13 @@ events:
         timezone: Asia/Tokyo
         missed: run          # after sleep or downtime, run once for the missed times
 
-  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
+  # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
     command: ['./deploy.sh']
     workdir: '~/app'
+    timeout: 10m
     concurrency: queue       # deploys wait for each other and run in order
-    params:
-      - name: ref            # the command reads it as $KICKD_DATA_REF
-        default: main
+    on_interrupt: abandon    # a deploy that a stop or a crash cut off does not run again
     triggers:
       - type: webhook
         path: '/hooks/deploy'
@@ -149,20 +153,22 @@ events:
   - name: build
     command: ['make', 'build']
     workdir: '~/app'
+    timeout: 10m
     concurrency: queue       # changes during a build are built after it
+    on_interrupt: abandon    # the next change starts a new build
     triggers:
       - type: file
         path: '~/app/src'
         recursive: true      # also watch subdirectories
         debounce: 2s
 
-  # No triggers: runs only by hand, as with kickd event notify message=hello.
+  # No triggers: runs only by hand, with kickd event notify.
   - name: notify
-    command: './notify.sh "$KICKD_DATA_MESSAGE"'
+    command: ['./notify.sh']
     workdir: '~/app'
-    params:
-      - name: message
-        default: 'Hello from kickd'
+    timeout: 1m
+    concurrency: parallel    # notifications do not wait for each other
+    on_interrupt: abandon
 ```
 
 </details>
@@ -185,7 +191,8 @@ events:
   - name: backup
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
     workdir: 'C:\scripts'
-    timeout: 1h
+    timeout: 1h              # the longest time the command may run
+    concurrency: skip        # a firing while the backup runs is skipped
     on_interrupt: rerun      # run again when a stop or a crash cut the run off
     triggers:
       - type: cron
@@ -193,14 +200,13 @@ events:
         timezone: Asia/Tokyo
         missed: run          # after sleep or downtime, run once for the missed times
 
-  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
+  # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
     workdir: 'C:\app'
+    timeout: 10m
     concurrency: queue       # deploys wait for each other and run in order
-    params:
-      - name: ref            # the script reads it as $env:KICKD_DATA_REF
-        default: main
+    on_interrupt: abandon    # a deploy that a stop or a crash cut off does not run again
     triggers:
       - type: webhook
         path: '/hooks/deploy'
@@ -211,27 +217,29 @@ events:
   - name: build
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
     workdir: 'C:\app'
+    timeout: 10m
     concurrency: queue       # changes during a build are built after it
+    on_interrupt: abandon    # the next change starts a new build
     triggers:
       - type: file
         path: 'C:\app\src'
         recursive: true      # also watch subfolders
         debounce: 2s
 
-  # No triggers: runs only by hand, as with kickd event notify message=hello.
+  # No triggers: runs only by hand, with kickd event notify.
   - name: notify
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
     workdir: 'C:\app'
-    params:
-      - name: message        # the script reads it as $env:KICKD_DATA_MESSAGE
-        default: 'Hello from kickd'
+    timeout: 1m
+    concurrency: parallel    # notifications do not wait for each other
+    on_interrupt: abandon
 ```
 
 </details>
 
 A `command` given as a string runs through the shell, `/bin/sh` on macOS and Linux and cmd on Windows, and a list starts its program directly; the Windows file starts PowerShell scripts with lists.
 Relative paths start at the directory of the config file, and a leading `~` is the home directory.
-Strings are in single quotes, which keep backslashes and double quotes as they are; double quotes appear only inside shell commands.
+Strings are in single quotes, which keep backslashes and double quotes as they are.
 
 `kickd check` validates a config file, lists its events and triggers, and prints where the log, the database and each command run.
 The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.

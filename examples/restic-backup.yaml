@@ -23,7 +23,6 @@ events:
     # A backup cut off by a reboot runs again at the next start. An extra
     # snapshot does no harm.
     on_interrupt: rerun
-    max_attempts: 3
     triggers:
       - type: cron
         schedule: '30 2 * * *'
@@ -35,6 +34,8 @@ events:
       RESTIC_REPOSITORY: /mnt/backup/restic
       RESTIC_PASSWORD_FILE: /etc/restic/password
     timeout: 4h
+    # A prune cut off waits for the next Sunday.
+    on_interrupt: abandon
     triggers:
       # restic locks the repository, so this runs hours after the backup.
       - type: cron

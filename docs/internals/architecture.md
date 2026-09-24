@@ -26,7 +26,7 @@ The `agent` package connects the parts and reloads the config, and the `logging`
 
 ## Path of a firing
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](../images/overview.svg)
+![kickd runs as a long-running process on macOS, Linux or Windows, and the service manager of the OS (launchd, systemd or Windows services) starts it and restarts it. Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. kickd runs the command of each event as a child process: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](../images/overview.svg)
 
 Every firing takes the same path, whatever fired it:
 

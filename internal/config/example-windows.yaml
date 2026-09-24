@@ -7,6 +7,8 @@
 # quotes as they are.
 # A command given as a string runs with cmd /S /C. These events start
 # PowerShell with lists instead, which pass every argument as it is.
+# Every key is described in
+# https://github.com/etak64n/kickd/blob/main/docs/config-keys.md
 
 log:
   path: 'LOG_PATH'   # without a path, kickd logs to standard error
@@ -27,12 +29,12 @@ database:
 events:
   # Build a project 2 seconds after its sources stop changing.
   - name: build
+    description: 'Build the project'   # shown by kickd events
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
-    workdir: '~\project'
-    timeout: 10m
-    concurrency: queue       # skip | queue | parallel: what a firing does while the event runs
-    on_interrupt: rerun      # abandon | rerun: what happens to a run that a stop or a crash cut off
-    max_attempts: 3          # with rerun: give up after this many runs of one firing
+    workdir: '~\project'        # without it, the folder of this file
+    timeout: 10m                 # the longest time the command may run; without it, no limit
+    concurrency: queue           # skip | queue | parallel: what a firing does while the event runs
+    on_interrupt: rerun          # abandon | rerun: what happens to a run that a stop or a crash cut off
     triggers:
       - type: file
         path: '~\project\src'
@@ -42,28 +44,25 @@ events:
 
   # A nightly report. kickd event nightly-report also runs it.
   - name: nightly-report
+    description: 'Write the nightly report'
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'report.ps1']
     workdir: '~\reports'
-    env:
-      REPORT_MODE: nightly
+    timeout: 30m
+    concurrency: skip
+    on_interrupt: abandon
     triggers:
       - type: cron
         schedule: '0 3 * * *'   # minute hour day month weekday; a leading seconds field is optional
         timezone: Asia/Tokyo    # without it, local time
 
-  # Deploy with kickd event deploy ref=v1.2, or with POST /hooks/deploy?ref=v1.2.
-  # The script reads the ref as $env:KICKD_DATA_REF. The payload JSON
-  # (parameters, request body, headers) is in the file $env:KICKD_PAYLOAD_FILE
-  # and, with stdin: payload, on standard input.
+  # Deploy with kickd event deploy, or with POST /hooks/deploy.
   - name: deploy
     description: 'Deploy the app'
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
     workdir: '~\app'
-    stdin: payload
+    timeout: 10m
     concurrency: queue
-    params:                  # optional; when given, only these keys are accepted
-      - name: ref
-        default: main
+    on_interrupt: abandon
     triggers:
       - type: webhook
         path: '/hooks/deploy'
