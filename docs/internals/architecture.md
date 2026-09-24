@@ -25,7 +25,7 @@ The `agent` package connects the parts and reloads the config, and the `logging`
 
 ## Path of a firing
 
-![Cron schedules, webhooks, kickd event and file changes fire named events. kickd records each firing in its SQLite queue and starts the command of the event.](../images/overview.svg)
+![Cron schedules, webhooks, kickd event and file changes fire events, and kickd runs the command of each event. Every event has a command of its own.](../images/overview.svg)
 
 Every firing takes the same path, whatever fired it:
 
