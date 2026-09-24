@@ -324,8 +324,11 @@ func (m *machine) check() {
 		}
 	}
 
+	stopped := time.Now()
 	m.service("stop")
+	t.Logf("kickd service stop returned after %s", time.Since(stopped).Round(100*time.Millisecond))
 	waitFor(t, "the service stops", 60*time.Second, func() bool { return m.agentPID() == 0 })
+	t.Logf("the agent recorded its stop %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
 	// The agent records its stop before its process ends; the next service
 	// needs the address of the webhook server.
 	waitFor(t, "the agent releases the webhook address", 60*time.Second, func() bool {
@@ -335,6 +338,7 @@ func (m *machine) check() {
 		}
 		return err == nil
 	})
+	t.Logf("the webhook address was free %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
 	m.service("uninstall")
 	if _, _, code := m.kickd(append([]string{"service", "status"}, m.flags...)...); code == 0 {
 		t.Error("kickd service status succeeds after uninstall")
