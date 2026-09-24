@@ -7,37 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
-
 	"github.com/etak64n/kickd/internal/event"
 	"github.com/etak64n/kickd/internal/logging"
 )
-
-// CronParser accepts standard 5-field specs, an optional leading seconds
-// field, and descriptors such as "@hourly" or "@every 10m".
-var CronParser = cron.NewParser(
-	cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
-)
-
-// NormalizeSchedule prepends the time zone to spec when one is given and
-// the spec does not already carry one.
-func NormalizeSchedule(spec, tz string) string {
-	spec = strings.TrimSpace(spec)
-	if tz == "" || strings.HasPrefix(spec, "TZ=") || strings.HasPrefix(spec, "CRON_TZ=") {
-		return spec
-	}
-	return "CRON_TZ=" + tz + " " + spec
-}
-
-// ParseSchedule validates a schedule and time zone.
-func ParseSchedule(spec, tz string) (cron.Schedule, error) {
-	if tz != "" {
-		if _, err := time.LoadLocation(tz); err != nil {
-			return nil, fmt.Errorf("timezone %q: %w", tz, err)
-		}
-	}
-	return CronParser.Parse(NormalizeSchedule(spec, tz))
-}
 
 // What a cron trigger does with scheduled times that passed while the
 // machine slept or kickd was stopped.
@@ -95,7 +67,7 @@ type CronScheduler struct {
 type cronEntry struct {
 	CronTrigger
 	key      string
-	schedule cron.Schedule
+	schedule Schedule
 	handler  event.Handler
 	// last is when kickd last handled the trigger; scheduled times after
 	// it are due.

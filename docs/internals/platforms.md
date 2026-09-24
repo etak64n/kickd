@@ -92,6 +92,10 @@ The `timezone` of a cron trigger names a zone of the IANA time zone database, su
 Windows has no copy of this database, and minimal Linux systems may lack one, so kickd carries its own copy inside the executable.
 The copy adds about 450 KB to the executable, and kickd uses it only when the OS has no database.
 
+On the day daylight saving time starts, the clock skips some times, such as 2:00 to 2:59 in New York.
+A cron schedule at a skipped time runs at the moment it would have come, which the clock shows as the time after the gap: 2:30 runs at 3:30.
+On the day daylight saving time ends, the clock shows some times twice, and a cron schedule at such a time runs once, at the first of them.
+
 ## Paths
 
 - **Home directory**: `~` expands to `$HOME` on macOS and Linux, and to `%USERPROFILE%` on Windows. Without a home directory, as in a systemd unit without `User=`, `~` stays unexpanded.

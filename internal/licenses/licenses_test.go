@@ -12,7 +12,7 @@ func TestTextNamesEveryPart(t *testing.T) {
 		"Go standard library: LICENSE",
 		"The Go Authors",
 		"modernc.org/sqlite",
-		"gopkg.in/yaml.v3",
+		"go.yaml.in/yaml/v3",
 	} {
 		if !strings.Contains(Text, want) {
 			t.Errorf("licenses.txt lacks %q", want)
