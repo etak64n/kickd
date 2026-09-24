@@ -130,8 +130,8 @@ kickd ignores `--user` on Windows and installs a service that runs as SYSTEM.
 Commands run as SYSTEM see a different environment from a logged-in user's:
 
 - **Home folder**: `~` and `%USERPROFILE%` point to `C:\Windows\system32\config\systemprofile`. Write absolute paths in the config file.
-- **PATH**: only the system `PATH` applies. Tools added to a user's `PATH` are not found by name, so give the program in `command` as an absolute path.
-- **Working directory**: commands of events without `workdir` run in `C:\Windows\System32`. Set `workdir` for events that use relative paths.
+- **PATH**: only the system `PATH` applies, so tools added to a user's `PATH` are not found by name. Add their folders to `PATH` with the event's `env`, or give the program as an absolute path.
+- **Working directory**: commands of events without `workdir` run in the folder of the config file, such as `C:\ProgramData\kickd`.
 - **Network drives**: drive letters mapped by a user do not exist for SYSTEM, and a user's saved credentials are not used for shared folders.
 
 ## Accepting webhooks from other machines

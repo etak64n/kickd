@@ -220,9 +220,10 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 		}
 	}()
 
-	cmd := buildCommand(ctx, spec)
+	env := buildEnv(spec, ev, eventFile)
+	cmd := buildCommand(ctx, spec, env)
 	cmd.Dir = spec.Workdir
-	cmd.Env = buildEnv(spec, ev, eventFile)
+	cmd.Env = env
 	if spec.Stdin == StdinPayload {
 		cmd.Stdin = bytes.NewReader(payload)
 	}
@@ -340,11 +341,18 @@ func eventAttrs(ev event.Event) []any {
 	return out
 }
 
-func buildCommand(ctx context.Context, spec Spec) *exec.Cmd {
+func buildCommand(ctx context.Context, spec Spec, env []string) *exec.Cmd {
 	if spec.Shell != "" {
 		return shellCommand(ctx, spec.Shell)
 	}
-	return exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	// A bare program name is looked up in the PATH that the command gets,
+	// as the shell of a shell command does, instead of in the PATH of
+	// kickd. A name with a path starts at the working directory.
+	if name := spec.Command[0]; !strings.ContainsAny(name, `/\`) {
+		cmd.Path, cmd.Err = lookPath(name, env)
+	}
+	return cmd
 }
 
 // buildEnv layers the job environment and the event variables over the

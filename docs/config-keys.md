@@ -42,8 +42,8 @@ A config file with the old names fails to load, with a message that gives the ne
 | `description` | A description, shown by `kickd events`. |
 | `command` | The program and its arguments, as a list. kickd looks the program up in its own `PATH`. The elements are passed as they are, without a shell, so `~` and `*` are not expanded. |
 | `shell` | A string run by the shell: `/bin/sh -c` on macOS and Linux, `cmd /S /C` on Windows. Each event has exactly one of `command` and `shell`. |
-| `workdir` | The working directory of the command. It must exist when the config is loaded. Without it, the command runs in the working directory of kickd. |
-| `env` | Environment variables added for the command. `${VAR}` in values expands to the environment variable of kickd. An entry replaces a variable of kickd with the same name. |
+| `workdir` | The working directory of the command. It must exist when the config is loaded. Without it, the command runs in the directory of the config file. |
+| `env` | Environment variables added for the command. `${VAR}` in values expands to the environment variable of kickd. An entry replaces a variable of kickd with the same name. A `PATH` here also decides where kickd finds the program of `command`. |
 | `timeout` | The longest time the command may run. When it passes, kickd sends SIGTERM to the command's process group on macOS and Linux, and SIGKILL 10 seconds later if it is still running. On Windows, kickd ends the process tree at once. Without it, there is no limit. |
 | `concurrency` | What happens when the event fires while it is running: `skip` (default), `queue` or `parallel`. |
 | `on_interrupt` | What happens, when the agent starts again, to a run that a stop or crash cut off: `abandon` (default) or `rerun`. |

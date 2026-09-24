@@ -80,6 +80,14 @@ func TestBaseDir(t *testing.T) {
 	if want := filepath.Join(dir, "work"); cfg.Events[0].Workdir != want {
 		t.Errorf("workdir = %q, want %q", cfg.Events[0].Workdir, want)
 	}
+	// Without a workdir, a command runs in the directory of the file.
+	cfg, err = Parse([]byte("events:\n  - name: a\n    command: ['true']\n"), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Events[0].Workdir != dir {
+		t.Errorf("default workdir = %q, want %q", cfg.Events[0].Workdir, dir)
+	}
 	// An absolute path stays, and a base for another OS only does not apply.
 	abs := filepath.Join(dir, "elsewhere.db")
 	other := map[string]string{"darwin": "linux", "linux": "windows", "windows": "macos"}[runtime.GOOS]

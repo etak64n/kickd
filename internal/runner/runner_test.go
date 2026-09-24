@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -348,6 +349,35 @@ func TestExecuteStartFailure(t *testing.T) {
 	}
 	if typ, _ := failed[0]["errorType"].(string); typ == "" || failed[0]["errorMessage"] == nil {
 		t.Errorf("error keys missing: %v", failed[0])
+	}
+}
+
+// A bare program name is found in the PATH that the event gives its
+// command, and not in the PATH of kickd.
+func TestExecuteFindsProgramsInThePATHOfTheEvent(t *testing.T) {
+	dir := t.TempDir()
+	name := "kickd-helper-copy"
+	exe := filepath.Join(dir, name)
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	b, err := os.ReadFile(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r, _, _ := newRunner(t)
+	job := helperJob("env", "PATH", dir)
+	job.Command = []string{name}
+	if res := r.Execute(context.Background(), job, fileEvent()); res.ExitCode != 0 {
+		t.Fatalf("with the directory in the PATH of the event: %+v", res)
+	}
+	job = helperJob("env")
+	job.Command = []string{name}
+	if res := r.Execute(context.Background(), job, fileEvent()); res.Error != "start_failed" {
+		t.Fatalf("without it: %+v", res)
 	}
 }
 

@@ -105,10 +105,8 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 The `PATH` of a kickd started by launchd is only `/usr/bin:/bin:/usr/sbin:/sbin`.
 Commands installed with Homebrew live in `/opt/homebrew/bin`, so this `PATH` does not find them.
 
-An event gives its command in one of two ways, and each looks commands up differently:
-
-- **command**: a list of the program and its arguments, run without a shell. kickd looks the program up in its own `PATH`, so write the program as an absolute path.
-- **shell**: a string run by `/bin/sh -c`. The shell looks commands up in the `PATH` of the command's environment, so adding directories to `PATH` with the event's `env` also works.
+kickd looks up the programs of an event in the `PATH` that the event gives its command, for `command` as for `shell`.
+Give the event a `PATH` with `env`:
 
 ```yaml
 events:
@@ -123,6 +121,7 @@ events:
 ```
 
 `env` adds environment variables for the command, and `${PATH}` in its values expands to the `PATH` of kickd itself.
+`kickd check` prints the `PATH` that each event sets.
 
 ## Access to protected folders
 

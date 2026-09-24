@@ -226,6 +226,12 @@ func cmdCheck(args []string) error {
 			interrupt = fmt.Sprintf("rerun, up to %d attempts", e.MaxAttempts)
 		}
 		fmt.Printf("- %s [%s; on interrupt: %s]: %s\n", e.Name, e.Concurrency, interrupt, cmd)
+		fmt.Printf("    workdir  %s\n", e.Workdir)
+		for k, v := range e.Env {
+			if strings.EqualFold(k, "PATH") {
+				fmt.Printf("    PATH     %s\n", v)
+			}
+		}
 		fmt.Printf("    %s\n", describeKick(e))
 		for _, t := range e.Triggers {
 			fmt.Printf("    %s\n", describeTrigger(t))

@@ -122,6 +122,29 @@ The output of the command is logged at DEBUG, so `LOG_LEVEL=debug kickd run` sho
 - **Environment variables on Windows**: the config file uses the `${USERPROFILE}` form on Windows too. The `%USERPROFILE%` form is expanded only by cmd, inside a `shell` string.
 - **Key names**: an unknown key is an error, so `kickd check` finds misspelled keys.
 
+## Where commands run
+
+Each event sets where its command runs and where its programs are found:
+
+```yaml
+events:
+  - name: deploy
+    command: ['./deploy.sh']
+    workdir: '~/app'
+  - name: convert
+    command: ['ffmpeg', '-version']
+    env:
+      PATH: '/opt/homebrew/bin:${PATH}'
+```
+
+- **Working directory**: `workdir` is the directory in which the command runs. Without it, the command runs in the directory of the config file, whether kickd runs as a service or in a terminal. A program or script given with a relative path, such as `./deploy.sh`, starts at the working directory.
+- **Programs**: a program name without a path, such as `ffmpeg`, is looked up in the `PATH` of the command's environment, for `command` as for `shell`. `env` sets that `PATH` for each event, and `${PATH}` in the value is the `PATH` of kickd.
+
+A service starts kickd with a shorter `PATH` than a terminal has.
+Under launchd on macOS, it is `/usr/bin:/bin:/usr/sbin:/sbin`.
+systemd gives units `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, and a Windows service sees only the system `PATH`.
+`kickd check` prints the working directory of each event, and the `PATH` that an event sets.
+
 ## Applying changes
 
 The agent watches the directory of its config file.

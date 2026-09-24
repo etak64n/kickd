@@ -383,6 +383,11 @@ func (c *Config) applyDefaults() {
 		if e.Stdin == "" {
 			e.Stdin = StdinNone
 		}
+		// Without a workdir, the command runs in the directory of the config
+		// file, whether kickd runs as a service or in a terminal.
+		if e.Workdir == "" {
+			e.Workdir = c.Dir
+		}
 		e.Workdir = c.resolve(e.Workdir)
 		for k := range e.Triggers {
 			t := &e.Triggers[k]
