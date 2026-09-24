@@ -32,7 +32,7 @@ cmd/kickd/          The kickd command: the agent (run), queue commands (event, e
 internal/config/    Loading, defaults and validation of the config, and the example config example.yaml
 internal/queue/     The SQLite queue: run records, recovery of interrupted runs, the heartbeat of the agent
 internal/runner/    Running commands, and consuming the queue: concurrency, reruns of interrupted runs
-internal/trigger/   Cron schedules and their parser, webhooks (net/http), file watching (fsnotify)
+internal/trigger/   Cron schedules (gocron), webhooks (net/http), file watching (fsnotify)
 internal/agent/     Builds the triggers and the queue consumer from the config, and reloads the config
 internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload

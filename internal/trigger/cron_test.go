@@ -39,18 +39,6 @@ func TestParseSchedule(t *testing.T) {
 	}
 }
 
-func TestNormalizeSchedule(t *testing.T) {
-	if got := NormalizeSchedule(" 0 3 * * * ", "Asia/Tokyo"); got != "CRON_TZ=Asia/Tokyo 0 3 * * *" {
-		t.Errorf("got %q", got)
-	}
-	if got := NormalizeSchedule("TZ=UTC 0 3 * * *", "Asia/Tokyo"); got != "TZ=UTC 0 3 * * *" {
-		t.Errorf("existing prefix must win, got %q", got)
-	}
-	if got := NormalizeSchedule("@hourly", ""); got != "@hourly" {
-		t.Errorf("got %q", got)
-	}
-}
-
 func TestScheduleNextInTimezone(t *testing.T) {
 	s, err := ParseSchedule("0 9 * * *", "Asia/Tokyo")
 	if err != nil {

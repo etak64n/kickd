@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/etak64n/gocron"
+
 	"github.com/etak64n/kickd/internal/event"
 	"github.com/etak64n/kickd/internal/logging"
 )
@@ -28,6 +30,21 @@ const MissedAfter = time.Minute
 // timers measure time on a clock that stops while the machine sleeps, so
 // one long timer would fire late after a wake.
 const maxCronWait = time.Second
+
+// ParseSchedule parses a cron schedule whose times are in the time zone
+// tz, or in the local time zone when tz is empty. A "CRON_TZ=zone" or
+// "TZ=zone" prefix on spec takes precedence over tz.
+func ParseSchedule(spec, tz string) (gocron.Schedule, error) {
+	loc := time.Local
+	if tz != "" {
+		l, err := time.LoadLocation(tz)
+		if err != nil {
+			return nil, fmt.Errorf("timezone %q: %w", tz, err)
+		}
+		loc = l
+	}
+	return gocron.ParseInLocation(spec, loc)
+}
 
 // maxCatchUpSteps bounds the scheduled times counted after a long stop.
 const maxCatchUpSteps = 1_000_000
@@ -67,7 +84,7 @@ type CronScheduler struct {
 type cronEntry struct {
 	CronTrigger
 	key      string
-	schedule Schedule
+	schedule gocron.Schedule
 	handler  event.Handler
 	// last is when kickd last handled the trigger; scheduled times after
 	// it are due.
