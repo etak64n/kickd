@@ -324,42 +324,19 @@ func (m *machine) check() {
 		}
 	}
 
-	stopped := time.Now()
 	m.service("stop")
-	t.Logf("kickd service stop returned after %s", time.Since(stopped).Round(100*time.Millisecond))
-	waitFor(t, "the service stops", 60*time.Second, func() bool { return m.agentPID() == 0 })
-	t.Logf("the agent recorded its stop %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
-	// The agent records its stop before its process ends; the next service
-	// needs the address of the webhook server.
-	described := false
-	waitFor(t, "the agent releases the webhook address", 60*time.Second, func() bool {
+	waitFor(t, "the service stops", 60*time.Second, func() bool { return m.agentPID() == 0 }, m.diagnose)
+	// The next test starts a service on the same address. The connection of
+	// the webhook request stays in TIME_WAIT for up to 30 seconds after the
+	// kill, and macOS lets no other user bind the address of a connection of
+	// root until then.
+	waitFor(t, "the webhook address is free", 60*time.Second, func() bool {
 		ln, err := net.Listen("tcp", "127.0.0.1:8787")
 		if err == nil {
 			ln.Close()
-			return true
 		}
-		if !described && time.Since(stopped) > 3*time.Second && runtime.GOOS != "windows" {
-			described = true
-			lsof, _, _ := m.runSudo("lsof", "-nP", "-iTCP:8787")
-			netstat, _, _ := m.exec("netstat", "-an", "-p", "tcp")
-			for _, l := range strings.Split(netstat, "\n") {
-				if strings.Contains(l, ".8787 ") || strings.Contains(l, ":8787 ") {
-					lsof += "\nnetstat: " + l
-				}
-			}
-			ps, _, _ := m.exec("ps", "-ax", "-o", "pid,ppid,stat,etime,command")
-			var procs []string
-			for _, l := range strings.Split(ps, "\n") {
-				if strings.Contains(l, "kickd") {
-					procs = append(procs, l)
-				}
-			}
-			t.Logf("the webhook address is still in use %s after kickd service stop\nlsof:\n%s\nprocesses:\n%s\n%s",
-				time.Since(stopped).Round(100*time.Millisecond), lsof, strings.Join(procs, "\n"), m.diagnose())
-		}
-		return false
+		return err == nil
 	})
-	t.Logf("the webhook address was free %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
 	m.service("uninstall")
 	if _, _, code := m.kickd(append([]string{"service", "status"}, m.flags...)...); code == 0 {
 		t.Error("kickd service status succeeds after uninstall")
