@@ -53,25 +53,28 @@ func startAgentWith(t *testing.T, cfgPath string, log *slog.Logger) (context.Can
 // watchLogger returns a logger that drops its records, and a channel that
 // is closed once a file trigger of an event watches its directory. The
 // watcher of the config file logs the same message at DEBUG.
-func watchLogger() (*slog.Logger, <-chan struct{}) { return messageLogger("File watch started") }
+func watchLogger() (*slog.Logger, <-chan struct{}) {
+	return messageLogger("File watch started", slog.LevelInfo)
+}
 
 // messageLogger returns a logger that drops its records, and a channel that
-// is closed once a record with the message msg arrives at INFO.
-func messageLogger(msg string) (*slog.Logger, <-chan struct{}) {
-	h := &messageHandler{msg: msg, seen: make(chan struct{})}
+// is closed once a record with the message msg arrives at level.
+func messageLogger(msg string, level slog.Level) (*slog.Logger, <-chan struct{}) {
+	h := &messageHandler{msg: msg, level: level, seen: make(chan struct{})}
 	return slog.New(h), h.seen
 }
 
 type messageHandler struct {
-	msg  string
-	once sync.Once
-	seen chan struct{}
+	msg   string
+	level slog.Level
+	once  sync.Once
+	seen  chan struct{}
 }
 
 func (h *messageHandler) Enabled(context.Context, slog.Level) bool { return true }
 
 func (h *messageHandler) Handle(_ context.Context, r slog.Record) error {
-	if r.Message == h.msg && r.Level == slog.LevelInfo {
+	if r.Message == h.msg && r.Level == h.level {
 		h.once.Do(func() { close(h.seen) })
 	}
 	return nil
@@ -94,7 +97,7 @@ func TestAgentWithWebhooksDisabled(t *testing.T) {
 	writeFile(t, cfgPath, "webhook:\n  enabled: false\n  listen: '"+addr+"'\nevents:\n  - name: hook\n"+
 		helperEvent("append", filepath.Join(dir, "out.txt"), "HELPER_TEXT", "hook")+
 		"    triggers: [{type: webhook, path: '/hooks/hook', token: t}]\n")
-	log, disabled := messageLogger("Webhook triggers disabled")
+	log, disabled := messageLogger("Webhook triggers disabled", slog.LevelInfo)
 	cancel, done := startAgentWith(t, cfgPath, log)
 	select {
 	case <-disabled:
@@ -218,16 +221,25 @@ func TestAgentKeepsPreviousConfigOnBrokenReload(t *testing.T) {
 	cfgPath := filepath.Join(dir, "kickd.yaml")
 	out := filepath.Join(dir, "tick.txt")
 	writeFile(t, cfgPath, "events:\n  - name: tick\n"+helperEvent("append", out, "HELPER_TEXT", "tick")+"    triggers: [{type: cron, schedule: '@every 1s'}]\n")
-	cancel, done := startAgent(t, cfgPath)
+	log, failed := messageLogger("Config reload failed", slog.LevelError)
+	cancel, done := startAgentWith(t, cfgPath, log)
 	waitForFile(t, out, "tick", 10*time.Second)
 
 	writeFile(t, cfgPath, "events: [\n")
-	time.Sleep(1500 * time.Millisecond)
+	select {
+	case <-failed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent did not report the broken config")
+	}
+	// The cron trigger of the previous config goes on firing.
 	before, _ := os.ReadFile(out)
-	time.Sleep(2500 * time.Millisecond)
-	after, _ := os.ReadFile(out)
-	if len(after) <= len(before) {
-		t.Fatal("the previous config must keep running after a broken reload")
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		if after, _ := os.ReadFile(out); len(after) > len(before) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the previous config must keep running after a broken reload")
+		}
 	}
 	select {
 	case err := <-done:
