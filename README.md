@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
-  <img alt="kickd" src="docs/images/logo-light.svg" width="360">
+  <img alt="kickd" src="docs/images/logo-light.svg" width="240">
 </picture>
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/etak64n/kickd.svg)](https://pkg.go.dev/github.com/etak64n/kickd)
