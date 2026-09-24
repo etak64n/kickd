@@ -141,6 +141,7 @@ A service starts kickd with a shorter `PATH` than a terminal has.
 Under launchd on macOS, it is `/usr/bin:/bin:/usr/sbin:/sbin`.
 systemd gives units `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, and a Windows service sees only the system `PATH`.
 `kickd check` prints the working directory of each event, and the `PATH` that an event sets.
+[Running commands](commands.md) lists the environment that each kind of service gives commands, and shows how to run Python and Node.js.
 
 ## Applying changes
 

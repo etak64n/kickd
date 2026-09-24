@@ -335,6 +335,7 @@ To keep kickd running in the background, install it as a service by following th
 - [Configuration reference](docs/config-keys.md): every key of the config file and its default
 - [Examples](examples/README.md): complete config files for common tasks, such as OCR of scans, deploys from GitHub, backups and certificate renewal
 - [What a command receives](docs/payload.md): environment variables and the payload JSON
+- [Running commands](docs/commands.md): the environment of a command under each kind of service, the working directory and `PATH`, Python and Node.js
 - [Logging](docs/logging.md): formats, levels, keys, messages, rotation
 - [Known limitations](docs/limitations.md): what kickd does not do yet, and what has not been tested
 - [Development](docs/development.md): tests, builds, source layout
