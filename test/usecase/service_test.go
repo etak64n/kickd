@@ -331,12 +331,27 @@ func (m *machine) check() {
 	t.Logf("the agent recorded its stop %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
 	// The agent records its stop before its process ends; the next service
 	// needs the address of the webhook server.
+	described := false
 	waitFor(t, "the agent releases the webhook address", 60*time.Second, func() bool {
 		ln, err := net.Listen("tcp", "127.0.0.1:8787")
 		if err == nil {
 			ln.Close()
+			return true
 		}
-		return err == nil
+		if !described && time.Since(stopped) > 3*time.Second && runtime.GOOS != "windows" {
+			described = true
+			lsof, _, _ := m.runSudo("lsof", "-nP", "-iTCP:8787")
+			ps, _, _ := m.exec("ps", "-ax", "-o", "pid,ppid,stat,etime,command")
+			var procs []string
+			for _, l := range strings.Split(ps, "\n") {
+				if strings.Contains(l, "kickd") {
+					procs = append(procs, l)
+				}
+			}
+			t.Logf("the webhook address is still in use %s after kickd service stop\nlsof:\n%s\nprocesses:\n%s\n%s",
+				time.Since(stopped).Round(100*time.Millisecond), lsof, strings.Join(procs, "\n"), m.diagnose())
+		}
+		return false
 	})
 	t.Logf("the webhook address was free %s after kickd service stop", time.Since(stopped).Round(100*time.Millisecond))
 	m.service("uninstall")
