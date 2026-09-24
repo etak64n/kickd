@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,9 +27,8 @@ func noLogEnv(t *testing.T) {
 
 func TestExampleDecodes(t *testing.T) {
 	// The example refers to directories that only exist on a real machine,
-	// so only check that every key is known and that every OS has a base.
-	oses := []string{"darwin", "linux", "windows"}
-	for _, goos := range oses {
+	// so only check that every key is known and where the files go.
+	for _, goos := range []string{"darwin", "linux", "windows"} {
 		for _, system := range []bool{false, true} {
 			dec := yaml.NewDecoder(strings.NewReader(Example(goos, system)))
 			dec.KnownFields(true)
@@ -41,11 +39,14 @@ func TestExampleDecodes(t *testing.T) {
 			if len(cfg.Events) != 3 {
 				t.Fatalf("%s: events = %d, want 3", goos, len(cfg.Events))
 			}
-			// Only the OS of the example has a base directory.
-			for _, other := range oses {
-				b := cfg.BaseDir.For(other)
-				if other == goos && (b == "" || system == strings.HasPrefix(b, "~")) || other != goos && b != "" {
-					t.Errorf("%s example, system %v: base_dir for %s is %q", goos, system, other, b)
+			want := PathsFor(goos, system)
+			if cfg.Log.Path != want.Log || cfg.Database.Path != want.Database {
+				t.Errorf("%s, system %v: log %q, database %q", goos, system, cfg.Log.Path, cfg.Database.Path)
+			}
+			// A service of the whole system has no home directory to rely on.
+			for _, p := range []string{want.Log, want.Database} {
+				if system == strings.HasPrefix(p, "~") {
+					t.Errorf("%s, system %v: path %q", goos, system, p)
 				}
 			}
 			if windows := cfg.Events[0].Command[0] == "powershell"; windows != (goos == "windows") {
@@ -53,53 +54,8 @@ func TestExampleDecodes(t *testing.T) {
 			}
 		}
 	}
-}
-
-// The log and the database start at the base_dir of the running OS, and
-// other relative paths still start at the directory of the file.
-func TestBaseDir(t *testing.T) {
-	noLogEnv(t)
-	dir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, "work"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	base := filepath.Join(dir, "state")
-	body := "base_dir:\n  macos: '" + base + "'\n  linux: '" + base + "'\n  windows: '" + base + "'\n" +
-		"log:\n  path: 'logs/kickd.log'\n" +
-		"events:\n  - name: a\n    command: ['true']\n    workdir: 'work'\n"
-	cfg, err := Parse([]byte(body), dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := filepath.Join(base, "logs", "kickd.log"); cfg.Log.Path != want {
-		t.Errorf("log.path = %q, want %q", cfg.Log.Path, want)
-	}
-	if want := filepath.Join(base, DefaultDatabasePath); cfg.Database.Path != want {
-		t.Errorf("database.path = %q, want %q", cfg.Database.Path, want)
-	}
-	if want := filepath.Join(dir, "work"); cfg.Events[0].Workdir != want {
-		t.Errorf("workdir = %q, want %q", cfg.Events[0].Workdir, want)
-	}
-	// Without a workdir, a command runs in the directory of the file.
-	cfg, err = Parse([]byte("events:\n  - name: a\n    command: ['true']\n"), dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Events[0].Workdir != dir {
-		t.Errorf("default workdir = %q, want %q", cfg.Events[0].Workdir, dir)
-	}
-	// An absolute path stays, and a base for another OS only does not apply.
-	abs := filepath.Join(dir, "elsewhere.db")
-	other := map[string]string{"darwin": "linux", "linux": "windows", "windows": "macos"}[runtime.GOOS]
-	body = "base_dir:\n  " + other + ": '" + base + "'\n" +
-		"database:\n  path: '" + abs + "'\n" +
-		"log:\n  path: 'kickd.log'\n" +
-		"events:\n  - name: a\n    command: ['true']\n"
-	if cfg, err = Parse([]byte(body), dir); err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Database.Path != abs || cfg.Log.Path != filepath.Join(dir, "kickd.log") || cfg.Base != dir {
-		t.Errorf("database %q, log %q, base %q", cfg.Database.Path, cfg.Log.Path, cfg.Base)
+	if p := PathsFor("linux", true); p.Log != "/var/log/kickd/kickd.log" || p.Database != "/var/lib/kickd/kickd.db" {
+		t.Errorf("Linux system paths = %+v", p)
 	}
 }
 
@@ -210,6 +166,7 @@ func TestParseErrors(t *testing.T) {
 		{"negative retention", "database: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
 		{"old log key", "log:\n  file: kickd.log\nevents:\n  - name: a" + ok, "line 2: log.file is now log.path"},
 		{"old queue section", "queue:\n  path: kickd.db\nevents:\n  - name: a" + ok, "line 1: the queue section is now called database"},
+		{"base_dir is gone", "base_dir:\n  linux: /var/lib/kickd\nevents:\n  - name: a" + ok, "line 1: base_dir is gone"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

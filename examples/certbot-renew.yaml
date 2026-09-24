@@ -9,12 +9,9 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event certbot-renew -c /etc/kickd/config.yaml
 
-# The database is /var/lib/kickd/kickd.db. Without log.path, the log goes
-# to journald.
-base_dir:
-  linux: '/var/lib/kickd'
+# Without log.path, the log goes to journald.
 database:
-  path: 'kickd.db'
+  path: '/var/lib/kickd/kickd.db'
 
 events:
   - name: certbot-renew

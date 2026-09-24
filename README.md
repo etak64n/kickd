@@ -40,21 +40,22 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 
 ## The config file
 
-A config file is YAML with five sections: `base_dir`, `log`, `webhook`, `database` and `events`.
+A config file is YAML with four sections: `log`, `webhook`, `database` and `events`.
 Only `events` is required, and every other key has a default.
-This file, for macOS and Linux, defines one event for each kind of trigger:
+Commands, shells and paths differ between operating systems, so a config file is written for one OS.
+These files define one event for each kind of trigger, and give the full paths of the log and the database:
+
+<details open>
+<summary>macOS</summary>
 
 ```yaml
-base_dir:                    # where the log and the database go on each OS
-  macos: '~/Library/Application Support/kickd'
-  linux: '~/.local/state/kickd'
 log:
-  path: 'kickd.log'          # base_dir/kickd.log; without a path, kickd logs to standard error
+  path: '~/Library/Logs/kickd/kickd.log'   # without a path, kickd logs to standard error
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
   listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
 database:
-  path: 'kickd.db'           # base_dir/kickd.db, the SQLite file that records every run
+  path: '~/Library/Application Support/kickd/kickd.db'   # the SQLite file that records every run
   retention: 168h            # how long finished runs stay in the history
 
 events:
@@ -69,45 +70,170 @@ events:
         timezone: Asia/Tokyo
         missed: run          # after sleep or downtime, run once for the missed times
 
-  # Webhook: POST /hooks/deploy?ref=v1.2 with "Authorization: Bearer <token>".
+  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
   - name: deploy
     command: ['./deploy.sh']
-    workdir: ~/app
+    workdir: '~/app'
     concurrency: queue       # deploys wait for each other and run in order
     params:
       - name: ref            # the command reads it as $KICKD_DATA_REF
         default: main
     triggers:
       - type: webhook
-        path: /hooks/deploy
+        path: '/hooks/deploy'
         methods: [POST]
         token: 'replace-with-a-long-random-string'
 
   # File changes: 2 seconds after the last change in ~/app/src or below.
   - name: build
     command: ['make', 'build']
-    workdir: ~/app
+    workdir: '~/app'
     concurrency: queue       # changes during a build are built after it
     triggers:
       - type: file
-        path: ~/app/src
+        path: '~/app/src'
         recursive: true      # also watch subdirectories
         debounce: 2s
 
-  # No triggers: runs only by hand, such as "kickd event notify message=hello".
+  # No triggers: runs only by hand, as with kickd event notify message=hello.
   - name: notify
     shell: './notify.sh "$KICKD_DATA_MESSAGE"'
-    workdir: ~/app
+    workdir: '~/app'
     params:
       - name: message
         default: 'Hello from kickd'
 ```
 
-A relative `log.path` or `database.path` starts at the `base_dir` of the OS that kickd runs on, and every other relative path starts at the directory of the config file.
-Commands, shells and paths differ between operating systems, so each OS gets a config file of its own: on Windows, `shell` runs with cmd, and [examples/windows-mirror.yaml](examples/windows-mirror.yaml) is a complete config for Windows.
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```yaml
+log:
+  path: '~/.local/state/kickd/kickd.log'   # without a path, kickd logs to standard error
+webhook:
+  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
+  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+database:
+  path: '~/.local/state/kickd/kickd.db'   # the SQLite file that records every run
+  retention: 168h            # how long finished runs stay in the history
+
+events:
+  # Cron: every night at 3:00, Tokyo time.
+  - name: backup
+    shell: 'rsync -a ~/work/ ~/backup/work/'
+    timeout: 1h
+    on_interrupt: rerun      # run again when a stop or a crash cut the run off
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'
+        timezone: Asia/Tokyo
+        missed: run          # after sleep or downtime, run once for the missed times
+
+  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
+  - name: deploy
+    command: ['./deploy.sh']
+    workdir: '~/app'
+    concurrency: queue       # deploys wait for each other and run in order
+    params:
+      - name: ref            # the command reads it as $KICKD_DATA_REF
+        default: main
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        methods: [POST]
+        token: 'replace-with-a-long-random-string'
+
+  # File changes: 2 seconds after the last change in ~/app/src or below.
+  - name: build
+    command: ['make', 'build']
+    workdir: '~/app'
+    concurrency: queue       # changes during a build are built after it
+    triggers:
+      - type: file
+        path: '~/app/src'
+        recursive: true      # also watch subdirectories
+        debounce: 2s
+
+  # No triggers: runs only by hand, as with kickd event notify message=hello.
+  - name: notify
+    shell: './notify.sh "$KICKD_DATA_MESSAGE"'
+    workdir: '~/app'
+    params:
+      - name: message
+        default: 'Hello from kickd'
+```
+
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```yaml
+log:
+  path: 'C:\ProgramData\kickd\kickd.log'   # without a path, kickd logs to standard error
+webhook:
+  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
+  listen: '127.0.0.1:8787'   # the HTTP server of webhook triggers
+database:
+  path: 'C:\ProgramData\kickd\kickd.db'   # the SQLite file that records every run
+  retention: 168h            # how long finished runs stay in the history
+
+events:
+  # Cron: every night at 3:00, Tokyo time.
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    workdir: 'C:\scripts'
+    timeout: 1h
+    on_interrupt: rerun      # run again when a stop or a crash cut the run off
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'
+        timezone: Asia/Tokyo
+        missed: run          # after sleep or downtime, run once for the missed times
+
+  # Webhook: POST /hooks/deploy?ref=v1.2 with the header Authorization: Bearer <token>.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    workdir: 'C:\app'
+    concurrency: queue       # deploys wait for each other and run in order
+    params:
+      - name: ref            # the script reads it as $env:KICKD_DATA_REF
+        default: main
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        methods: [POST]
+        token: 'replace-with-a-long-random-string'
+
+  # File changes: 2 seconds after the last change in C:\app\src or below.
+  - name: build
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    workdir: 'C:\app'
+    concurrency: queue       # changes during a build are built after it
+    triggers:
+      - type: file
+        path: 'C:\app\src'
+        recursive: true      # also watch subfolders
+        debounce: 2s
+
+  # No triggers: runs only by hand, as with kickd event notify message=hello.
+  - name: notify
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
+    workdir: 'C:\app'
+    params:
+      - name: message        # the script reads it as $env:KICKD_DATA_MESSAGE
+        default: 'Hello from kickd'
+```
+
+</details>
+
+On macOS and Linux, `shell` runs with `/bin/sh`, and on Windows with cmd; the Windows file starts PowerShell scripts with `command` instead.
+Relative paths start at the directory of the config file, and a leading `~` is the home directory.
 Strings are in single quotes, which keep backslashes and double quotes as they are; double quotes appear only inside shell commands.
 
-`kickd check` validates a config file, lists its events and triggers, and prints where the log and the database go.
+`kickd check` validates a config file, lists its events and triggers, and prints where the log, the database and each command run.
 The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
 
 ## Features
@@ -159,7 +285,7 @@ The installation guides for macOS, Linux and Windows cover each OS in detail, in
 With `kickd` installed, these steps define an event, run the agent and fire the event.
 
 1. Create a config file named `kickd.yaml` that defines one event, `hello`.
-   Without `base_dir`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
+   Without `database.path`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
 
    ```yaml
    events:

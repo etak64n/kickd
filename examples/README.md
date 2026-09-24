@@ -5,7 +5,7 @@
 Each file here is a complete kickd config for one task.
 Copy a file to the location of the config file, or copy its events into an existing config, then adjust the paths and the commands.
 The comments at the top of each file say what the example needs and how to install the service.
-The `base_dir`, `log` and `database` sections at the top say where the log and the database of kickd go.
+The `log` and `database` sections at the top give the full paths of the log and the database of kickd.
 
 | File | What it does | Automatic triggers | Runs on |
 |---|---|---|---|

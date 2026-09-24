@@ -9,15 +9,12 @@
 # Service: kickd service install --user
 # By hand: kickd event transcode
 
-# The log and the database go to ~/Library/Application Support/kickd on
-# macOS and to ~/.local/state/kickd on Linux.
-base_dir:
-  macos: '~/Library/Application Support/kickd'
-  linux: '~/.local/state/kickd'
+# The usual places on Linux. On macOS, they are ~/Library/Logs/kickd/kickd.log
+# and ~/Library/Application Support/kickd/kickd.db.
 log:
-  path: 'kickd.log'
+  path: '~/.local/state/kickd/kickd.log'
 database:
-  path: 'kickd.db'
+  path: '~/.local/state/kickd/kickd.db'
 
 events:
   - name: transcode

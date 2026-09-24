@@ -43,7 +43,7 @@ Finished runs stay in the database for `database.retention`, 7 days by default.
 The history holds the status and exit code of each run, and the first 64 KB of its output when the event's `log_output` is `true`, the default.
 `kickd runs` lists the history, and `kickd show` displays one run.
 
-The database is `kickd.db` in the `base_dir` of the OS, or in the directory of the config file when `base_dir` names no directory for the OS.
+`database.path` gives the full path of the database, and without it, the database is `kickd.db` in the directory of the config file.
 `database.path` names another file, and `kickd check` prints where the database is.
 The agent and the other kickd commands must run as users that can read and write this database.
 

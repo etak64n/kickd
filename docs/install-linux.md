@@ -52,31 +52,23 @@ Delete the events that are not needed, and change the paths to match the machine
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.
-The config file is outside the home directory, so `kickd init` sets the `base_dir` of Linux to `/var/lib/kickd`, where Linux keeps data that changes:
+The config file is outside the home directory, so `kickd init` puts the files where Linux keeps them for a service: the log in `/var/log` and the database in `/var/lib`, where data that changes lives:
 
 ```yaml
-base_dir:
-  linux: '/var/lib/kickd'
 log:
-  path: 'kickd.log'
+  path: '/var/log/kickd/kickd.log'
 database:
-  path: 'kickd.db'
+  path: '/var/lib/kickd/kickd.db'
 ```
 
-The database is `/var/lib/kickd/kickd.db`, and the log is `/var/lib/kickd/kickd.log`.
-kickd creates the directory when it first opens the files.
+kickd creates the directories when it first opens the files.
 The database belongs to root, so run `kickd event` and the other commands that read or write it with `sudo` as well.
 
 systemd collects the standard error of units with **journald**, and `journalctl` reads what journald collected.
 Without `log.path`, kickd writes its log to standard error, so deleting the `path` line of `log` sends the log to journald.
 The records sent to journald are JSON.
 With `format: text`, they are tab-separated text.
-To keep a log file in the usual place for logs instead, give an absolute path:
-
-```yaml
-log:
-  path: '/var/log/kickd/kickd.log'
-```
+With both, journald and the file get the same records.
 
 systemd sets `HOME` only for units with a `User=` setting, and the unit that kickd writes has none.
 Without `HOME`, `~` in the config file is not expanded.

@@ -68,8 +68,7 @@ Their commands start the PowerShell scripts `build.ps1`, `report.ps1` and `deplo
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.
-The config file is outside the home folder, so `kickd init` sets the `base_dir` of Windows to `C:\ProgramData\kickd`.
-The database is then `C:\ProgramData\kickd\kickd.db`, and the log `C:\ProgramData\kickd\kickd.log`, next to the config file.
+The config file is outside the home folder, so `kickd init` puts the database at `C:\ProgramData\kickd\kickd.db`, and the log at `C:\ProgramData\kickd\kickd.log`, next to the config file.
 A database created by the service belongs to administrators and SYSTEM, so run `kickd event` and the other commands that read or write it in an administrator PowerShell as well.
 
 Write Windows paths in single quotes, as the examples do: in single quotes, a backslash (`\`) is an ordinary character.

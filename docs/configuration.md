@@ -32,35 +32,34 @@ After moving the config file, uninstall the service and install it again.
 ## Where the log and the database go
 
 kickd writes two files of its own: the log, and the **database**, a SQLite file that records every run.
-The `base_dir` section gives a directory for each OS, and a relative `log.path` or `database.path` starts at the directory for the OS that kickd runs on:
+`log.path` and `database.path` give their full paths:
 
 ```yaml
-base_dir:
-  macos: '~/Library/Application Support/kickd'
-  linux: '~/.local/state/kickd'
-  windows: '~\AppData\Local\kickd'
 log:
-  path: 'kickd.log'
+  path: '~/Library/Logs/kickd/kickd.log'
 database:
-  path: 'kickd.db'
+  path: '~/Library/Application Support/kickd/kickd.db'
 events:
   - name: hello
     shell: 'echo hello from kickd'
 ```
 
-On a Mac, this file puts the log at `~/Library/Application Support/kickd/kickd.log` and the database next to it.
-Without a `base_dir` entry for the OS, the two files start at the directory of the config file, as every other relative path in the file does.
-Without `log.path`, kickd writes its log to standard error, and without `database.path`, the database is `kickd.db`.
+Without `log.path`, kickd writes its log to standard error.
+Without `database.path`, the database is `kickd.db` in the directory of the config file.
 
-`kickd init` writes the `base_dir` entry of the OS that it runs on, with the usual place of that OS.
+`kickd init` writes the usual places of the OS that it runs on.
 A config file inside the home directory is taken for a user's kickd, and one outside it, such as `/etc/kickd/config.yaml`, for a service of the whole system:
 
-| OS | For a user | For the whole system |
-|---|---|---|
-| macOS | `~/Library/Application Support/kickd` | `/Library/Application Support/kickd` |
-| Linux | `~/.local/state/kickd` | `/var/lib/kickd` |
-| Windows | `~\AppData\Local\kickd` | `C:\ProgramData\kickd` |
+| OS | Use | Log | Database |
+|---|---|---|---|
+| macOS | A user | `~/Library/Logs/kickd/kickd.log` | `~/Library/Application Support/kickd/kickd.db` |
+| macOS | The whole system | `/Library/Logs/kickd/kickd.log` | `/Library/Application Support/kickd/kickd.db` |
+| Linux | A user | `~/.local/state/kickd/kickd.log` | `~/.local/state/kickd/kickd.db` |
+| Linux | The whole system | `/var/log/kickd/kickd.log` | `/var/lib/kickd/kickd.db` |
+| Windows | A user | `~\AppData\Local\kickd\kickd.log` | `~\AppData\Local\kickd\kickd.db` |
+| Windows | The whole system | `C:\ProgramData\kickd\kickd.log` | `C:\ProgramData\kickd\kickd.db` |
 
+On Linux, a user's program keeps what it records in `~/.local/state`, as the XDG Base Directory specification says, because only root can write to `/var/log` and `/var/lib`.
 `kickd check` prints the resolved paths of the log and the database.
 
 ## One config file for each OS
@@ -81,8 +80,6 @@ A few things already work the same on every OS:
 - A leading `~` is the home directory, and `/` separates folders on Windows too.
 - `${VAR}` in a path expands to the environment variable `VAR`.
 - `command` starts a program without a shell, so its arguments need no quoting for sh or cmd.
-
-A `base_dir` entry for another OS has no effect, so a file copied to another OS keeps its log and database next to the config file instead of in a folder of the wrong OS.
 
 ## Defining events
 
@@ -117,7 +114,7 @@ The output of the command is logged at DEBUG, so `LOG_LEVEL=debug kickd run` sho
 ## Writing values
 
 - **Durations**: values such as `30s`, `5m` and `1h`. A bare number such as `30` is an error.
-- **Paths**: a leading `~` expands to the home directory, and `${VAR}` expands to the value of the environment variable `VAR` of kickd. A relative `log.path` or `database.path` starts at the `base_dir` of the OS, and every other relative path, such as a `workdir` or the `path` of a file trigger, starts at the directory of the config file.
+- **Paths**: a leading `~` expands to the home directory, and `${VAR}` expands to the value of the environment variable `VAR` of kickd. A relative path, such as a `workdir` or the `path` of a file trigger, starts at the directory of the config file.
 - **Quotes**: the examples put strings in single quotes, which keep backslashes and double quotes as they are, so Windows paths and shell commands need no escapes. Double quotes appear only inside shell commands, where the shell reads them. Inside single quotes, a single quote is written twice, as in `'it''s'`.
 - **Environment variables on Windows**: the config file uses the `${USERPROFILE}` form on Windows too. The `%USERPROFILE%` form is expanded only by cmd, inside a `shell` string.
 - **Key names**: an unknown key is an error, so `kickd check` finds misspelled keys.
@@ -158,7 +155,7 @@ Waiting runs of events that the new config no longer defines are recorded as `dr
 
 When the new config has errors, the agent logs them and keeps running with the previous config.
 It switches to the new config when a valid version is saved.
-A change to where the database goes, through `database.path` or `base_dir`, takes effect only when the agent restarts.
+A change to `database.path` takes effect only when the agent restarts.
 
 ## Differences between operating systems
 

@@ -2,19 +2,14 @@
 # Every event has a name. kickd event NAME fires any event, and triggers
 # (cron, webhook, file) fire it automatically. kickd records every firing
 # as a run in its database, then starts the command of the run.
-# ~ is the home folder. Strings are in single quotes, which keep
-# backslashes and double quotes as they are.
+# A relative path starts at the folder of this file, and ~ is the home
+# folder. Strings are in single quotes, which keep backslashes and double
+# quotes as they are.
 # A shell string runs with cmd /S /C. These events start PowerShell with
 # command instead, which passes every argument as it is.
 
-# kickd keeps its log and its database in base_dir: a relative log.path or
-# database.path starts there. Other relative paths start at the folder of
-# this file. kickd check shows where the files go.
-base_dir:
-  OS_KEY: 'BASE_DIR'
-
 log:
-  path: 'kickd.log'    # in base_dir; without a path, kickd logs to standard error
+  path: 'LOG_PATH'   # without a path, kickd logs to standard error
   level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
   format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
   max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
@@ -26,7 +21,7 @@ webhook:
   max_body_bytes: 1048576
 
 database:
-  path: 'kickd.db'        # in base_dir: the SQLite file that records every run, waiting, running and finished
+  path: 'DATABASE_PATH'   # the SQLite file that records every run: waiting, running and finished
   retention: 168h         # how long finished runs stay in the history
 
 events:

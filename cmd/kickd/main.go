@@ -199,9 +199,6 @@ func cmdCheck(args []string) error {
 		triggers += len(e.Triggers)
 	}
 	fmt.Printf("OK: %s (%d events, %d triggers)\n", cfg.Path, len(cfg.Events), triggers)
-	if b := cfg.BaseDir.For(runtime.GOOS); b != "" {
-		fmt.Printf("base_dir: %s\n", cfg.Base)
-	}
 	logPath := cfg.Log.Path
 	if logPath == "" {
 		logPath = "standard error"
@@ -340,12 +337,9 @@ func cmdInit(args []string) error {
 	if err := os.WriteFile(path, []byte(config.Example(runtime.GOOS, system)), 0o600); err != nil {
 		return err
 	}
-	kind := "a user"
-	if system {
-		kind = "a system-wide service"
-	}
+	p := config.PathsFor(runtime.GOOS, system)
 	fmt.Printf("wrote %s\n", path)
-	fmt.Printf("base_dir lists the usual places for the files of %s; kickd check shows where the log and the database go.\n", kind)
+	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 	fmt.Printf("Edit it, then run: kickd check -c %s\n", path)
 	return nil
 }

@@ -240,8 +240,8 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
 		}
 	}
-	if config.Example("linux", true) == config.Example("linux", false) || !strings.Contains(config.Example("linux", true), "/var/lib/kickd") {
-		t.Fatal("the system example must have its own base_dir")
+	if !strings.Contains(config.Example("linux", true), "'/var/lib/kickd/kickd.db'") || !strings.Contains(config.Example("linux", false), "'~/.local/state/kickd/kickd.db'") {
+		t.Fatal("the examples must name the database of a system and of a user")
 	}
 	path := user
 	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {

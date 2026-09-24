@@ -51,7 +51,7 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 ## 2. Create the config file
 
 `kickd init` writes an example config to `~/Library/Application Support/kickd/config.yaml`.
-Its `base_dir` puts the log and the database of kickd in the same folder, as `kickd.log` and `kickd.db`.
+It puts the log of kickd in `~/Library/Logs/kickd/kickd.log`, and the database in `~/Library/Application Support/kickd/kickd.db`.
 The example defines three events.
 Delete the events that are not needed, and change the paths to match the Mac.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
@@ -178,7 +178,7 @@ A LaunchDaemon runs as root from the time the Mac starts, and its definition fil
 
 A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
 Write absolute paths in the config file, and give the config file with `-c` when installing.
-A config file outside the home folder gets absolute paths from `kickd init`: its `base_dir` puts the log and the database in `/Library/Application Support/kickd`.
+A config file outside the home folder gets absolute paths from `kickd init`: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
 
 ```sh
 sudo kickd init -c "/Library/Application Support/kickd/config.yaml"

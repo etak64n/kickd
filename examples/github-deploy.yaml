@@ -11,17 +11,13 @@
 # Service: sudo kickd service install -c /etc/kickd/config.yaml
 # By hand: sudo kickd event deploy-app -c /etc/kickd/config.yaml
 
-# The database is /var/lib/kickd/kickd.db, and the log
-# /var/log/kickd/kickd.log.
-base_dir:
-  linux: '/var/lib/kickd'
 log:
   path: '/var/log/kickd/kickd.log'
 webhook:
   enabled: true
   listen: '127.0.0.1:8787'
 database:
-  path: 'kickd.db'
+  path: '/var/lib/kickd/kickd.db'
 
 events:
   - name: deploy-app

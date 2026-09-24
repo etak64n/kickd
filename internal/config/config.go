@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -28,19 +27,44 @@ var (
 	exampleWindows string
 )
 
-// initBaseDirs are the base directories that "kickd init" writes for each
-// OS: the usual places for the files of a user's program, and those of a
-// service for the whole system.
-var initBaseDirs = map[string]struct{ key, user, system string }{
-	"darwin":  {"macos", "~/Library/Application Support/kickd", "/Library/Application Support/kickd"},
-	"linux":   {"linux", "~/.local/state/kickd", "/var/lib/kickd"},
-	"windows": {"windows", `~\AppData\Local\kickd`, `C:\ProgramData\kickd`},
+// InitPaths holds the log file and the database that "kickd init" writes
+// into a new config.
+type InitPaths struct{ Log, Database string }
+
+// initPaths are the usual places for the log and the database on each
+// OS: for a user's program, and for a service of the whole system.
+var initPaths = map[string]struct{ user, system InitPaths }{
+	"darwin": {
+		InitPaths{"~/Library/Logs/kickd/kickd.log", "~/Library/Application Support/kickd/kickd.db"},
+		InitPaths{"/Library/Logs/kickd/kickd.log", "/Library/Application Support/kickd/kickd.db"},
+	},
+	"linux": {
+		InitPaths{"~/.local/state/kickd/kickd.log", "~/.local/state/kickd/kickd.db"},
+		InitPaths{"/var/log/kickd/kickd.log", "/var/lib/kickd/kickd.db"},
+	},
+	"windows": {
+		InitPaths{`~\AppData\Local\kickd\kickd.log`, `~\AppData\Local\kickd\kickd.db`},
+		InitPaths{`C:\ProgramData\kickd\kickd.log`, `C:\ProgramData\kickd\kickd.db`},
+	},
+}
+
+// PathsFor returns the log file and the database that "kickd init" writes
+// on the OS goos, as runtime.GOOS names it: those of a service of the whole
+// system when system is true, and those of a user otherwise.
+func PathsFor(goos string, system bool) InitPaths {
+	p, ok := initPaths[goos]
+	if !ok {
+		p = initPaths["linux"]
+	}
+	if system {
+		return p.system
+	}
+	return p.user
 }
 
 // Example returns the annotated configuration that "kickd init" writes on
-// the OS goos, as runtime.GOOS names it: with commands for Windows or for
-// macOS and Linux, and with the base directory of goos, for a service of
-// the whole system when system is true and for a user otherwise.
+// the OS goos: with commands for Windows or for macOS and Linux, and with
+// the log and the database at the paths of PathsFor.
 func Example(goos string, system bool) string {
 	text := exampleUnix
 	if goos == "windows" {
@@ -48,15 +72,8 @@ func Example(goos string, system bool) string {
 	}
 	// A checkout on Windows can turn the line endings into CRLF.
 	text = strings.ReplaceAll(text, "\r\n", "\n")
-	b, ok := initBaseDirs[goos]
-	if !ok {
-		b = initBaseDirs["linux"]
-	}
-	dir := b.user
-	if system {
-		dir = b.system
-	}
-	return strings.Replace(text, "  OS_KEY: 'BASE_DIR'\n", "  "+b.key+": '"+dir+"'\n", 1)
+	p := PathsFor(goos, system)
+	return strings.NewReplacer("'LOG_PATH'", "'"+p.Log+"'", "'DATABASE_PATH'", "'"+p.Database+"'").Replace(text)
 }
 
 // Concurrency policies.
@@ -115,42 +132,15 @@ var (
 
 // Config is the root of the configuration file.
 type Config struct {
-	BaseDir  BaseDir  `yaml:"base_dir"`
 	Log      Log      `yaml:"log"`
 	Webhook  Webhook  `yaml:"webhook"`
 	Database Database `yaml:"database"`
 	Events   []Event  `yaml:"events"`
 
 	// Path is the absolute path of the loaded file and Dir its directory.
-	// Relative paths in the file are resolved against Dir, except those of
-	// kickd's own files, which start at Base.
+	// Relative paths in the file are resolved against Dir.
 	Path string `yaml:"-"`
 	Dir  string `yaml:"-"`
-	// Base is the base_dir of the running OS, resolved, or Dir when
-	// base_dir names none.
-	Base string `yaml:"-"`
-}
-
-// BaseDir is where kickd keeps its own files on each OS: a relative
-// log.path or database.path starts there.
-type BaseDir struct {
-	MacOS   string `yaml:"macos"`
-	Linux   string `yaml:"linux"`
-	Windows string `yaml:"windows"`
-}
-
-// For returns the base directory for the OS goos, as runtime.GOOS names
-// it, or "" when the file gives none.
-func (b BaseDir) For(goos string) string {
-	switch goos {
-	case "darwin":
-		return b.MacOS
-	case "linux":
-		return b.Linux
-	case "windows":
-		return b.Windows
-	}
-	return ""
 }
 
 // Log configures the agent log.
@@ -351,11 +341,7 @@ func (c *Config) applyDefaults() {
 	if c.Log.MaxBackups == 0 {
 		c.Log.MaxBackups = DefaultLogBackups
 	}
-	c.Base = c.Dir
-	if b := c.BaseDir.For(runtime.GOOS); b != "" {
-		c.Base = c.resolve(b)
-	}
-	c.Log.Path = c.resolveOwn(c.Log.Path)
+	c.Log.Path = c.resolve(c.Log.Path)
 	if c.Webhook.Listen == "" {
 		c.Webhook.Listen = DefaultListen
 	}
@@ -365,7 +351,7 @@ func (c *Config) applyDefaults() {
 	if c.Database.Path == "" {
 		c.Database.Path = DefaultDatabasePath
 	}
-	c.Database.Path = c.resolveOwn(c.Database.Path)
+	c.Database.Path = c.resolve(c.Database.Path)
 	if c.Database.Retention == 0 {
 		c.Database.Retention = DefaultRetention
 	}
@@ -417,15 +403,9 @@ func (c *Config) applyDefaults() {
 
 // resolve expands "~" and environment variables and makes p absolute,
 // relative to the config directory.
-func (c *Config) resolve(p string) string { return resolveFrom(c.Dir, p) }
-
-// resolveOwn resolves the path of one of kickd's own files, the log or the
-// database, which start at the base directory.
-func (c *Config) resolveOwn(p string) string { return resolveFrom(c.Base, p) }
-
-// resolveFrom expands environment variables and a leading ~ in p, and
-// makes a relative result relative to dir.
-func resolveFrom(dir, p string) string {
+// resolve expands environment variables and a leading ~ in p, and makes a
+// relative result relative to the directory of the config file.
+func (c *Config) resolve(p string) string {
 	if p == "" {
 		return ""
 	}
@@ -436,7 +416,7 @@ func resolveFrom(dir, p string) string {
 		}
 	}
 	if !filepath.IsAbs(p) {
-		p = filepath.Join(dir, p)
+		p = filepath.Join(c.Dir, p)
 	}
 	return filepath.Clean(p)
 }
@@ -694,6 +674,8 @@ func renamedKeys(data []byte) error {
 		switch {
 		case key.Value == "queue":
 			errs = append(errs, fmt.Errorf("line %d: the queue section is now called database", key.Line))
+		case key.Value == "base_dir":
+			errs = append(errs, fmt.Errorf("line %d: base_dir is gone: give the full paths in log.path and database.path", key.Line))
 		case key.Value == "log" && value.Kind == yaml.MappingNode:
 			for j := 0; j+1 < len(value.Content); j += 2 {
 				if k := value.Content[j]; k.Value == "file" {

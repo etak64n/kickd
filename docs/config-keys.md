@@ -2,26 +2,22 @@
 
 [Documentation index](../README.md#documentation)
 
-The kickd config file is YAML with five top-level sections: `base_dir`, `log`, `webhook`, `database` and `events`.
+The kickd config file is YAML with four top-level sections: `log`, `webhook`, `database` and `events`.
 In kickd, a named command is an **event**, and a **trigger** fires an event automatically.
 Every key below is optional unless its description says otherwise.
 kickd reports unknown keys as errors, and `kickd check` lists every error in the file.
 
-A relative `log.path` or `database.path` starts at the `base_dir` entry for the OS that kickd runs on.
-Without that entry, and for every other relative path in the file, a relative path starts at the directory of the config file.
+A relative path starts at the directory of the config file.
 In every path, a leading `~` is the home directory, and `${VAR}` is the value of the environment variable `VAR`.
 `kickd check` prints where the log and the database go.
 
-Earlier versions of kickd called `log.path` `log.file`, and the `database` section `queue`.
-A config file with the old names fails to load, with a message that gives the new name.
+Earlier versions of kickd called `log.path` `log.file`, and the `database` section `queue`, and kickd v0.2.0 had a `base_dir` section for the directory of the log and the database.
+A config file with the old keys fails to load, with a message that gives the new key.
 
 ## Top-level keys
 
 | Key | Default | Description |
 |---|---|---|
-| `base_dir.macos` | none | The directory for the log and the database on macOS. |
-| `base_dir.linux` | none | The directory for the log and the database on Linux. |
-| `base_dir.windows` | none | The directory for the log and the database on Windows. |
 | `log.path` | none | The log file. Without it, kickd logs to standard error. |
 | `log.level` | `info` | The log level: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. The environment variable `LOG_LEVEL` overrides it. |
 | `log.format` | `auto` | The log format: `auto`, `json` or `text`. `auto` writes text to a terminal and JSON to files and pipes. The environment variable `LOG_FORMAT` overrides it. |
