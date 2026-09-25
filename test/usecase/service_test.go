@@ -284,7 +284,7 @@ func (m *machine) install(cfg string, installed func()) {
 		m.t.Fatalf("the config has no events:\n%s", text)
 	}
 	m.write(cfg, text[:i]+"events:\n  - name: whoami\n    command: "+command+
-		"\n    triggers:\n      - type: webhook\n        path: '/hooks/whoami'\n        token: '"+token+"'\n")
+		"\n    triggers:\n      - type: webhook\n        path: '/hooks/whoami'\n        token: '"+token+"'\n      - type: manual\n")
 	m.mustKickd("check")
 	m.service("install")
 	if installed != nil {

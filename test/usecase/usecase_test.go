@@ -17,19 +17,32 @@ import (
 // event runs in its working directory.
 func TestUseCaseTriggers(t *testing.T) {
 	t.Parallel()
+	testTriggers(t, "", "hello", "main.c")
+}
+
+// The same with Japanese and spaces in the home directory, the value of a
+// parameter, and the name of the changed file.
+func TestUseCaseTriggersJapanese(t *testing.T) {
+	t.Parallel()
+	testTriggers(t, "ホーム ディレクトリ", "こんにちは 世界", "新しい ファイル.c")
+}
+
+func testTriggers(t *testing.T, homeName, msg, file string) {
 	// A leading seconds field makes the nightly backup run every second.
-	h := setup(t, edit{"schedule: '0 3 * * *'", "schedule: '* * * * * *'"})
+	h := setupIn(t, homeName, edit{"schedule: '0 3 * * *'", "schedule: '* * * * * *'"})
 	h.start()
 
 	// Manual: kickd event --wait waits for the run and reports it.
 	var chain []record
-	if err := json.Unmarshal([]byte(h.must("event", "notify", "--wait", "--json")), &chain); err != nil || len(chain) != 1 {
+	if err := json.Unmarshal([]byte(h.must("event", "notify", "msg="+msg, "--wait", "--json")), &chain); err != nil || len(chain) != 1 {
 		t.Fatalf("kickd event notify --wait printed %v: %v", chain, err)
 	}
 	if chain[0].Trigger != "manual" {
 		t.Errorf("%v: want the trigger manual", chain[0])
 	}
-	h.checkRun(chain[0], h.app)
+	if rep := h.checkRun(chain[0], h.app); rep["msg"] != msg {
+		t.Errorf("%v: the script got the parameter %q, want %q", chain[0], rep["msg"], msg)
+	}
 
 	// Webhook: a request without the token is refused and fires nothing.
 	if code := h.post("/hooks/deploy", ""); code != http.StatusUnauthorized {
@@ -50,15 +63,15 @@ func TestUseCaseTriggers(t *testing.T) {
 	h.checkRun(rs[0], h.app)
 
 	// File changes: a new file in app/src builds the app after the debounce.
-	src := filepath.Join(h.app, "src", "main.c")
+	src := filepath.Join(h.app, "src", file)
 	if err := os.WriteFile(src, []byte("int main(void) { return 0; }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	rs = h.waitRuns("build", "a new file fires build", 60*time.Second, func(rs []record) bool {
 		return len(rs) > 0 && final(rs[0])
 	})
-	if rep := h.checkRun(rs[0], h.app); rs[0].Trigger != "file" || !samePath(rep.file, src) {
-		t.Errorf("%v: got the file %q, want %s", rs[0], rep.file, src)
+	if rep := h.checkRun(rs[0], h.app); rs[0].Trigger != "file" || !samePath(rep["file"], src) {
+		t.Errorf("%v: got the file %q, want %s", rs[0], rep["file"], src)
 	}
 
 	// Cron: the backup runs on its schedule, in the home directory.
@@ -214,9 +227,9 @@ func TestUseCaseReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A new event that runs the script of notify.
-	added := "\n  - name: hello\n    command: ['./notify.sh']\n    workdir: '~/app'\n"
+	added := "\n  - name: hello\n    command: ['./notify.sh']\n    workdir: '~/app'\n    triggers: [{type: manual}]\n"
 	if runtime.GOOS == "windows" {
-		added = "\n  - name: hello\n    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']\n    workdir: '" + h.app + "'\n"
+		added = "\n  - name: hello\n    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']\n    workdir: '" + h.app + "'\n    triggers: [{type: manual}]\n"
 	}
 	offset := fileSize(h.log)
 	h.write(string(b) + added)

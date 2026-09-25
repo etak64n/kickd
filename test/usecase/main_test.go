@@ -66,6 +66,7 @@ type home struct {
 	backup string // the working directory of backup
 	cfg    string
 	log    string
+	db     string
 	port   string
 	env    []string
 	agent  *exec.Cmd
@@ -79,9 +80,22 @@ type edit struct{ old, new string }
 // directory, applies the edits, and writes the scripts of the events.
 func setup(t *testing.T, edits ...edit) *home {
 	t.Helper()
+	return setupIn(t, "", edits...)
+}
+
+// setupIn is setup with the home directory named name, inside a new
+// temporary directory, when name is not empty.
+func setupIn(t *testing.T, name string, edits ...edit) *home {
+	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if name != "" {
+		dir = filepath.Join(dir, name)
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	h := &home{t: t, dir: dir, cfg: filepath.Join(dir, "kickd.yaml"), port: freePort(t)}
 	for _, kv := range os.Environ() {
@@ -102,6 +116,9 @@ func setup(t *testing.T, edits ...edit) *home {
 		t.Fatalf("kickd init did not print the log file:\n%s", out)
 	}
 	h.log = filepath.Join(dir, strings.TrimSpace(m[1])[2:]) // after ~/ or ~\
+	if m := regexp.MustCompile(`(?m)^database: +(\S.*)$`).FindStringSubmatch(out); m != nil {
+		h.db = filepath.Join(dir, strings.TrimSpace(m[1])[2:])
+	}
 
 	b, err := os.ReadFile(h.cfg)
 	if err != nil {
@@ -141,18 +158,29 @@ func setup(t *testing.T, edits ...edit) *home {
 	return h
 }
 
-// The script of an event prints what kickd passed it, and takes as many
-// seconds as the file sleep-EVENT in the home directory says.
+// The script of an event prints what kickd passed it, one value on each
+// line, and takes as many seconds as the file sleep-EVENT in the home
+// directory says. PowerShell prints UTF-8 only when told to.
 const (
 	shScript = `#!/bin/sh
-echo "event=$KICKD_EVENT trigger=$KICKD_TRIGGER attempt=$KICKD_ATTEMPT file=$KICKD_FILE_PATH dir=$(pwd -P)"
+echo "event=$KICKD_EVENT"
+echo "trigger=$KICKD_TRIGGER"
+echo "attempt=$KICKD_ATTEMPT"
+echo "msg=$KICKD_DATA_MSG"
+echo "file=$KICKD_FILE_PATH"
+echo "dir=$(pwd -P)"
 if [ -f "$HOME/sleep-$KICKD_EVENT" ]; then sleep "$(cat "$HOME/sleep-$KICKD_EVENT")"; fi
 echo done
 `
-	psScript = `$dir = (Get-Location).Path
-Write-Output "event=$env:KICKD_EVENT trigger=$env:KICKD_TRIGGER attempt=$env:KICKD_ATTEMPT file=$env:KICKD_FILE_PATH dir=$dir"
+	psScript = `try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+Write-Output "event=$env:KICKD_EVENT"
+Write-Output "trigger=$env:KICKD_TRIGGER"
+Write-Output "attempt=$env:KICKD_ATTEMPT"
+Write-Output "msg=$env:KICKD_DATA_MSG"
+Write-Output "file=$env:KICKD_FILE_PATH"
+Write-Output "dir=$((Get-Location).Path)"
 $sleep = Join-Path $env:USERPROFILE "sleep-$env:KICKD_EVENT"
-if (Test-Path $sleep) { Start-Sleep -Seconds ([int](Get-Content $sleep)) }
+if (Test-Path -LiteralPath $sleep) { Start-Sleep -Seconds ([int](Get-Content -LiteralPath $sleep)) }
 Write-Output 'done'
 `
 )
@@ -203,7 +231,13 @@ func freePort(t *testing.T) string {
 // standard output, standard error and exit code.
 func (h *home) run(args ...string) (string, string, int) {
 	h.t.Helper()
-	cmd := exec.Command(kickd, append(args, "-c", h.cfg)...)
+	return h.runRaw(append(args, "-c", h.cfg)...)
+}
+
+// runRaw runs kickd with args as they are, in the environment of the home.
+func (h *home) runRaw(args ...string) (string, string, int) {
+	h.t.Helper()
+	cmd := exec.Command(kickd, args...)
 	cmd.Env, cmd.Dir = h.env, h.dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -437,26 +471,37 @@ func find(rs []record, id int64) (record, bool) {
 	return record{}, false
 }
 
-// report is what the script of a run printed.
-type report struct{ event, trigger, attempt, file, dir string }
+// report is what the script of a run printed: the value after KEY= on the
+// first line that starts with it.
+type report map[string]string
 
-var reportLine = regexp.MustCompile(`event=(\S*) trigger=(\S*) attempt=(\S*) file=(\S*) dir=(.*)`)
+func parseReport(output string) report {
+	rep := report{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSuffix(strings.TrimPrefix(line, "\uFEFF"), "\r")
+		if k, v, ok := strings.Cut(line, "="); ok {
+			if _, seen := rep[k]; !seen {
+				rep[k] = v
+			}
+		}
+	}
+	return rep
+}
 
 // checkRun checks that the run succeeded, and that its script ran in dir
 // with the event and trigger of the run.
 func (h *home) checkRun(r record, dir string) report {
 	h.t.Helper()
 	r = h.show(r.ID)
-	m := reportLine.FindStringSubmatch(r.Output)
-	if r.Status != "succeeded" || m == nil || !strings.Contains(r.Output, "done") {
+	rep := parseReport(r.Output)
+	if r.Status != "succeeded" || rep["event"] == "" || !strings.Contains(r.Output, "done") {
 		h.t.Fatalf("%v printed:\n%s", r, r.Output)
 	}
-	rep := report{m[1], m[2], m[3], m[4], strings.TrimSpace(m[5])}
-	if rep.event != r.Event || rep.trigger != r.Trigger || rep.attempt != strconv.Itoa(r.Attempt) {
-		h.t.Errorf("%v: the script got event %s, trigger %s, attempt %s", r, rep.event, rep.trigger, rep.attempt)
+	if rep["event"] != r.Event || rep["trigger"] != r.Trigger || rep["attempt"] != strconv.Itoa(r.Attempt) {
+		h.t.Errorf("%v: the script got event %s, trigger %s, attempt %s", r, rep["event"], rep["trigger"], rep["attempt"])
 	}
-	if !samePath(rep.dir, dir) {
-		h.t.Errorf("%v: the script ran in %s, want %s", r, rep.dir, dir)
+	if !samePath(rep["dir"], dir) {
+		h.t.Errorf("%v: the script ran in %s, want %s", r, rep["dir"], dir)
 	}
 	return rep
 }
