@@ -26,6 +26,7 @@ events:
     triggers:
       - type: cron
         schedule: '30 2 * * *'
+      - type: manual
 
   - name: prune
     description: Keep 7 daily, 4 weekly and 12 monthly snapshots
@@ -40,3 +41,4 @@ events:
       # restic locks the repository, so this runs hours after the backup.
       - type: cron
         schedule: '0 6 * * 0'
+      - type: manual

@@ -96,8 +96,10 @@ const (
 	StdinPayload = "payload"
 )
 
-// Trigger types. Every event can also be fired with "kickd event NAME".
+// Trigger types. An event fires only through the triggers that it lists;
+// a manual trigger lets "kickd event NAME" fire it.
 const (
+	TriggerManual  = "manual"
 	TriggerCron    = "cron"
 	TriggerWebhook = "webhook"
 	TriggerFile    = "file"
@@ -230,6 +232,17 @@ type Param struct {
 	Description string `yaml:"description" json:"description,omitempty"`
 	Required    bool   `yaml:"required" json:"required,omitempty"`
 	Default     string `yaml:"default" json:"default,omitempty"`
+}
+
+// Manual reports whether the event has a manual trigger, which lets
+// "kickd event NAME" fire it.
+func (e Event) Manual() bool {
+	for _, t := range e.Triggers {
+		if t.Type == TriggerManual {
+			return true
+		}
+	}
+	return false
 }
 
 // Apply checks data against the declared params and fills in the declared
@@ -528,9 +541,22 @@ func (c *Config) validate() error {
 			params[p.Name] = true
 			hasRequired = hasRequired || p.Required
 		}
+		if len(e.Triggers) == 0 {
+			fail("%s: triggers is required, with at least one trigger; a manual trigger (- type: manual) lets kickd event fire the event", where)
+		}
+		manual := false
 		for k, t := range e.Triggers {
 			twhere := fmt.Sprintf("%s triggers[%d]", where, k)
 			switch t.Type {
+			case TriggerManual:
+				if manual {
+					fail("%s: the event already has a manual trigger", twhere)
+				}
+				manual = true
+				if t.Path != "" || t.Recursive || len(t.Include) > 0 || len(t.Exclude) > 0 || len(t.Changes) > 0 || t.Debounce != 0 ||
+					t.Schedule != "" || t.Timezone != "" || t.Missed != "" || t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
+					fail("%s: a manual trigger has no keys other than type", twhere)
+				}
 			case TriggerCron:
 				if t.Schedule == "" {
 					fail("%s: schedule is required", twhere)
@@ -590,9 +616,9 @@ func (c *Config) validate() error {
 					fail("%s: cron and webhook fields are not allowed on a file trigger", twhere)
 				}
 			case "":
-				fail("%s: type is required (cron, webhook or file)", twhere)
+				fail("%s: type is required (manual, cron, webhook or file)", twhere)
 			default:
-				fail("%s: unknown type %q (cron, webhook or file)", twhere, t.Type)
+				fail("%s: unknown type %q (manual, cron, webhook or file)", twhere, t.Type)
 			}
 		}
 	}

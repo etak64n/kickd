@@ -253,7 +253,7 @@ func TestAgentRunsKickEvents(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "kickd.yaml")
 	out := filepath.Join(dir, "deployed.txt")
-	writeFile(t, cfgPath, "events:\n  - name: deploy\n    params: [{name: ref, default: main}]\n"+helperEvent("append-event", out))
+	writeFile(t, cfgPath, "events:\n  - name: deploy\n    params: [{name: ref, default: main}]\n"+helperEvent("append-event", out)+"    triggers: [{type: manual}]\n")
 	cancel, done := startAgent(t, cfgPath)
 	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
 
@@ -278,7 +278,7 @@ func TestAgentRerunsAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "kickd.yaml")
 	out := filepath.Join(dir, "attempts.txt")
-	writeFile(t, cfgPath, "events:\n  - name: slow\n    on_interrupt: rerun\n    max_attempts: 2\n"+helperEvent("attempt", out))
+	writeFile(t, cfgPath, "events:\n  - name: slow\n    on_interrupt: rerun\n    max_attempts: 2\n"+helperEvent("attempt", out)+"    triggers: [{type: manual}]\n")
 	cancel, done := startAgent(t, cfgPath)
 	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
 	first := kickEvent(t, store, "slow", nil)

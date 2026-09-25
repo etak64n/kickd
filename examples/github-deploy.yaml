@@ -48,3 +48,4 @@ events:
         secret: 'replace-with-the-webhook-secret'
         # GitHub waits at most 10 seconds for a response, so kickd answers
         # with 202 at once instead of waiting for the deploy.
+      - type: manual

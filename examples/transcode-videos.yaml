@@ -45,3 +45,4 @@ events:
         include: ['*.mov', '*.MOV']
         changes: [create, write]
         debounce: 30s
+      - type: manual

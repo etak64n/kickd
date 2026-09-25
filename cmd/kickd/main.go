@@ -235,9 +235,12 @@ func cmdCheck(args []string) error {
 				fmt.Printf("    PATH     %s\n", v)
 			}
 		}
-		fmt.Printf("    %s\n", describeKick(e))
 		for _, t := range e.Triggers {
-			fmt.Printf("    %s\n", describeTrigger(t))
+			if t.Type == config.TriggerManual {
+				fmt.Printf("    %s\n", describeKick(e))
+			} else {
+				fmt.Printf("    %s\n", describeTrigger(t))
+			}
 		}
 	}
 	for _, w := range cfg.Warnings() {

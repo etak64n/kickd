@@ -22,16 +22,18 @@ Its config file is YAML and has the same format on every OS.
 ## How kickd works
 
 A named command in the config file is called an **event**.
-An event holds the command to run and, optionally, a list of triggers.
+An event holds the command to run and a list of triggers.
 Firing an event requests one run of its command.
 
 A **trigger** fires an event.
 kickd has four kinds of trigger:
 
-- **Manual**: `kickd event NAME` fires the event. Every event can be fired this way, whether or not it has other triggers.
+- **Manual**: `kickd event NAME` fires the event.
 - **Cron**: the event fires at the times given by a cron expression.
 - **Webhook**: the event fires when an HTTP request arrives at a path that kickd listens on.
 - **File**: the event fires when files are created, written, removed or renamed in a directory.
+
+An event fires only through the triggers that it lists, and it can list several of them.
 
 Each firing is first recorded as a **run** in the **database**, a SQLite file.
 The long-running kickd process, called the **agent**, starts the command of each run.
@@ -45,7 +47,7 @@ Only `events` is required, and every other key has a default.
 Commands, shells and paths differ between operating systems, so a config file is written for one OS.
 `kickd init` writes these files, the one for the OS that it runs on.
 The paths of the log and the database depend on where the config file is: these files have them for a config file in the home directory on macOS and Linux, and in `C:\ProgramData\kickd` on Windows.
-Each file defines one event for each kind of trigger:
+Each file defines one event for each kind of trigger, and gives the other events a manual trigger as well:
 
 <details open>
 <summary>macOS</summary>
@@ -80,6 +82,7 @@ events:
         schedule: '0 3 * * *'   # minute hour day month weekday
         timezone: Asia/Tokyo    # without it, local time
         missed: run             # after sleep or downtime, run once for the missed times
+      - type: manual            # kickd event backup also runs it
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -93,6 +96,7 @@ events:
         path: '/hooks/deploy'
         methods: [POST]
         token: 'replace-with-a-long-random-string'
+      - type: manual            # kickd event deploy also runs it
 
   # File changes: 2 seconds after the last change in ~/app/src or below.
   - name: build
@@ -106,14 +110,17 @@ events:
         path: '~/app/src'
         recursive: true      # also watch subdirectories
         debounce: 2s
+      - type: manual         # kickd event build also runs it
 
-  # No triggers: runs only by hand, with kickd event notify.
+  # Manual: only by hand, with kickd event notify.
   - name: notify
     command: ['./notify.sh']
     workdir: '~/app'
     timeout: 1m
     concurrency: parallel    # notifications do not wait for each other
     on_interrupt: abandon
+    triggers:
+      - type: manual
 ```
 
 </details>
@@ -151,6 +158,7 @@ events:
         schedule: '0 3 * * *'   # minute hour day month weekday
         timezone: Asia/Tokyo    # without it, local time
         missed: run             # after sleep or downtime, run once for the missed times
+      - type: manual            # kickd event backup also runs it
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -164,6 +172,7 @@ events:
         path: '/hooks/deploy'
         methods: [POST]
         token: 'replace-with-a-long-random-string'
+      - type: manual            # kickd event deploy also runs it
 
   # File changes: 2 seconds after the last change in ~/app/src or below.
   - name: build
@@ -177,14 +186,17 @@ events:
         path: '~/app/src'
         recursive: true      # also watch subdirectories
         debounce: 2s
+      - type: manual         # kickd event build also runs it
 
-  # No triggers: runs only by hand, with kickd event notify.
+  # Manual: only by hand, with kickd event notify.
   - name: notify
     command: ['./notify.sh']
     workdir: '~/app'
     timeout: 1m
     concurrency: parallel    # notifications do not wait for each other
     on_interrupt: abandon
+    triggers:
+      - type: manual
 ```
 
 </details>
@@ -222,6 +234,7 @@ events:
         schedule: '0 3 * * *'   # minute hour day month weekday
         timezone: Asia/Tokyo    # without it, local time
         missed: run             # after sleep or downtime, run once for the missed times
+      - type: manual            # kickd event backup also runs it
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -235,6 +248,7 @@ events:
         path: '/hooks/deploy'
         methods: [POST]
         token: 'replace-with-a-long-random-string'
+      - type: manual            # kickd event deploy also runs it
 
   # File changes: 2 seconds after the last change in C:\app\src or below.
   - name: build
@@ -248,14 +262,17 @@ events:
         path: 'C:\app\src'
         recursive: true      # also watch subfolders
         debounce: 2s
+      - type: manual         # kickd event build also runs it
 
-  # No triggers: runs only by hand, with kickd event notify.
+  # Manual: only by hand, with kickd event notify.
   - name: notify
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
     workdir: 'C:\app'
     timeout: 1m
     concurrency: parallel    # notifications do not wait for each other
     on_interrupt: abandon
+    triggers:
+      - type: manual
 ```
 
 </details>
@@ -322,6 +339,8 @@ With `kickd` installed, these steps define an event, run the agent and fire the 
    events:
      - name: hello
        command: 'echo hello from kickd'
+       triggers:
+         - type: manual   # kickd event hello fires it
    ```
 
 2. Start the agent in the foreground.

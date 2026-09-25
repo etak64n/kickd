@@ -46,7 +46,7 @@ A config file with the old keys fails to load, with a message that gives the new
 | `stdin` | `payload` also passes the payload JSON, the information about the run, on standard input. Default `none`. |
 | `log_output` | Whether kickd keeps the command's output. With the default `true`, each line of output is logged at DEBUG, the record of a failed run includes the end of standard error, and the first 64 KB are stored with the run. `false` does none of these; a webhook with `wait: true` still returns the output. |
 | `params` | The parameters that a firing can pass. |
-| `triggers` | The triggers. An event fired only from the command line needs none. |
+| `triggers` | The triggers, one or more. The event fires only through these; `- type: manual` lets `kickd event` fire it. |
 
 A kickd running as a service has the directory of its config file as its working directory on macOS and Linux, and `C:\Windows\System32` on Windows.
 
@@ -58,6 +58,15 @@ A kickd running as a service has the directory of its config file as its working
 | `required` | `true` makes the parameter mandatory. A required parameter cannot have a `default`, and its event cannot have cron or file triggers. |
 | `default` | The value used when the parameter is omitted. Without a default, an omitted parameter reaches the command as an empty value. |
 | `description` | A description. |
+
+## Manual trigger keys
+
+A manual trigger lets `kickd event NAME` fire the event, with the parameters given on the command line.
+An event lists it at most once.
+
+| Key | Description |
+|---|---|
+| `type` | `manual`, required. A manual trigger has no other keys. |
 
 ## Cron trigger keys
 

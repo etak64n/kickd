@@ -30,3 +30,4 @@ events:
         recursive: true
         exclude: ['.git', 'node_modules']
         debounce: 2s
+      - type: manual

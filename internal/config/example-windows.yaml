@@ -27,6 +27,7 @@ events:
         schedule: '0 3 * * *'   # minute hour day month weekday
         timezone: Asia/Tokyo    # without it, local time
         missed: run             # after sleep or downtime, run once for the missed times
+      - type: manual            # kickd event backup also runs it
 
   # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
   - name: deploy
@@ -40,6 +41,7 @@ events:
         path: '/hooks/deploy'
         methods: [POST]
         token: 'replace-with-a-long-random-string'
+      - type: manual            # kickd event deploy also runs it
 
   # File changes: 2 seconds after the last change in C:\app\src or below.
   - name: build
@@ -53,11 +55,14 @@ events:
         path: 'C:\app\src'
         recursive: true      # also watch subfolders
         debounce: 2s
+      - type: manual         # kickd event build also runs it
 
-  # No triggers: runs only by hand, with kickd event notify.
+  # Manual: only by hand, with kickd event notify.
   - name: notify
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
     workdir: 'C:\app'
     timeout: 1m
     concurrency: parallel    # notifications do not wait for each other
     on_interrupt: abandon
+    triggers:
+      - type: manual

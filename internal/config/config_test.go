@@ -151,6 +151,9 @@ func TestParseErrors(t *testing.T) {
 		{"bad max_attempts", "events:\n  - name: a\n    max_attempts: -1" + ok, "max_attempts"},
 		{"bad stdin", "events:\n  - name: a\n    stdin: event" + ok, "stdin"},
 		{"unknown trigger type", "events:\n  - name: a" + ok + "    triggers: [{type: timer}]", "unknown type"},
+		{"no triggers", "events:\n  - name: a" + ok, "triggers is required"},
+		{"two manual triggers", "events:\n  - name: a" + ok + "    triggers: [{type: manual}, {type: manual}]", "already has a manual trigger"},
+		{"key on a manual trigger", "events:\n  - name: a" + ok + "    triggers: [{type: manual, schedule: '@hourly'}]", "no keys other than type"},
 		{"bad cron", "events:\n  - name: a" + ok + "    triggers: [{type: cron, schedule: 'every day'}]", "schedule"},
 		{"bad timezone", "events:\n  - name: a" + ok + "    triggers: [{type: cron, schedule: '@hourly', timezone: Mars/Olympus}]", "timezone"},
 		{"webhook path without slash", "events:\n  - name: a" + ok + "    triggers: [{type: webhook, path: hooks}]", "must start with /"},
@@ -191,12 +194,15 @@ func TestCommandForms(t *testing.T) {
 events:
   - name: string
     command: 'make build && make test'
+    triggers: [{type: manual}]
   - name: block
     command: |
       set -e
       make build
+    triggers: [{type: manual}]
   - name: list
     command: ['make', 'build']
+    triggers: [{type: manual}]
 `), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -216,6 +222,31 @@ events:
 	}
 }
 
+// Only an event with a manual trigger can be fired with kickd event.
+func TestManualTrigger(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: by-hand
+    command: [x]
+    triggers: [{type: manual}]
+  - name: nightly
+    command: [x]
+    triggers: [{type: cron, schedule: '0 3 * * *'}]
+  - name: both
+    command: [x]
+    triggers: [{type: cron, schedule: '0 3 * * *'}, {type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{"by-hand": true, "nightly": false, "both": true} {
+		if e, _ := cfg.EventByName(name); e.Manual() != want {
+			t.Errorf("%s: Manual() = %v, want %v", name, e.Manual(), want)
+		}
+	}
+}
+
 func TestParamsApply(t *testing.T) {
 	noLogEnv(t)
 	cfg, err := Parse([]byte(`
@@ -229,6 +260,7 @@ events:
     triggers: [{type: webhook, path: /d}]
   - name: free
     command: [x]
+    triggers: [{type: manual}]
 `), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +322,7 @@ events:
 }
 
 func TestLogEnvironmentOverrides(t *testing.T) {
-	body := []byte("log: {level: warn, format: json}\nevents:\n  - name: a\n    command: [x]\n")
+	body := []byte("log: {level: warn, format: json}\nevents:\n  - name: a\n    command: [x]\n    triggers: [{type: manual}]\n")
 	t.Setenv(EnvLogLevel, "DEBUG")
 	t.Setenv(EnvLogFormat, " Text ")
 	cfg, err := Parse(body, t.TempDir())
