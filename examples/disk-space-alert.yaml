@@ -29,3 +29,4 @@ events:
     triggers:
       - type: cron
         schedule: '*/10 * * * *'
+      - type: manual

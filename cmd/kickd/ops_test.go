@@ -82,12 +82,16 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code, _, errOut := ops(t, "event", "deploy", "novalue", "-c", cfg); code != exitUsage || !strings.Contains(errOut, "KEY=VALUE") {
 		t.Errorf("bad arg: %d %q", code, errOut)
 	}
+	// An event without a manual trigger cannot be fired by hand.
+	if code, _, errOut := ops(t, "event", "nightly", "-c", cfg); code != exitUsage || !strings.Contains(errOut, `has no manual trigger`) || !strings.Contains(errOut, `add "- type: manual"`) {
+		t.Errorf("event without a manual trigger: %d %q", code, errOut)
+	}
 	if code, _, errOut := ops(t, "cancel", "99", "-c", cfg); code != exitFailed || !strings.Contains(errOut, "not found") {
 		t.Errorf("cancel missing: %d %q", code, errOut)
 	}
 	if code, out, _ := ops(t, "events", "-c", cfg); code != 0 ||
 		!regexp.MustCompile(`deploy\s+manual\s+skip\s+abandon\s+ref=main\s+Deploy the app`).MatchString(out) ||
-		!regexp.MustCompile(`boom\s+manual, cron @yearly`).MatchString(out) ||
+		!regexp.MustCompile(`boom\s+cron @yearly, manual`).MatchString(out) ||
 		!regexp.MustCompile(`slow\s+manual\s+skip\s+rerun \(max 3\)`).MatchString(out) {
 		t.Errorf("events: %d %q", code, out)
 	}

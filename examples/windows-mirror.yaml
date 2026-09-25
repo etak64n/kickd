@@ -31,3 +31,4 @@ events:
     triggers:
       - type: cron
         schedule: '0 1 * * *'
+      - type: manual

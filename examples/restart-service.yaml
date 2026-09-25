@@ -42,3 +42,4 @@ events:
         methods: [POST]
         token: 'replace-with-a-long-random-token'
         wait: true
+      - type: manual

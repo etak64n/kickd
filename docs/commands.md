@@ -31,6 +31,8 @@ An event that prints its environment shows what its commands get:
 events:
   - name: show-env
     command: ['env']   # on Windows: command: 'set'
+    triggers:
+      - type: manual
 ```
 
 `kickd event show-env --wait` fires it, and `kickd show` with the printed run ID displays the output.
@@ -54,6 +56,8 @@ events:
     workdir: '~/reports'
     env:
       PYTHONUNBUFFERED: '1'
+    triggers:
+      - type: manual
 ```
 
 Python writes its output in blocks when the output goes to a pipe, as it does under kickd, so the lines of a long run reach kickd's log only at the end.
@@ -67,6 +71,8 @@ events:
   - name: report
     command: ['.venv/bin/python', 'report.py']   # on Windows: '.venv\Scripts\python.exe'
     workdir: '~/reports'
+    triggers:
+      - type: manual
 ```
 
 With uv, `uv run` picks the environment of the project.
@@ -79,6 +85,8 @@ events:
     workdir: '~/reports'
     env:
       PATH: '${HOME}/.local/bin:${PATH}'
+    triggers:
+      - type: manual
 ```
 
 On Windows, the Python launcher `py` is in the system `PATH` when Python was installed for all users, so `command: ['py', '-3', 'report.py']` works for a service as well.
@@ -106,6 +114,8 @@ events:
     workdir: '~/site'
     env:
       PATH: '/opt/homebrew/bin:${PATH}'   # where Homebrew puts node on a Mac with Apple silicon
+    triggers:
+      - type: manual
 ```
 
 `npm` and `npx` are Node.js scripts themselves, so the `PATH` must hold the directory of `node` for them as well:
@@ -117,6 +127,8 @@ events:
     workdir: '~/site'
     env:
       PATH: '/opt/homebrew/bin:${PATH}'
+    triggers:
+      - type: manual
 ```
 
 nvm adds the directory of the selected Node.js version to `PATH` in the startup files of the shell, which a service does not read.

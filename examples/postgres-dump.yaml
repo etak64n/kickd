@@ -43,3 +43,4 @@ events:
     triggers:
       - type: cron
         schedule: '15 1 * * *'
+      - type: manual

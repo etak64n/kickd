@@ -22,7 +22,7 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd check` | Validates the config file, prints every error, and lists the events and their triggers. |
 | `kickd init` | Writes an example config file for the OS that it runs on, the file that the README shows for that OS. It refuses to overwrite an existing file. |
 | `kickd service ACTION` | Manages the service. `ACTION` is `install`, `uninstall`, `start`, `stop`, `restart` or `status`. |
-| `kickd event NAME` | Fires an event. |
+| `kickd event NAME` | Fires an event that has a manual trigger. |
 | `kickd events` | Lists the events and the triggers that fire each one. |
 | `kickd queue` | Shows queued, running and interrupted runs. |
 | `kickd runs` | Shows the run history, newest first. `--event`, `--status` and `--limit` filter it. |
@@ -44,7 +44,8 @@ The run ID is the number in the RUN column of `kickd queue` and `kickd runs`, an
 
 ## Firing an event
 
-`kickd event` fires an event.
+`kickd event` fires an event whose triggers include `- type: manual`.
+For an event without a manual trigger, it exits with code 2 and names the line to add.
 Parameters follow the event name as `KEY=VALUE`:
 
 ```sh
@@ -69,7 +70,7 @@ If the run is interrupted and rerun during the wait, `kickd event` waits for the
 |---|---|
 | 0 | The run succeeded. Without `--wait`, the run was queued. |
 | 1 | The run did not succeed: it failed, or was skipped, dropped, canceled or abandoned. Errors of kickd itself also exit with 1. |
-| 2 | The arguments were wrong, such as an undefined event or an undeclared parameter. |
+| 2 | The arguments were wrong, such as an undefined event, an event without a manual trigger, or an undeclared parameter. |
 | 124 | The time given with `--timeout` passed. |
 
 ## Parameters

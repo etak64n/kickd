@@ -21,4 +21,4 @@ The `log` and `database` sections at the top give the full paths of the log and 
 | [windows-mirror.yaml](windows-mirror.yaml) | Mirrors a Documents folder to a second drive with robocopy | Cron | Windows |
 | [windows-cleanup.yaml](windows-cleanup.yaml) | Deletes old downloads with PowerShell | Cron | Windows |
 
-Every event can also be fired by hand with `kickd event NAME`.
+Every event in the examples also has a manual trigger, so `kickd event NAME` fires it by hand as well.

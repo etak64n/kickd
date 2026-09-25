@@ -40,7 +40,7 @@ For example, with kickd installed as a system-wide unit on Linux, `sudo kickd ev
 
 Every trigger except cron lets someone other than the user of the agent make the agent run a command as that user:
 
-- **`kickd event`**: anyone who can read the config file and read and write the database. The database belongs to the user whose kickd process created it, and on macOS and Linux only that user and root can open it.
+- **Manual**: for an event with a manual trigger, anyone who can read the config file and read and write the database, with `kickd event`. The database belongs to the user whose kickd process created it, and on macOS and Linux only that user and root can open it.
 - **Webhook**: anyone who can reach the webhook server and knows the `token` or `secret` of the trigger. When the trigger has neither, anyone who can reach the server.
 - **File**: anyone who can create, change, remove or rename files in the watched directory.
 - **Cron**: nobody, because the schedule fires by itself.

@@ -178,6 +178,9 @@ func (c *cli) event(args []string) int {
 	if !ok {
 		return c.exit(usageError{fmt.Sprintf("event %q is not defined in %s (defined: %s)", name, cfg.Path, strings.Join(cfg.EventNames(), ", "))})
 	}
+	if !def.Manual() {
+		return c.exit(usageError{fmt.Sprintf("event %q has no manual trigger, so kickd event cannot fire it; add \"- type: manual\" to its triggers in %s", name, cfg.Path)})
+	}
 	data := map[string]string{}
 	if *dataJSON != "" {
 		if err := json.Unmarshal([]byte(*dataJSON), &data); err != nil {
@@ -361,9 +364,11 @@ func (c *cli) events(args []string) error {
 
 // triggerNames lists what fires an event; a manual firing always can.
 func triggerNames(e config.Event) []string {
-	out := []string{"manual"}
+	out := []string{}
 	for _, t := range e.Triggers {
 		switch t.Type {
+		case config.TriggerManual:
+			out = append(out, "manual")
 		case config.TriggerCron:
 			out = append(out, "cron "+t.Schedule)
 		case config.TriggerWebhook:

@@ -47,13 +47,19 @@ events:
     params: [{name: ref, default: main}]
     command: ` + cmd + `
     env: {KICKD_CMD_HELPER: deploy}
+    triggers: [{type: manual}]
   - name: boom
     command: ` + cmd + `
     env: {KICKD_CMD_HELPER: boom}
-    triggers: [{type: cron, schedule: "@yearly"}]
+    triggers: [{type: cron, schedule: "@yearly"}, {type: manual}]
   - name: slow
     on_interrupt: rerun
     command: ` + cmd + `
     env: {KICKD_CMD_HELPER: slow}
+    triggers: [{type: manual}]
+  - name: nightly
+    command: ` + cmd + `
+    env: {KICKD_CMD_HELPER: deploy}
+    triggers: [{type: cron, schedule: "@daily"}]
 `
 }

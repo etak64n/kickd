@@ -39,3 +39,4 @@ events:
         debounce: 30s
       - type: cron
         schedule: '*/10 * * * *'
+      - type: manual

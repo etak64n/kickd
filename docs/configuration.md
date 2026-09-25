@@ -4,8 +4,8 @@
 
 kickd reads one YAML config file.
 The file defines **events**, which are named commands.
-An event can list **triggers**, which fire the event automatically: a cron schedule, a webhook, or changes in a directory.
-Every event can also be fired from the command line with `kickd event NAME`.
+An event lists **triggers**, the ways in which it fires: `kickd event NAME` on the command line, a cron schedule, a webhook, or changes in a directory.
+An event fires only through the triggers that it lists, and it can list several of them.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, the **agent**, starts the event's command for each run.
 
 ## Where kickd looks for the config file
@@ -42,6 +42,8 @@ database:
 events:
   - name: hello
     command: 'echo hello from kickd'
+    triggers:
+      - type: manual
 ```
 
 Without `log.path`, kickd writes its log to standard error.
@@ -90,6 +92,8 @@ This config defines two events:
 events:
   - name: hello
     command: 'echo hello from kickd'
+    triggers:
+      - type: manual
 
   - name: archive
     command: 'tar czf "$HOME/backup/notes-$(date +%Y%m%d).tgz" -C "$HOME" notes'
@@ -97,10 +101,12 @@ events:
       - type: cron
         schedule: '30 3 * * *'
         timezone: Asia/Tokyo
+      - type: manual
 ```
 
-`hello` has no triggers, so it runs only when fired with `kickd event hello`.
-`archive` fires every day at 3:30 Tokyo time from its cron trigger, and also with `kickd event archive`.
+`hello` has only a manual trigger, so it runs only when fired with `kickd event hello`.
+`archive` has two triggers: it fires every day at 3:30 Tokyo time, and with `kickd event archive`.
+An event without a manual trigger cannot be fired with `kickd event`, and an event without any trigger is an error in the config.
 
 `command` is a string or a list:
 
@@ -128,10 +134,14 @@ events:
   - name: deploy
     command: ['./deploy.sh']
     workdir: '~/app'
+    triggers:
+      - type: manual
   - name: convert
     command: ['ffmpeg', '-version']
     env:
       PATH: '/opt/homebrew/bin:${PATH}'
+    triggers:
+      - type: manual
 ```
 
 - **Working directory**: `workdir` is the directory in which the command runs. Without it, the command runs in the directory of the config file, whether kickd runs as a service or in a terminal. A program or script given with a relative path, such as `./deploy.sh`, starts at the working directory.
@@ -228,7 +238,7 @@ rsync gives the same result when it runs twice, which makes it safe to rerun.
 
 ## Example: a deploy fired by a webhook or by hand
 
-This event fires on a POST to `/hooks/deploy` and on `kickd event deploy`.
+This event has two triggers: it fires on a POST to `/hooks/deploy`, and on `kickd event deploy`.
 
 ```yaml
 webhook:
@@ -247,6 +257,7 @@ events:
         methods: [POST]
         token: 'replace-with-a-long-random-string'
         wait: true
+      - type: manual
 ```
 
 `params` declares the values that a firing can pass, called **parameters**.

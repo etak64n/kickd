@@ -30,14 +30,14 @@ The `agent` package connects the parts and reloads the config, and the `logging`
 
 Every firing takes the same path, whatever fired it:
 
-1. A trigger, or `kickd event`, builds the **payload**: the event name, the parameters, and the details of the trigger.
+1. The trigger builds the **payload**: the event name, the parameters, and the details of the trigger. For a manual trigger, `kickd event` builds it.
 2. The payload is inserted into the database as a run with the status `queued`. From this point, the firing survives a restart of the agent.
 3. The dispatcher reads the queued runs, oldest first. For each run, the event's `concurrency` setting decides whether the run starts, is skipped, or keeps waiting.
 4. The runner starts the command in a new process and waits for it to exit.
 5. The dispatcher writes the outcome to the database: the status, the exit code, the duration and the start of the output.
 
-Triggers run inside the agent, so a trigger inserts its run through the dispatcher and wakes it at once.
-`kickd event` runs in a process of its own and inserts the run into the database directly.
+Cron, webhook and file triggers run inside the agent, so they insert their runs through the dispatcher and wake it at once.
+`kickd event`, the command of manual triggers, runs in a process of its own and inserts the run into the database directly.
 The agent notices writes from other processes by checking the database every 0.2 seconds.
 
 A queue in a database, rather than in the memory of the agent, is what lets `kickd event` work while the agent is stopped, and lets waiting runs survive a crash.
