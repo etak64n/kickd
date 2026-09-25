@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -474,6 +475,29 @@ func TestLineWriterSplitsLines(t *testing.T) {
 	got := rec.find("Run output")
 	if len(got) != 3 || got[0]["text"] != "one" || got[1]["text"] != "two" || got[2]["text"] != "three" || got[0]["stream"] != "stdout" {
 		t.Fatalf("lines = %v", got)
+	}
+}
+
+// The stored output takes whole lines from each stream, so that a line of
+// standard error does not split a line of standard output.
+func TestCaptureKeepsLinesWhole(t *testing.T) {
+	capture := &capBuffer{limit: 1000}
+	stdout := &lineWriter{stream: "stdout", capture: capture}
+	stderr := &lineWriter{stream: "stderr", capture: capture}
+	stdout.Write([]byte("one\npay"))
+	stderr.Write([]byte("to std"))
+	stdout.Write([]byte("load={}"))
+	stderr.Write([]byte("err\n"))
+	stdout.Write([]byte("\ntwo"))
+	stdout.flush()
+	stderr.flush()
+	if got, want := capture.String(), "one\nto stderr\npayload={}\ntwo"; got != want {
+		t.Errorf("captured %q, want %q", got, want)
+	}
+	long := &lineWriter{stream: "stdout", capture: capture}
+	long.Write(bytes.Repeat([]byte("x"), maxLogLine+1))
+	if !strings.HasSuffix(capture.String(), "xxx") {
+		t.Error("a line longer than maxLogLine must reach the capture before its end")
 	}
 }
 

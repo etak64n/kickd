@@ -513,10 +513,21 @@ type lineWriter struct {
 	tail    *tailBuffer
 	emit    bool
 	buf     []byte
+	// pending is the end of the output that has no newline yet. The capture,
+	// which both streams share, takes whole lines, so that a line of one
+	// stream does not split a line of the other.
+	pending []byte
 }
 
 func (w *lineWriter) Write(p []byte) (int, error) {
-	w.capture.Write(p)
+	w.pending = append(w.pending, p...)
+	if i := bytes.LastIndexByte(w.pending, '\n'); i >= 0 {
+		w.capture.Write(w.pending[:i+1])
+		w.pending = append([]byte(nil), w.pending[i+1:]...)
+	} else if len(w.pending) > maxLogLine {
+		w.capture.Write(w.pending)
+		w.pending = nil
+	}
 	if w.tail != nil {
 		w.tail.Write(p)
 	}
@@ -540,6 +551,10 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 }
 
 func (w *lineWriter) flush() {
+	if len(w.pending) > 0 {
+		w.capture.Write(w.pending)
+		w.pending = nil
+	}
 	if len(w.buf) > 0 {
 		w.line(w.buf)
 		w.buf = nil
