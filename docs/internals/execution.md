@@ -43,7 +43,7 @@ With `stdin: payload`, the command reads the payload JSON from its standard inpu
 
 kickd connects the standard output and the standard error of the command to pipes, and reads both as data arrives:
 
-- **Stored output**: both streams go into one buffer in the order the data arrives, and kickd keeps the first 64 KB. The run record stores this buffer, and a webhook with `wait: true` returns it.
+- **Stored output**: both streams go into one buffer line by line, in the order in which the lines end, so a line of one stream never splits a line of the other. A line longer than 8 KB goes in before its end. kickd keeps the first 64 KB. The run record stores this buffer, and a webhook with `wait: true` returns it.
 - **Error tail**: kickd keeps the last 20 lines of standard error, up to 4 KB. The log record of a failed run carries them as `stderrTail`.
 - **Log records**: at the DEBUG level, every line of output becomes a `Run output` record, cut at 8 KB.
 
