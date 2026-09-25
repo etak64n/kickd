@@ -392,6 +392,7 @@ func (h *home) post(path, tok string) int {
 // record is one run as kickd runs --json prints it.
 type record struct {
 	ID         int64  `json:"runId"`
+	RequestID  string `json:"requestId"`
 	Event      string `json:"event"`
 	Trigger    string `json:"trigger"`
 	Attempt    int    `json:"attempt"`

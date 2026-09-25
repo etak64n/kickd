@@ -22,6 +22,9 @@ Each test writes the config of the README with `kickd init`, replaces the comman
 The tests check:
 
 - the triggers of the README config, and that only an event with a manual trigger can be fired by hand
+- file changes of every kind, directories created later, and `include`, `exclude`, `changes` and `recursive`
+- cron schedules in time zones with offsets of whole hours, half an hour and three quarters of an hour, and `missed: run` and `missed: skip` across a stop of kickd
+- the signature of a webhook with `secret`, parameters from the query, `wait: true`, and `methods`
 - the `concurrency` and `on_interrupt` settings, timeouts, `kickd cancel` and reloading
 - commands of many kinds: commands of the OS in a string, and programs in sh, Python, Node.js, Ruby, Perl, Rust, PowerShell and cmd
 - Japanese and spaces in paths, file names and parameters
