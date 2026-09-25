@@ -96,7 +96,7 @@ journalctl -u kickd -f
 ```
 
 `install` writes the unit file `/etc/systemd/system/kickd.service` and enables it, so the agent starts when Linux boots.
-When the agent process exits, systemd starts it again after 2 minutes.
+When the agent process exits, systemd starts it again after 5 seconds.
 After `systemctl stop`, systemd leaves it stopped.
 
 When the config file is saved, the agent reloads it.
@@ -112,11 +112,7 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 systemd also runs one instance for each logged-in user.
 A unit registered with a user's instance is called a **per-user unit**.
 A per-user unit runs with that user's permissions, and systemd sets `HOME` for it.
-`kickd service install --user` installs kickd as a per-user unit.
-
-kickd installs services with the kardianos/service library, which writes `WantedBy=multi-user.target` even into per-user units.
-A user's instance of systemd has no `multi-user.target`, so with this line the unit does not start automatically.
-After installing, change the line to `WantedBy=default.target` and enable the unit again.
+`kickd service install --user` installs kickd as a per-user unit: it writes `~/.config/systemd/user/kickd.service` and enables the unit, so the unit starts when the user's instance of systemd starts.
 
 A user's instance of systemd normally runs only while the user is logged in.
 `loginctl enable-linger` keeps it running from boot, whether or not the user is logged in.
@@ -125,11 +121,8 @@ A user's instance of systemd normally runs only while the user is logged in.
 kickd init
 "${EDITOR:-vi}" ~/.config/kickd/config.yaml
 kickd check
-kickd service install --user
-sed -i 's/^WantedBy=multi-user.target$/WantedBy=default.target/' ~/.config/systemd/user/kickd.service
-systemctl --user daemon-reload
-systemctl --user reenable kickd
 sudo loginctl enable-linger "$USER"
+kickd service install --user
 kickd service start --user
 journalctl --user -u kickd -f
 ```

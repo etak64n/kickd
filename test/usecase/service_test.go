@@ -47,7 +47,11 @@ func TestServiceSystem(t *testing.T) {
 		m.who = `nt authority\system`
 	}
 	m.cleanup(filepath.Dir(m.cfg), filepath.Dir(m.logFile), filepath.Dir(m.dbFile))
-	m.install(m.cfg, nil)
+	var installed func()
+	if runtime.GOOS == "linux" {
+		installed = func() { m.checkUnit("/etc/systemd/system/kickd.service", "multi-user.target") }
+	}
+	m.install(m.cfg, installed)
 	m.check()
 }
 
@@ -66,7 +70,7 @@ func TestServiceUser(t *testing.T) {
 	conf, _ := os.UserConfigDir()
 	m := &machine{t: t, env: os.Environ(), flags: []string{"--user"}, who: u.Username, home: home}
 	cfg := filepath.Join(conf, "kickd", "config.yaml")
-	var afterInstall func()
+	var installed func()
 	switch runtime.GOOS {
 	case "darwin":
 		m.logFile, m.dbFile = "~/Library/Logs/kickd/kickd.log", "~/Library/Application Support/kickd/kickd.db"
@@ -82,17 +86,27 @@ func TestServiceUser(t *testing.T) {
 			_, err := os.Stat(runtimeDir + "/bus")
 			return err == nil
 		})
-		// The steps of docs/install-linux.md after kickd service install --user.
-		afterInstall = func() {
-			unit := filepath.Join(home, ".config", "systemd", "user", "kickd.service")
-			m.must("sed", "-i", "s/^WantedBy=multi-user.target$/WantedBy=default.target/", unit)
-			m.must("systemctl", "--user", "daemon-reload")
-			m.must("systemctl", "--user", "reenable", "kickd")
+		installed = func() {
+			m.checkUnit(filepath.Join(home, ".config", "systemd", "user", "kickd.service"), "default.target")
 		}
 	}
 	m.cleanup(filepath.Dir(cfg), filepath.Dir(m.expand(m.logFile)), filepath.Dir(m.expand(m.dbFile)))
-	m.install(cfg, afterInstall)
+	m.install(cfg, installed)
 	m.check()
+}
+
+// checkUnit checks the unit file that kickd service install wrote on Linux:
+// systemd starts kickd again 5 seconds after it exits, and the unit is
+// enabled for target.
+func (m *machine) checkUnit(path, target string) {
+	m.t.Helper()
+	unit := m.read(path)
+	if !strings.Contains(unit, "\nRestartSec=5\n") || !strings.Contains(unit, "\nWantedBy="+target+"\n") {
+		m.t.Errorf("%s:\n%s", path, unit)
+	}
+	if out, _, _ := m.run("systemctl", append(m.flags, "is-enabled", "kickd")...); strings.TrimSpace(out) != "enabled" {
+		m.t.Errorf("systemctl is-enabled kickd: %q", out)
+	}
 }
 
 // machine runs the commands of a service test: with sudo for a service of
@@ -249,8 +263,9 @@ func (m *machine) cleanup(dirs ...string) {
 }
 
 // install writes the config with kickd init, replaces its events with one
-// that records who runs it, and installs and starts the service.
-func (m *machine) install(cfg string, afterInstall func()) {
+// that records who runs it, and installs and starts the service. installed,
+// when it is not nil, checks the installed service before it starts.
+func (m *machine) install(cfg string, installed func()) {
 	m.t.Helper()
 	m.mustKickd("init")
 	text := m.read(cfg)
@@ -272,8 +287,8 @@ func (m *machine) install(cfg string, afterInstall func()) {
 		"\n    triggers:\n      - type: webhook\n        path: '/hooks/whoami'\n        token: '"+token+"'\n")
 	m.mustKickd("check")
 	m.service("install")
-	if afterInstall != nil {
-		afterInstall()
+	if installed != nil {
+		installed()
 	}
 	m.service("start")
 }
@@ -314,7 +329,7 @@ func (m *machine) check() {
 	} else {
 		m.must("kill", "-9", strconv.Itoa(pid))
 	}
-	m.waitAgent(pid, "the service manager starts kickd again", 200*time.Second)
+	m.waitAgent(pid, "the service manager starts kickd again", 45*time.Second)
 	t.Logf("the service manager started kickd again %s after it was killed", time.Since(killed).Round(time.Second))
 
 	// The agent created its log and database where kickd init put them.

@@ -446,6 +446,7 @@ func serviceConfig(cfgPath, name string, user bool) *service.Config {
 	if user {
 		opts["UserService"] = true
 	}
+	opts["SystemdScript"] = systemdUnit(user)
 	return &service.Config{
 		Name:             name,
 		DisplayName:      name + " (event-driven command runner)",
@@ -454,6 +455,44 @@ func serviceConfig(cfgPath, name string, user bool) *service.Config {
 		WorkingDirectory: filepath.Dir(cfgPath),
 		Option:           opts,
 	}
+}
+
+// systemdUnit returns the template of the unit that kickd service install
+// writes on Linux: the template of kardianos/service v1.3.0 with two
+// changes. systemd starts kickd again 5 seconds after it exits, where the
+// original waits 120 seconds. A per-user unit is wanted by default.target,
+// because the systemd of a user has no multi-user.target, the target that
+// the original names.
+func systemdUnit(user bool) string {
+	target := "multi-user.target"
+	if user {
+		target = "default.target"
+	}
+	return `[Unit]
+Description={{Description}}
+ConditionFileIsExecutable={{Path | cmdEscape}}
+{{range Dependencies}}{{.}}
+{{end}}
+[Service]
+StartLimitInterval=5
+StartLimitBurst=10
+ExecStart={{Path | cmdEscape}}{{range Arguments}} {{. | cmd}}{{end}}
+{{if ChRoot}}RootDirectory={{ChRoot | cmd}}
+{{end}}{{if WorkingDirectory}}WorkingDirectory={{WorkingDirectory | cmdEscape}}
+{{end}}{{if UserName}}User={{UserName}}
+{{end}}{{if ReloadSignal}}ExecReload=/bin/kill -{{ReloadSignal}} "$MAINPID"
+{{end}}{{if PIDFile}}PIDFile={{PIDFile | cmd}}
+{{end}}{{if OutputFileSupport}}StandardOutput=file:{{LogDirectory}}/{{Name}}.out
+StandardError=file:{{LogDirectory}}/{{Name}}.err
+{{end}}{{if LimitNOFILE}}LimitNOFILE={{LimitNOFILE}}
+{{end}}{{if Restart}}Restart={{Restart}}
+{{end}}{{if SuccessExitStatus}}SuccessExitStatus={{SuccessExitStatus}}
+{{end}}RestartSec=5
+EnvironmentFile=-/etc/sysconfig/{{Name}}
+
+{{range EnvVars}}{{.}}
+{{end}}[Install]
+WantedBy=` + target + "\n"
 }
 
 // program adapts the agent to the service manager.

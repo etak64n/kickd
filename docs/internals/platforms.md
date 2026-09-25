@@ -55,9 +55,11 @@ kickd installs itself as a service through the kardianos/service library:
 | Definition | `~/Library/LaunchAgents/kickd.plist`, or `/Library/LaunchDaemons/kickd.plist` | `~/.config/systemd/user/kickd.service`, or `/etc/systemd/system/kickd.service` | An entry in the service database of Windows |
 | Account | The user, or root | The user, or root | SYSTEM |
 | Starts | At login, or at boot | At login, or at boot | At boot |
-| Restart after an exit | At once, but launchd starts a job at most once every 10 seconds | After 2 minutes, from `Restart=always` and `RestartSec=120` | After 5 seconds, from the recovery settings of the service |
+| Restart after an exit | At once, but launchd starts a job at most once every 10 seconds | After 5 seconds, from `Restart=always` and `RestartSec=5` | After 5 seconds, from the recovery settings of the service |
 | Working directory | The directory of the config file | The directory of the config file | `C:\Windows\System32` |
 | Output before the log file opens | `~/kickd.err.log`, or `/var/log/kickd.err.log` | journald | Not kept |
+
+On Linux, kickd writes the unit from its own template: the template of kardianos/service with `RestartSec=5` in place of `RestartSec=120`, and with `WantedBy=default.target` in a per-user unit, because the systemd of a user has no `multi-user.target`.
 
 The environment of a service differs from the environment of a terminal:
 
