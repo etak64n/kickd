@@ -61,7 +61,9 @@ func setupProcesses(t *testing.T) *home {
 	for _, e := range []struct{ name, script, extra string }{
 		{"spawn-quiet", "spawn-quiet", ""},
 		{"spawn-holding", "spawn-holding", ""},
-		{"tree-timeout", "tree", "    timeout: 2s\n"},
+		// The timeout leaves the script time to start its child and write
+		// its process ID, which PowerShell on a busy machine needs.
+		{"tree-timeout", "tree", "    timeout: 10s\n"},
 		{"tree-cancel", "tree", ""},
 	} {
 		file := e.script + ext
