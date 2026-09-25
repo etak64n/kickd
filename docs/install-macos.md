@@ -187,4 +187,5 @@ sudo kickd service start
 ```
 
 If kickd fails to start, the output is written to `/var/log/kickd.err.log`.
-The LaunchDaemon setup has not yet been tested on a real Mac.
+For every change, the CI of kickd sets up a LaunchDaemon this way on the macOS 26 machines of GitHub Actions, and a LaunchAgent as well.
+It fires an event, checks the user who runs the command, and checks that launchd starts kickd again after a crash.

@@ -11,7 +11,8 @@ SYSTEM is the account that Windows itself uses, and it has more privileges than 
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 
-These steps have not yet been tested on a real Windows machine.
+For every change, the CI of kickd follows these steps from `kickd init` on, on the Windows Server 2025 machines of GitHub Actions.
+It fires an event, checks that the command runs as SYSTEM, and checks that Windows starts kickd again after a crash.
 
 ## 1. Place the executable
 

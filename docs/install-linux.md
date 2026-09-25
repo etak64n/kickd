@@ -7,7 +7,8 @@ A unit is a definition file that tells systemd how to start, stop and restart a 
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 
-These steps have not yet been tested on a real Linux machine.
+For every change, the CI of kickd follows these steps from `kickd init` on, on the Ubuntu 24.04 machines of GitHub Actions, for both a system-wide unit and a per-user unit.
+It fires an event, checks the user who runs the command, and checks that systemd starts kickd again after a crash.
 
 ## 1. Place the executable
 
