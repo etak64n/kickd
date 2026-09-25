@@ -147,3 +147,20 @@ const ref = process.env.KICKD_DATA_REF ?? 'main';
 const payload = JSON.parse(readFileSync(process.env.KICKD_PAYLOAD_FILE, 'utf8'));
 console.log(`${payload.event}: run ${payload.runId}, ref ${ref}`);
 ```
+
+## Text other than ASCII on Windows
+
+The log, `kickd show` and the responses of webhooks read the output of a command as UTF-8.
+On Windows, several programs print text in the code page of the console instead, so letters such as Japanese ones arrive broken, unless the command asks for UTF-8:
+
+| Program | What makes it print UTF-8 |
+|---|---|
+| cmd | `chcp 65001 >nul` before the commands, as in `command: 'chcp 65001 >nul& echo %KICKD_DATA_MSG%'` |
+| PowerShell | `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at the start of the script |
+| Python | `PYTHONUTF8: '1'` in the `env` of the event |
+| Node.js, Ruby, Rust | Nothing: they print UTF-8 |
+
+Windows PowerShell 5.1 reads a file without a byte order mark in the code page of the system, so a script reads a UTF-8 file, such as the payload file, with `Get-Content -Encoding UTF8`.
+Perl on Windows gets its arguments in that code page as well, so it cannot open a script whose name has other letters.
+
+kickd passes paths, parameters and the names of changed files to the command as Unicode, so these settings concern only the text that a program prints.

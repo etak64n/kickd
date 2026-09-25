@@ -19,7 +19,16 @@ On all three OSes, it also runs the use-case tests, with every kind of command r
 
 The use-case tests in `test/usecase` run the kickd executable the way its users do.
 Each test writes the config of the README with `kickd init`, replaces the commands with small scripts, starts the agent, and fires the events through their triggers.
-The tests check the triggers, the `concurrency` and `on_interrupt` settings, timeouts, `kickd cancel`, reloading, and commands of many kinds: commands of the OS in a string, and programs in sh, Python, Node.js, Ruby, Perl, Rust, PowerShell and cmd.
+The tests check:
+
+- the triggers of the README config, and that only an event with a manual trigger can be fired by hand
+- the `concurrency` and `on_interrupt` settings, timeouts, `kickd cancel` and reloading
+- commands of many kinds: commands of the OS in a string, and programs in sh, Python, Node.js, Ruby, Perl, Rust, PowerShell and cmd
+- Japanese and spaces in paths, file names and parameters
+- processes that a command leaves running in the background, and the processes that a timeout or `kickd cancel` stops
+- the ways of running programs in [Running commands](commands.md): a virtual environment of Python, `npm run`, a program in the `PATH` of the event, and `stdin: payload`
+- the output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`
+
 They build only with the tag `usecase`:
 
 ```sh
