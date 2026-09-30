@@ -43,6 +43,93 @@ The long-running kickd process, called the **agent**, starts the command of each
 A run that has not started yet, such as one that waits for the previous run of its event, waits in the **queue**.
 The database is a file, so waiting runs survive a restart of the agent or of the machine.
 
+## Features
+
+- **Recovery after a stop or crash**: each event chooses whether a run that was cut off starts again or is given up.
+- **Overlap control**: each event chooses whether a firing that arrives while it is running is skipped, queued, or run at the same time.
+- **Time limits**: commands that run past their limit are stopped.
+- **Live reload**: saving the config file, or a file of events next to it, applies the change without a restart.
+- **Events in several files**: each group of events can have a YAML file of its own next to the config file.
+- **Queue commands**: the command line shows the queue and the run history, and cancels runs.
+- **Service installation**: kickd installs itself as a launchd job on macOS, a systemd unit on Linux and a Windows service on Windows.
+- **Structured logs**: JSON Lines in a log file, colored text on a terminal.
+
+## Installation
+
+Prebuilt executables are on the [releases page](https://github.com/etak64n/kickd/releases/latest).
+Each file is kickd for one platform, and needs no other files:
+
+| Machine | File |
+|---|---|
+| Mac with Apple silicon | `kickd-darwin-arm64` |
+| Mac with an Intel CPU | `kickd-darwin-amd64` |
+| Linux on x86-64 | `kickd-linux-amd64` |
+| Linux on 64-bit ARM | `kickd-linux-arm64` |
+| Windows on x64 | `kickd-windows-amd64.exe` |
+| Windows on ARM | `kickd-windows-arm64.exe` |
+
+The releases page shows the SHA-256 digest of every file.
+On Linux, these commands download kickd for x86-64, print its SHA-256 hash to compare with the digest on the page, and install it as `/usr/local/bin/kickd`:
+
+```sh
+curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-linux-amd64
+sha256sum kickd-linux-amd64
+sudo install -m 755 kickd-linux-amd64 /usr/local/bin/kickd
+```
+
+On a Mac, the same commands work with the file name for the Mac, and with `shasum -a 256` in place of `sha256sum`.
+
+With Go 1.25 or later, `go install` builds kickd from source instead.
+Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless Go is configured otherwise.
+
+```sh
+go install github.com/etak64n/kickd/cmd/kickd@latest
+```
+
+The installation guides for [macOS](docs/install-macos.md), [Linux](docs/install-linux.md) and [Windows](docs/install-windows.md) cover each OS in detail, including running kickd as a service.
+
+## Quick start
+
+With `kickd` installed, these steps define an event, run the agent and fire the event.
+
+1. In an empty directory, create a config file named `kickd.yaml` that defines one event, `hello`.
+   Without `database.path`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
+
+   ```yaml
+   events:
+     - name: hello
+       command: 'echo hello from kickd'
+       triggers:
+         - type: manual   # kickd event hello fires it
+   ```
+
+2. Start the agent in the foreground.
+   Ctrl+C stops it.
+
+   ```sh
+   kickd run -c kickd.yaml
+   ```
+
+3. In another terminal, fire the event.
+   With `--wait`, `kickd event` waits for the run to finish and prints the result.
+
+   ```sh
+   kickd event hello --wait -c kickd.yaml
+   ```
+
+   ```text
+   RUN  EVENT  ATTEMPT  STATUS     EXIT  DURATION  DETAIL
+   1    hello  1        succeeded  0     12ms      -
+   ```
+
+4. Show the run, including the output of its command.
+
+   ```sh
+   kickd show 1 -c kickd.yaml
+   ```
+
+To keep kickd running in the background, install it as a service by following the installation guide for the OS.
+
 ## The config file
 
 kickd reads its settings from `~/.kickd/config.yaml`, on every OS, and its events from the YAML files in `~/.kickd`.
@@ -244,92 +331,6 @@ Strings are in single quotes, which keep backslashes and double quotes as they a
 
 `kickd check` validates the config, lists the files whose events it reads, and prints the events with their triggers and where the log, the database and each command run.
 The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
-
-## Features
-
-- **Recovery after a stop or crash**: each event chooses whether a run that was cut off starts again or is given up.
-- **Overlap control**: each event chooses whether a firing that arrives while it is running is skipped, queued, or run at the same time.
-- **Time limits**: commands that run past their limit are stopped.
-- **Live reload**: saving the config file applies it without a restart.
-- **Queue commands**: the command line shows the queue and the run history, and cancels runs.
-- **Service installation**: kickd installs itself as a launchd job on macOS, a systemd unit on Linux and a Windows service on Windows.
-- **Structured logs**: JSON Lines in a log file, colored text on a terminal.
-
-## Installation
-
-Prebuilt executables are on the [releases page](https://github.com/etak64n/kickd/releases/latest).
-Each file is kickd for one platform, and needs no other files:
-
-| Machine | File |
-|---|---|
-| Mac with Apple silicon | `kickd-darwin-arm64` |
-| Mac with an Intel CPU | `kickd-darwin-amd64` |
-| Linux on x86-64 | `kickd-linux-amd64` |
-| Linux on 64-bit ARM | `kickd-linux-arm64` |
-| Windows on x64 | `kickd-windows-amd64.exe` |
-| Windows on ARM | `kickd-windows-arm64.exe` |
-
-The releases page shows the SHA-256 digest of every file.
-On Linux, these commands download kickd for x86-64, print its SHA-256 hash to compare with the digest on the page, and install it as `/usr/local/bin/kickd`:
-
-```sh
-curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-linux-amd64
-sha256sum kickd-linux-amd64
-sudo install -m 755 kickd-linux-amd64 /usr/local/bin/kickd
-```
-
-On a Mac, the same commands work with the file name for the Mac, and with `shasum -a 256` in place of `sha256sum`.
-
-With Go 1.25 or later, `go install` builds kickd from source instead.
-Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless Go is configured otherwise.
-
-```sh
-go install github.com/etak64n/kickd/cmd/kickd@latest
-```
-
-The installation guides for macOS, Linux and Windows cover each OS in detail, including running kickd as a service.
-
-## Quick start
-
-With `kickd` installed, these steps define an event, run the agent and fire the event.
-
-1. In an empty directory, create a config file named `kickd.yaml` that defines one event, `hello`.
-   Without `database.path`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
-
-   ```yaml
-   events:
-     - name: hello
-       command: 'echo hello from kickd'
-       triggers:
-         - type: manual   # kickd event hello fires it
-   ```
-
-2. Start the agent in the foreground.
-   Ctrl+C stops it.
-
-   ```sh
-   kickd run -c kickd.yaml
-   ```
-
-3. In another terminal, fire the event.
-   With `--wait`, `kickd event` waits for the run to finish and prints the result.
-
-   ```sh
-   kickd event hello --wait -c kickd.yaml
-   ```
-
-   ```text
-   RUN  EVENT  ATTEMPT  STATUS     EXIT  DURATION  DETAIL
-   1    hello  1        succeeded  0     12ms      -
-   ```
-
-4. Show the run, including the output of its command.
-
-   ```sh
-   kickd show 1 -c kickd.yaml
-   ```
-
-To keep kickd running in the background, install it as a service by following the installation guide for the OS.
 
 ## Documentation
 
