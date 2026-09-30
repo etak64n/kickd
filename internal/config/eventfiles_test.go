@@ -161,13 +161,13 @@ func TestLoadNamesTheFileOfAYAMLError(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsAnOldKeyInAFileOtherThanTheConfig(t *testing.T) {
+func TestLoadNamesTheFileOfAnUnknownKeyInAnotherFile(t *testing.T) {
 	dir := writeFiles(t, t.TempDir(), map[string]string{
 		"config.yaml": event("backup"),
-		"deploy.yaml": "events:\n  - name: deploy\n    shell: 'echo deploy'\n    triggers:\n      - type: manual\n",
+		"deploy.yaml": "events:\n  - name: deploy\n    comand: 'echo deploy'\n    triggers:\n      - type: manual\n",
 	})
 	_, err := Load(filepath.Join(dir, "config.yaml"))
-	if err == nil || !strings.Contains(err.Error(), "deploy.yaml: line 3: shell is gone") {
+	if err == nil || !strings.HasPrefix(err.Error(), filepath.Join(dir, "config.yaml")+": deploy.yaml: ") || !strings.Contains(err.Error(), "comand") {
 		t.Errorf("Load: %v", err)
 	}
 }
@@ -244,8 +244,6 @@ func homeDir(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("APPDATA", filepath.Join(dir, "AppData", "Roaming"))
 }
 
 func TestUserPathIsConfigYamlInTheKickdDirectoryOfTheHome(t *testing.T) {
@@ -261,19 +259,6 @@ func TestLoadOfAMissingConfigAtPathSaysThatInitWritesOne(t *testing.T) {
 	t.Setenv("ProgramData", t.TempDir()) // the folder of the config for the whole machine on Windows
 	if _, err := Load(Path()); err == nil || !strings.Contains(err.Error(), "kickd init writes an example there") {
 		t.Errorf("Load: %v", err)
-	}
-}
-
-func TestAMissingConfigOfAUserNamesTheConfigOfAnEarlierVersion(t *testing.T) {
-	homeDir(t, t.TempDir())
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		t.Skip(err)
-	}
-	old := filepath.Join(dir, "kickd", "config.yaml")
-	writeFiles(t, filepath.Dir(old), map[string]string{"config.yaml": event("backup")})
-	if err := missing(fs.ErrNotExist, false); !strings.Contains(err.Error(), "no longer from "+old) {
-		t.Errorf("missing: %v", err)
 	}
 }
 

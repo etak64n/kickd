@@ -258,10 +258,11 @@ The examples of [Running commands](../../docs/commands.md).
 
 ### The commands of kickd
 
-The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, which config file kickd reads and writes, and the flags that kickd v0.4 and earlier took.
+The output of `kickd check`, `events`, `status`, `history`, `show` and `help`, and which config file kickd reads and writes.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
+| `TestAnUnknownCommandSaysThatHelpListsTheCommands` | ✓ | ✓ | ✓ |
 | `TestCheckListsTheTriggersOfEachEvent` | ✓ | ✓ | ✓ |
 | `TestCheckPrintsWhereTheLogAndTheDatabaseGo` | ✓ | ✓ | ✓ |
 | `TestCheckRejectsAnEventWithoutTriggers` | ✓ | ✓ | ✓ |
@@ -272,6 +273,10 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, whi
 | `TestCommandsReadTheConfigInTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestEventRefusesAnEventWithoutAManualTrigger` | ✓ | ✓ | ✓ |
 | `TestEventsListsTheEventsWithTheirTriggers` | ✓ | ✓ | ✓ |
+| `TestHelpListsTheCommands` | ✓ | ✓ | ✓ |
+| `TestHelpOfACommandListsItsFlags` | ✓ | ✓ | ✓ |
+| `TestHistoryFiltersTheRunsByStatus` | ✓ | ✓ | ✓ |
+| `TestHistoryListsTheRunsThatWait` | ✓ | ✓ | ✓ |
 | `TestInitDoesNotOverwriteAConfig` | ✓ | ✓ | ✓ |
 | `TestInitOfAnAdministratorPutsTheLogAndTheDatabaseInProgramData` |  |  | ✓ |
 | `TestInitOfAnAdministratorWritesTheConfigIntoProgramData` |  |  | ✓ |
@@ -280,13 +285,10 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, whi
 | `TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestLicensesPrintTheLicenses` | ✓ | ✓ | ✓ |
 | `TestLogLevelInTheEnvironmentOverridesTheConfig` | ✓ | ✓ | ✓ |
-| `TestQueueShowsTheRunsThatWait` | ✓ | ✓ | ✓ |
-| `TestRunsFiltersTheHistoryByStatus` | ✓ | ✓ | ✓ |
 | `TestShowPrintsTheOutputOfARun` | ✓ | ✓ | ✓ |
 | `TestStatusReportsAStoppedAgent` | ✓ | ✓ |  |
 | `TestStatusReportsTheRunningAgent` | ✓ | ✓ | ✓ |
-| `TestTheConfigFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
-| `TestTheUserFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
+| `TestTheHelpFlagShowsTheHelpOfTheCommand` | ✓ | ✓ | ✓ |
 | `TestVersionPrintsTheVersion` | ✓ | ✓ | ✓ |
 
 ### Services

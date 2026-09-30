@@ -32,18 +32,11 @@ A service runs `kickd run` as the user of the service, so it reads the config fi
 - A LaunchAgent on macOS and a per-user unit of systemd on Linux run as the user who installed them, and read `~/.kickd/config.yaml` of that user.
 - A LaunchDaemon, a system-wide unit and the Windows service read the config for the whole machine.
 
-The commands that fire events and show runs, such as `kickd event` and `kickd runs`, find the database through the config file, so they reach the agent of the same user.
+The commands that fire events and show runs, such as `kickd event` and `kickd history`, find the database through the config file, so they reach the agent of the same user.
 `kickd event deploy` fires `deploy` of the kickd of the user, and `sudo kickd event deploy` fires `deploy` of the kickd for the whole machine.
 
 `kickd init` writes two example files next to the config file: `config.yaml`, and `event.example.yaml` with example events.
 `kickd check` prints the path of the config file that it read, and a command whose config file does not exist names the path that it looked for.
-
-Earlier versions of kickd read the config from the config directory of the OS, such as `~/Library/Application Support/kickd/config.yaml` on macOS and `~/.config/kickd/config.yaml` on Linux.
-When such a file exists and `~/.kickd/config.yaml` does not, kickd names the old file and asks to move it to `~/.kickd`.
-
-kickd v0.4 and earlier also took the path of a config file: from `-c` or `--config`, from the environment variable `KICKD_CONFIG`, and as `kickd.yaml` in the current directory.
-Later versions read only the files of the table, and a command given `-c` or `--config` fails with the path of the file that it reads.
-A service that v0.4 or earlier installed starts `kickd run --config`, so install the service again after upgrading, with `kickd service uninstall` and then `kickd service install`.
 
 ## Where the log and the database go
 

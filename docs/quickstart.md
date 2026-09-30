@@ -45,4 +45,5 @@ With `kickd` on the `PATH`, these steps define an event, run the agent in a term
    kickd show 1
    ```
 
+`kickd help` lists every subcommand, and `kickd help history` shows the flags of `kickd history`, which lists the runs.
 To keep kickd running in the background, install it as a service by following the guide for the OS: [macOS](install-macos.md), [Linux](install-linux.md) or [Windows](install-windows.md).

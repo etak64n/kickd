@@ -372,7 +372,7 @@ func (r run) line(key string) string {
 func (h *home) runs(event string) []run {
 	h.t.Helper()
 	var rs []run
-	if err := json.Unmarshal([]byte(h.must("runs", "--event", event, "--limit", "200", "--json")), &rs); err != nil {
+	if err := json.Unmarshal([]byte(h.must("history", "--event", event, "--limit", "200", "--json")), &rs); err != nil {
 		h.t.Fatal(err)
 	}
 	sort.Slice(rs, func(i, j int) bool { return rs[i].ID < rs[j].ID })

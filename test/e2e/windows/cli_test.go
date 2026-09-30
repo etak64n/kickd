@@ -117,7 +117,7 @@ func TestStatusReportsTheRunningAgent(t *testing.T) {
 	})
 }
 
-func TestQueueShowsTheRunsThatWait(t *testing.T) {
+func TestHistoryListsTheRunsThatWait(t *testing.T) {
 	h := newHome(t, "cli")
 	h.start()
 	for range 3 {
@@ -125,7 +125,7 @@ func TestQueueShowsTheRunsThatWait(t *testing.T) {
 	}
 	h.waitFor("one deploy runs and two wait", 30*time.Second, func() bool {
 		var q []run
-		if err := json.Unmarshal([]byte(h.must("queue", "--json")), &q); err != nil {
+		if err := json.Unmarshal([]byte(h.must("history", "--event", "deploy", "--json")), &q); err != nil {
 			t.Fatal(err)
 		}
 		n := map[string]int{}
@@ -138,27 +138,27 @@ func TestQueueShowsTheRunsThatWait(t *testing.T) {
 	})
 }
 
-func TestRunsFiltersTheHistoryByStatus(t *testing.T) {
+func TestHistoryFiltersTheRunsByStatus(t *testing.T) {
 	h := newHome(t, "cli")
 	h.start()
 	id := h.fire("backup")
 	h.waitForRun(id)
 	var succeeded, failed []run
-	if err := json.Unmarshal([]byte(h.must("runs", "--status", "succeeded", "--json")), &succeeded); err != nil {
+	if err := json.Unmarshal([]byte(h.must("history", "--status", "succeeded", "--json")), &succeeded); err != nil {
 		t.Fatal(err)
 	}
 	found := false
 	for _, r := range succeeded {
 		found = found || r.ID == id
 		if r.Status != "succeeded" {
-			t.Errorf("kickd runs --status succeeded lists run %d, which %s", r.ID, r.Status)
+			t.Errorf("kickd history --status succeeded lists run %d, which %s", r.ID, r.Status)
 		}
 	}
 	if !found {
-		t.Errorf("kickd runs --status succeeded does not list run %d: %v", id, succeeded)
+		t.Errorf("kickd history --status succeeded does not list run %d: %v", id, succeeded)
 	}
-	if err := json.Unmarshal([]byte(h.must("runs", "--status", "failed", "--json")), &failed); err != nil || len(failed) != 0 {
-		t.Errorf("kickd runs --status failed: %v %v", failed, err)
+	if err := json.Unmarshal([]byte(h.must("history", "--status", "failed", "--json")), &failed); err != nil || len(failed) != 0 {
+		t.Errorf("kickd history --status failed: %v %v", failed, err)
 	}
 }
 
@@ -230,21 +230,39 @@ func TestCommandsDoNotReadKickdYamlInTheCurrentDirectory(t *testing.T) {
 	}
 }
 
-func TestTheConfigFlagFailsWithTheReason(t *testing.T) {
+func TestHelpListsTheCommands(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("events", "-c", h.config())
-	if r.code != 2 || !strings.Contains(r.stderr, "kickd no longer takes -c: it reads "+h.config()) {
-		t.Errorf("kickd events -c: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("help")
+	if r.code != 0 || !strings.Contains(r.stdout, "\n  kickd history ") || !strings.Contains(r.stdout, "\n  kickd help ") {
+		t.Errorf("kickd help: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
 }
 
-func TestTheUserFlagFailsWithTheReason(t *testing.T) {
+func TestHelpOfACommandListsItsFlags(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("service", "install", "--user")
-	if r.code != 1 || !strings.Contains(r.stderr, "kickd no longer takes --user") {
-		t.Errorf("kickd service install --user: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("help", "history")
+	if r.code != 0 || !strings.HasPrefix(r.stdout, "Usage: kickd history ") || !strings.Contains(r.stdout, "  --limit N") {
+		t.Errorf("kickd help history: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+}
+
+func TestTheHelpFlagShowsTheHelpOfTheCommand(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "")
+	r := h.kickd("event", "--help")
+	if r.code != 0 || !strings.HasPrefix(r.stdout, "Usage: kickd event NAME ") {
+		t.Errorf("kickd event --help: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+}
+
+func TestAnUnknownCommandSaysThatHelpListsTheCommands(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "")
+	r := h.kickd("nope")
+	if r.code != 2 || !strings.Contains(r.stderr, `unknown command "nope"; kickd help lists the commands`) {
+		t.Errorf("kickd nope: exit %d\n%s", r.code, r.stderr)
 	}
 }
 

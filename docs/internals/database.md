@@ -13,7 +13,7 @@ kickd keeps runs in a database file, rather than in the memory of the agent, for
 
 - **Restarts**: a waiting run survives a stop, a crash and a reboot, because it is on disk.
 - **Sharing between processes**: `kickd event`, `kickd cancel` and the other subcommands work on the same records as the agent, without a network connection to it.
-- **History**: finished runs stay available to `kickd runs` and `kickd show`.
+- **History**: finished runs stay available to `kickd history` and `kickd show`.
 
 SQLite keeps a whole database in one file and needs no server process.
 kickd uses modernc.org/sqlite, a port of SQLite to Go generated from its C source, so kickd builds for every platform without a C compiler.
@@ -32,7 +32,7 @@ kickd opens the database with these settings:
 
 **WAL**, or write-ahead logging, is a SQLite mode in which a commit appends the changes to a second file, `kickd.db-wal`.
 SQLite later copies the changes into the database file.
-Readers keep reading the last committed state while a writer appends, so `kickd runs` does not wait for the agent.
+Readers keep reading the last committed state while a writer appends, so `kickd history` does not wait for the agent.
 
 Immediate transactions prevent a deadlock between processes.
 In the default mode, a SQLite transaction takes the write lock only at its first write.

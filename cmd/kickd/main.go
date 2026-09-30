@@ -29,42 +29,12 @@ import (
 	"github.com/etak64n/kickd/internal/logging"
 )
 
-const usageText = `kickd - run named events from cron, webhooks, file changes or the command line
-
-Usage:
-  kickd run                                Run the agent in the foreground, or as a service when started by one
-  kickd event   NAME [KEY=VALUE ...] [--data JSON] [--wait] [--timeout DURATION] [--json]
-                                           Fire an event; --wait waits for the run and exits 0 only if it succeeds
-  kickd events  [--json]                   List the events and what fires them
-  kickd queue   [--json]                   Show queued, running and interrupted runs
-  kickd runs    [--event NAME] [--status STATUS] [--limit N] [--json]
-                                           Show recent runs, newest first
-  kickd show    RUN_ID [--json]            Show one run, including its output
-  kickd cancel  RUN_ID                     Cancel a queued run, or stop a running one
-  kickd status  [--json]                   Show whether the agent is running and the queue size
-  kickd check                              Validate the config and print a summary
-  kickd init                               Write an example config and an example events file
-  kickd service ACTION                     Install or control the service that runs the agent
-                ACTION: install | uninstall | start | stop | restart | status
-  kickd licenses                           Print the licenses of kickd and of the software it includes
-  kickd version
-
-The user who runs kickd decides its config file:
-  ~/.kickd/config.yaml                            for a user
-  /etc/kickd/config.yaml                          for the whole machine: as root on Linux
-  /Library/Application Support/kickd/config.yaml  for the whole machine: as root on macOS
-  C:\ProgramData\kickd\config.yaml                for the whole machine: as an administrator on Windows
-kickd also reads the events of the other .yaml and .yml files next to the
-config file. kickd service works on the service of the user, or on the
-service of the whole machine as root or as an administrator.
-`
-
 func main() {
 	info, ok := debug.ReadBuildInfo()
 	version = resolveVersion(version, info, ok)
 	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usageText)
-		os.Exit(2)
+		fmt.Fprint(os.Stderr, usage())
+		os.Exit(exitUsage)
 	}
 	var err error
 	switch os.Args[1] {
@@ -76,27 +46,38 @@ func main() {
 		err = cmdInit(config.Path(), config.System(), os.Args[2:])
 	case "service":
 		err = cmdService(os.Args[2:])
-	case "event", "events", "queue", "runs", "show", "cancel", "status":
-		os.Exit(runOps(config.Path(), os.Args[1:], os.Stdout, os.Stderr))
 	case "licenses":
-		fmt.Print(licenses.Text)
+		err = noArgs("licenses", os.Args[2:])
+		if err == nil {
+			fmt.Print(licenses.Text)
+		}
 	case "version", "-v", "--version":
-		fmt.Println("kickd " + version)
+		err = noArgs("version", os.Args[2:])
+		if err == nil {
+			fmt.Println("kickd " + version)
+		}
 	case "help", "-h", "--help":
-		fmt.Print(usageText)
+		os.Exit(help(os.Args[2:], os.Stdout, os.Stderr))
 	default:
-		fmt.Fprintf(os.Stderr, "kickd: unknown command %q\n\n%s", os.Args[1], usageText)
-		os.Exit(2)
+		if !opsCommands[os.Args[1]] {
+			fmt.Fprintf(os.Stderr, "kickd: unknown command %q; kickd help lists the commands\n", os.Args[1])
+			os.Exit(exitUsage)
+		}
+		os.Exit(runOps(config.Path(), os.Args[1:], os.Stdout, os.Stderr))
 	}
 	if err != nil {
 		switch {
 		case errors.Is(err, flag.ErrHelp):
-			os.Exit(2)
+			os.Exit(exitOK)
 		case errors.Is(err, errLogged):
-			os.Exit(1)
+			os.Exit(exitFailed)
 		}
 		fmt.Fprintln(os.Stderr, "kickd:", err)
-		os.Exit(1)
+		var ue usageError
+		if errors.As(err, &ue) {
+			os.Exit(exitUsage)
+		}
+		os.Exit(exitFailed)
 	}
 }
 
@@ -104,21 +85,21 @@ func main() {
 // line, so it exits without printing it again.
 var errLogged = errors.New("failure already logged")
 
-// noArgs refuses the arguments of a command that takes none, and explains
-// the flags that earlier versions of kickd took.
+// noArgs refuses the arguments of a command that takes none. For --help,
+// it prints the help of the command and returns flag.ErrHelp.
 func noArgs(cmd string, args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	switch args[0] {
-	case "-h", "-help", "--help":
-		fmt.Print(usageText)
+	if isHelp(args[0]) {
+		text, err := commandHelp(strings.Fields(cmd)[0], nil)
+		if err != nil {
+			return err
+		}
+		fmt.Print(text)
 		return flag.ErrHelp
 	}
-	if msg := removedFlag(args[0]); msg != "" {
-		return errors.New(msg)
-	}
-	return fmt.Errorf("kickd %s takes no arguments: %s", cmd, strings.Join(args, " "))
+	return usageError{fmt.Sprintf("kickd %s takes no arguments: %s; kickd help %s shows its usage", cmd, strings.Join(args, " "), strings.Fields(cmd)[0])}
 }
 
 // sudo is the prefix of a kickd command that works on the config for the
@@ -422,13 +403,18 @@ func perUser() bool {
 }
 
 func cmdService(args []string) error {
+	if len(args) > 0 && isHelp(args[0]) {
+		return noArgs("service", args)
+	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		if len(args) > 0 && removedFlag(args[0]) != "" {
-			return errors.New(removedFlag(args[0]))
-		}
-		return errors.New("service action is required: install, uninstall, start, stop, restart, status")
+		return usageError{"kickd service needs an action: install, uninstall, start, stop, restart or status"}
 	}
 	action := args[0]
+	switch action {
+	case "install", "uninstall", "start", "stop", "restart", "status":
+	default:
+		return usageError{fmt.Sprintf("unknown service action %q; kickd help service lists the actions", action)}
+	}
 	if err := noArgs("service "+action, args[1:]); err != nil {
 		return err
 	}
@@ -462,10 +448,8 @@ func cmdService(args []string) error {
 		if action == "install" {
 			fmt.Printf("config: %s\nstart it with: %skickd service start\n", abs, sudo(!perUser()))
 		}
-		return nil
-	default:
-		return fmt.Errorf("unknown service action %q", action)
 	}
+	return nil
 }
 
 func statusName(st service.Status) string {

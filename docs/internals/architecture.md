@@ -4,7 +4,7 @@
 
 kickd is one Go executable.
 `kickd run` starts the long-running process, called the **agent**.
-The other subcommands, such as `kickd event` and `kickd runs`, are short-lived processes that read and write the same database as the agent.
+The other subcommands, such as `kickd event` and `kickd history`, are short-lived processes that read and write the same database as the agent.
 
 In kickd, a named command in the config file is an **event**, and a **trigger** fires an event.
 Each firing becomes a **run**, one execution of the event's command, recorded in the **database**, a SQLite file.

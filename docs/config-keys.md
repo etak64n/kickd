@@ -27,10 +27,6 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 - **Paths**: a leading `~` is the home directory, `${VAR}` is the value of the environment variable `VAR`, and a relative path starts at the directory of the config file. `kickd check` prints the resolved paths.
 - **Lists**: `[a, b]` on one line, or one `- ` item on each line.
 
-Earlier versions of kickd called `log.path` `log.file` and the `database` section `queue`, took a string command as `shell`, and, in v0.2.0, had a `base_dir` section for the directory of the log and the database.
-A config file with the old keys fails to load, with a message that gives the new key.
-Earlier versions also read the config file from the config directory of the OS, such as `~/Library/Application Support/kickd` on macOS, and when a file is still there and `~/.kickd/config.yaml` does not exist, kickd names the old file and asks to move it.
-
 ## Top-level keys
 
 | Key | Default | Description |

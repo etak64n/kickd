@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -55,29 +56,22 @@ func TestParseInterleavedFlags(t *testing.T) {
 	}
 }
 
-// The flags of kickd v0.4 and earlier that chose the config file and the
-// service fail with the reason.
-
-func TestParseExplainsThatTheConfigFlagIsGone(t *testing.T) {
-	fs := flag.NewFlagSet("event", flag.ContinueOnError)
-	for arg, flag := range map[string]string{"-c": "-c", "--config": "--config", "--config=x.yaml": "--config"} {
-		if _, err := parse(fs, []string{"deploy", arg, "x.yaml"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes "+flag+": it reads "+config.Path()) {
-			t.Errorf("%s: %v", arg, err)
-		}
+func TestServiceNeedsAnAction(t *testing.T) {
+	var ue usageError
+	if err := cmdService(nil); !errors.As(err, &ue) || !strings.Contains(err.Error(), "kickd service needs an action") {
+		t.Errorf("cmdService: %v", err)
 	}
 }
 
-func TestNoArgsExplainsThatTheUserAndNameFlagsAreGone(t *testing.T) {
-	if err := noArgs("service install", []string{"--user"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes --user") {
-		t.Errorf("--user: %v", err)
-	}
-	if err := noArgs("run", []string{"--name", "kickd"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes --name") {
-		t.Errorf("--name: %v", err)
+func TestServiceRefusesAnUnknownAction(t *testing.T) {
+	var ue usageError
+	if err := cmdService([]string{"instal"}); !errors.As(err, &ue) || !strings.Contains(err.Error(), `unknown service action "instal"; kickd help service lists the actions`) {
+		t.Errorf("cmdService: %v", err)
 	}
 }
 
 func TestNoArgsRefusesArguments(t *testing.T) {
-	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra" {
+	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra; kickd help check shows its usage" {
 		t.Errorf("noArgs: %v", err)
 	}
 }
@@ -88,8 +82,8 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code != 0 || !regexp.MustCompile(`^queued run 1 \(event deploy, request [0-9a-f]{16}\)\n$`).MatchString(out) || !strings.Contains(errOut, "the agent is not running") {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
 	}
-	if code, out, _ := ops(t, cfg, "queue"); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+1\s+queued`).MatchString(out) {
-		t.Errorf("queue: %d %q", code, out)
+	if code, out, _ := ops(t, cfg, "history", "--status", "queued"); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+queued`).MatchString(out) {
+		t.Errorf("history: %d %q", code, out)
 	}
 	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: has not started") || !strings.Contains(out, "1 queued") {
 		t.Errorf("status: %d %q", code, out)
@@ -169,8 +163,8 @@ func TestOpsWithAgent(t *testing.T) {
 	if code, out, _ := ops(t, cfg, "event", "boom", "--wait", "--json"); code != exitFailed || !strings.Contains(out, `"status": "failed"`) || !strings.Contains(out, `"exitCode": 7`) {
 		t.Errorf("failing wait: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, cfg, "runs", "--event", "boom"); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
-		t.Errorf("runs --event: %d %q", code, out)
+	if code, out, _ := ops(t, cfg, "history", "--event", "boom"); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
+		t.Errorf("history --event: %d %q", code, out)
 	}
 	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: running") {
 		t.Errorf("status: %d %q", code, out)

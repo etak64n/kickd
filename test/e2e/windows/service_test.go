@@ -169,7 +169,7 @@ func (s *service) waitForRequest(event, requestID string) run {
 	var id int64
 	waitFor(s.t, "the run of request "+requestID, 60*time.Second, func() bool {
 		var rs []run
-		if err := json.Unmarshal([]byte(s.mustKickd("runs", "--event", event, "--json")), &rs); err != nil {
+		if err := json.Unmarshal([]byte(s.mustKickd("history", "--event", event, "--json")), &rs); err != nil {
 			s.t.Fatal(err)
 		}
 		for _, r := range rs {

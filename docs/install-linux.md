@@ -60,7 +60,7 @@ database:
 
 kickd creates the directories when it first opens the files.
 With `sudo`, every kickd command reads the config for the whole machine and its database, which belongs to root.
-Run `kickd event` and the other commands with `sudo` as well, such as `sudo kickd event deploy` and `sudo kickd runs`.
+Run `kickd event` and the other commands with `sudo` as well, such as `sudo kickd event deploy` and `sudo kickd history`.
 
 systemd collects the standard error of units with **journald**, and `journalctl` reads what journald collected.
 Without `log.path`, kickd writes its log to standard error, so deleting the `path` line of `log` sends the log to journald.
