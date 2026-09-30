@@ -48,6 +48,7 @@ Pushing a tag whose name starts with `v` publishes a release: GitHub Actions run
 The documentation site is built from the Markdown files in `docs` with MkDocs and its Material theme, as `mkdocs.yml` sets.
 GitHub Actions builds the site for every pull request that changes the docs, and a broken link or a link to a missing heading fails the build.
 For every release, it publishes the site to GitHub Pages, at https://etak64n.github.io/kickd/, so that the site describes the released version.
+Running the Docs workflow by hand on GitHub publishes the site from the branch or tag that it runs on, such as `main` after a change of the docs alone.
 
 govulncheck, the vulnerability checker of the Go team, checks the dependencies and the Go standard library for every push to `main`, every pull request, and once a week.
 
