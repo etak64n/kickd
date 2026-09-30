@@ -1,5 +1,0 @@
-events:
-  - name: backup
-    command: ['./backup.sh']
-    triggers:
-      - type: manual

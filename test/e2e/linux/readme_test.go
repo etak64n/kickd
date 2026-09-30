@@ -24,7 +24,7 @@ func TestReadmeNotifyRunsByHand(t *testing.T) {
 	h := readme(t)
 	h.start()
 	r := h.waitForRun(h.fire("notify"))
-	if r.Status != "succeeded" || r.line("trigger") != "manual" || r.line("dir") != h.path("app") {
+	if r.Status != "succeeded" || r.line("trigger") != "manual" || r.line("dir") != h.inHome("app") {
 		t.Errorf("notify: %s %s\n%s", r.Status, r.Reason, r.Output)
 	}
 }
@@ -37,7 +37,7 @@ func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 		t.Fatalf("POST /hooks/deploy: %d %s", res.status, res.body)
 	}
 	r := h.waitForRuns("deploy", 1)[0]
-	if r.Status != "succeeded" || r.line("trigger") != "webhook" || r.line("dir") != h.path("app") {
+	if r.Status != "succeeded" || r.line("trigger") != "webhook" || r.line("dir") != h.inHome("app") {
 		t.Errorf("deploy: %s %s\n%s", r.Status, r.Reason, r.Output)
 	}
 }
@@ -56,9 +56,9 @@ func TestReadmeWebhookRefusesARequestWithoutTheToken(t *testing.T) {
 func TestReadmeBuildRunsWhenASourceFileChanges(t *testing.T) {
 	h := readme(t)
 	h.start()
-	h.write("app/src/util.c", "int util(void) { return 1; }\n")
+	h.writeFile(h.inHome("app", "src", "util.c"), "int util(void) { return 1; }\n")
 	r := h.waitForRuns("build", 1)[0]
-	if r.Status != "succeeded" || r.line("trigger") != "file" || r.line("file") != h.path("app", "src", "util.c") {
+	if r.Status != "succeeded" || r.line("trigger") != "file" || r.line("file") != h.inHome("app", "src", "util.c") {
 		t.Errorf("build: %s %s\n%s", r.Status, r.Reason, r.Output)
 	}
 }
@@ -67,7 +67,7 @@ func TestReadmeNotifyRunsWhenTheBackupFails(t *testing.T) {
 	h := readme(t)
 	h.start()
 	// ~/work does not exist, so rsync fails.
-	if _, err := os.Stat(h.path("work")); err == nil {
+	if _, err := os.Stat(h.inHome("work")); err == nil {
 		t.Fatal("~/work exists")
 	}
 	if r := h.waitForRun(h.fire("backup")); r.Status != "failed" {

@@ -1,0 +1,7 @@
+# Backs up every night, under the name of the event of config.yaml.
+events:
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'

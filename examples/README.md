@@ -3,9 +3,10 @@
 [Documentation index](../docs/index.md)
 
 Each file here is a complete kickd config for one task.
-Copy a file to the location of the config file, such as `/etc/kickd/config.yaml`, then adjust the paths and the commands.
+Copy a file to the config file of the kickd that runs it: `~/.kickd/config.yaml` for the kickd of a user, or the config for the whole machine, such as `/etc/kickd/config.yaml` on Linux, for a kickd that runs as root.
+Then adjust the paths and the commands.
 To add an example to an existing config, copy its `events` section into a file of its own next to the config file, such as `/etc/kickd/deploy.yaml`: kickd reads the events of every YAML file there, and the `log`, `webhook` and `database` sections stay in the config file.
-The comments at the top of each file say what the example needs and how to install the service.
+The comments at the top of each file say what the example needs, which config file it is written for, and how to install the service.
 The `log` and `database` sections at the top give the full paths of the log and the database of kickd.
 
 | File | What it does | Automatic triggers | Runs on |

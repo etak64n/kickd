@@ -10,7 +10,7 @@ func TestTheEnvOfTheEventExpandsTheVariablesOfKickd(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "env")
 	h.start()
-	got, want := h.waitForRun(h.fire("greet")).line("greeting"), "hello from "+h.dir
+	got, want := h.waitForRun(h.fire("greet")).line("greeting"), "hello from "+h.homeDir
 	if got != want {
 		t.Errorf("greeting=%s, want %s", got, want)
 	}

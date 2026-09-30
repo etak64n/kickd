@@ -1,0 +1,7 @@
+# Backs up every night, under the name of the event of config.yaml.
+events:
+  - name: backup
+    command: ['./backup.sh']
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'

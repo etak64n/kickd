@@ -31,7 +31,8 @@ The file gets the permissions 0600 on macOS and Linux, so only its owner can rea
 SQLite keeps two more files next to it, with `-wal` and `-shm` appended to the name, and kickd gives them the same permissions.
 
 The agent and every subcommand that uses the same config file use this database, so each of them must run as a user that can read and write it.
-A database that a service of the whole system created belongs to root, or to administrators and SYSTEM on Windows, so the subcommands for that service run with sudo or in an administrator shell.
+A database that kickd for the whole machine created belongs to root, or to administrators and SYSTEM on Windows.
+The subcommands for that kickd run with sudo, or in a PowerShell opened as administrator on Windows, which also makes them read the config for the whole machine.
 
 A change to `database.path` reaches the subcommands at once, because they read the config file each time they run, while the agent keeps the file that it opened.
 Until the agent starts again, `kickd event` writes its runs to the new file and the agent reads the old one, so restart the agent right after the change.
@@ -42,12 +43,12 @@ To keep them, stop the agent, move the file to the new path together with its `-
 `kickd check` prints the resolved path in its `database:` line.
 
 `kickd init` writes a `database.path` at the usual place of the OS.
-A config file inside the home directory is for a user's kickd, and one outside it is for a service of the whole system:
+Run by a user, it writes the config of that user, and run as root or as an administrator, it writes the config for the whole machine:
 
 | Config file | macOS | Linux | Windows |
 |---|---|---|---|
-| Inside the home directory | `~/.kickd/kickd.db` | `~/.kickd/kickd.db` | `~\.kickd\kickd.db` |
-| Outside the home directory | `/Library/Application Support/kickd/kickd.db` | `/var/lib/kickd/kickd.db` | `C:\ProgramData\kickd\kickd.db` |
+| Of a user | `~/.kickd/kickd.db` | `~/.kickd/kickd.db` | `~\.kickd\kickd.db` |
+| For the whole machine | `/Library/Application Support/kickd/kickd.db` | `/var/lib/kickd/kickd.db` | `C:\ProgramData\kickd\kickd.db` |
 
 ```yaml
 database:

@@ -45,14 +45,16 @@ Unblock-File 'C:\Program Files\kickd\kickd.exe'
 ## 2. Create the config file
 
 The kickd service runs the commands in its config as SYSTEM.
-Keep the config in `C:\ProgramData\kickd`, where only administrators can change it.
-With the default permissions, other users cannot change files that an administrator creates under `C:\ProgramData`.
-`kickd init` writes two files there: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+Run as an administrator, kickd reads the config for the whole machine, `C:\ProgramData\kickd\config.yaml`, which only administrators can change: with the default permissions, other users cannot change files that an administrator creates under `C:\ProgramData`.
+The steps from here on run in PowerShell opened as administrator.
+In a PowerShell that was not opened as administrator, kickd reads the config of the user, `~\.kickd\config.yaml`, instead.
+
+`kickd init` writes two files to `C:\ProgramData\kickd`: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
 
 ```powershell
-kickd init -c C:\ProgramData\kickd\config.yaml
+kickd init
 notepad C:\ProgramData\kickd\event.example.yaml
-kickd check -c C:\ProgramData\kickd\config.yaml
+kickd check
 ```
 
 The files are the Windows files of the README.
@@ -61,8 +63,9 @@ Their commands start the PowerShell scripts `backup.ps1`, `deploy.ps1`, `build.p
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.
-The config file is outside the home folder, so `kickd init` puts the database at `C:\ProgramData\kickd\kickd.db`, and the log at `C:\ProgramData\kickd\kickd.log`, next to the config file.
-A database created by the service belongs to administrators and SYSTEM, so run `kickd event` and the other commands that read or write it in an administrator PowerShell as well.
+For the config for the whole machine, `kickd init` puts the database at `C:\ProgramData\kickd\kickd.db`, and the log at `C:\ProgramData\kickd\kickd.log`, next to the config file.
+A database created by the service belongs to administrators and SYSTEM.
+In PowerShell opened as administrator, every kickd command reads the config for the whole machine and this database, so run `kickd event` and the other commands there, such as `kickd event notify` and `kickd runs`.
 
 Write Windows paths in single quotes, as the examples do: in single quotes, a backslash (`\`) is an ordinary character.
 In double quotes, a backslash starts an escape sequence, so a double-quoted `C:\Data\Import` fails to load with `found unknown escape character`.
@@ -78,7 +81,7 @@ path: C:/Data/Import
 ## 3. Try it in the foreground
 
 ```powershell
-kickd run -c C:\ProgramData\kickd\config.yaml
+kickd run
 ```
 
 Ctrl+C stops it.
@@ -98,7 +101,7 @@ The service runs them as SYSTEM, so an event that works in the foreground can be
 In PowerShell opened as administrator:
 
 ```powershell
-kickd service install -c C:\ProgramData\kickd\config.yaml
+kickd service install
 kickd service start
 kickd service status
 ```
@@ -114,8 +117,7 @@ Windows gives kickd no reliable signal to ask a command to exit, so the commands
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
-Windows has no per-user form of service.
-kickd ignores `--user` on Windows and installs a service that runs as SYSTEM.
+Windows has no per-user form of service, so `kickd service` needs PowerShell opened as administrator, and it works on the service that runs as SYSTEM.
 
 ## Uninstalling the service
 

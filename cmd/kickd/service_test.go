@@ -10,7 +10,7 @@ import (
 // user.
 func TestServiceConfigSystemdUnit(t *testing.T) {
 	for _, user := range []bool{false, true} {
-		c := serviceConfig("/etc/kickd/config.yaml", "kickd", user)
+		c := serviceConfig("/etc/kickd/config.yaml", user)
 		unit, _ := c.Option["SystemdScript"].(string)
 		want := "WantedBy=multi-user.target\n"
 		if user {

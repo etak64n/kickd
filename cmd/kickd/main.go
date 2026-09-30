@@ -32,7 +32,7 @@ import (
 const usageText = `kickd - run named events from cron, webhooks, file changes or the command line
 
 Usage:
-  kickd run     [-c CONFIG] [--name NAME]   Run the agent in the foreground, or as a service when started by one
+  kickd run                                Run the agent in the foreground, or as a service when started by one
   kickd event   NAME [KEY=VALUE ...] [--data JSON] [--wait] [--timeout DURATION] [--json]
                                            Fire an event; --wait waits for the run and exits 0 only if it succeeds
   kickd events  [--json]                   List the events and what fires them
@@ -42,17 +42,21 @@ Usage:
   kickd show    RUN_ID [--json]            Show one run, including its output
   kickd cancel  RUN_ID                     Cancel a queued run, or stop a running one
   kickd status  [--json]                   Show whether the agent is running and the queue size
-  kickd check   [-c CONFIG]                Validate the config and print a summary
-  kickd init    [-c CONFIG]                Write an example config and an example events file
-  kickd service ACTION [-c CONFIG] [--user] [--name NAME]
+  kickd check                              Validate the config and print a summary
+  kickd init                               Write an example config and an example events file
+  kickd service ACTION                     Install or control the service that runs the agent
                 ACTION: install | uninstall | start | stop | restart | status
   kickd licenses                           Print the licenses of kickd and of the software it includes
   kickd version
 
-Every command takes -c CONFIG. The config is found in this order:
--c, $KICKD_CONFIG, ~/.kickd/config.yaml, ./kickd.yaml
+The user who runs kickd decides its config file:
+  ~/.kickd/config.yaml                            for a user
+  /etc/kickd/config.yaml                          for the whole machine: as root on Linux
+  /Library/Application Support/kickd/config.yaml  for the whole machine: as root on macOS
+  C:\ProgramData\kickd\config.yaml                for the whole machine: as an administrator on Windows
 kickd also reads the events of the other .yaml and .yml files next to the
-config file.
+config file. kickd service works on the service of the user, or on the
+service of the whole machine as root or as an administrator.
 `
 
 func main() {
@@ -67,13 +71,13 @@ func main() {
 	case "run":
 		err = cmdRun(os.Args[2:])
 	case "check":
-		err = cmdCheck(os.Args[2:])
+		err = cmdCheck(config.Path(), os.Args[2:])
 	case "init":
-		err = cmdInit(os.Args[2:])
+		err = cmdInit(config.Path(), config.System(), os.Args[2:])
 	case "service":
 		err = cmdService(os.Args[2:])
 	case "event", "events", "queue", "runs", "show", "cancel", "status":
-		os.Exit(runOps(os.Args[1:], os.Stdout, os.Stderr))
+		os.Exit(runOps(config.Path(), os.Args[1:], os.Stdout, os.Stderr))
 	case "licenses":
 		fmt.Print(licenses.Text)
 	case "version", "-v", "--version":
@@ -100,22 +104,40 @@ func main() {
 // line, so it exits without printing it again.
 var errLogged = errors.New("failure already logged")
 
-func newFlags(name string) (*flag.FlagSet, *string) {
-	fs := flag.NewFlagSet("kickd "+name, flag.ContinueOnError)
-	cfg := fs.String("config", "", "config file path")
-	fs.StringVar(cfg, "c", "", "config file path (shorthand)")
-	return fs, cfg
+// noArgs refuses the arguments of a command that takes none, and explains
+// the flags that earlier versions of kickd took.
+func noArgs(cmd string, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	switch args[0] {
+	case "-h", "-help", "--help":
+		fmt.Print(usageText)
+		return flag.ErrHelp
+	}
+	if msg := removedFlag(args[0]); msg != "" {
+		return errors.New(msg)
+	}
+	return fmt.Errorf("kickd %s takes no arguments: %s", cmd, strings.Join(args, " "))
+}
+
+// sudo is the prefix of a kickd command that works on the config for the
+// whole machine: sudo on macOS and Linux. On Windows, the same PowerShell
+// opened as administrator runs it.
+func sudo(system bool) string {
+	if system && runtime.GOOS != "windows" {
+		return "sudo "
+	}
+	return ""
 }
 
 func cmdRun(args []string) error {
-	fs, cfgFlag := newFlags("run")
-	name := fs.String("name", "kickd", "service name (must match the installed service)")
-	if err := fs.Parse(args); err != nil {
+	if err := noArgs("run", args); err != nil {
 		return err
 	}
 	procID := event.NewID()
 	interactive := service.Interactive()
-	cfgPath := config.Resolve(*cfgFlag)
+	cfgPath := config.Path()
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		// The log settings live in the config, so this line uses the
@@ -162,7 +184,7 @@ func cmdRun(args []string) error {
 		}
 		return nil
 	}
-	svc, err := service.New(&program{logger: logger, opts: opts}, serviceConfig(cfg.Path, *name, false))
+	svc, err := service.New(&program{logger: logger, opts: opts}, serviceConfig(cfg.Path, perUser()))
 	if err != nil {
 		plog.Log(context.Background(), logging.LevelFatal, "Service setup failed", logging.Err(err), "exitCode", 1)
 		return errLogged
@@ -187,12 +209,11 @@ func fatal(procID string, o logging.Options, msg string, err error, kv ...any) {
 	logger.Log(context.Background(), logging.LevelFatal, msg, args...)
 }
 
-func cmdCheck(args []string) error {
-	fs, cfgFlag := newFlags("check")
-	if err := fs.Parse(args); err != nil {
+func cmdCheck(path string, args []string) error {
+	if err := noArgs("check", args); err != nil {
 		return err
 	}
-	cfg, err := config.Load(config.Resolve(*cfgFlag))
+	cfg, err := config.Load(path)
 	if err != nil {
 		return err
 	}
@@ -360,17 +381,12 @@ func orDash(s string) string {
 	return s
 }
 
-func cmdInit(args []string) error {
-	fs, cfgFlag := newFlags("init")
-	if err := fs.Parse(args); err != nil {
+// cmdInit writes the example config to path, and the example events next
+// to it, with the log and the database of a service of the whole machine
+// when system is true.
+func cmdInit(path string, system bool, args []string) error {
+	if err := noArgs("init", args); err != nil {
 		return err
-	}
-	path := *cfgFlag
-	if path == "" {
-		path = os.Getenv("KICKD_CONFIG")
-	}
-	if path == "" {
-		path = config.DefaultPath()
 	}
 	events := filepath.Join(filepath.Dir(path), config.ExampleEventsName)
 	for _, p := range []string{path, events} {
@@ -381,7 +397,6 @@ func cmdInit(args []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	system := initForSystem(path)
 	if err := os.WriteFile(path, []byte(config.ExampleConfig(runtime.GOOS, system)), 0o600); err != nil {
 		return err
 	}
@@ -392,49 +407,42 @@ func cmdInit(args []string) error {
 	fmt.Printf("wrote %s\n", path)
 	fmt.Printf("wrote %s\n", events)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
-	fmt.Printf("Edit them, then run: kickd check -c %s\n", path)
+	fmt.Printf("Edit them, then run: %skickd check\n", sudo(system))
 	fmt.Println("kickd reads the events of every .yaml and .yml file next to the config file.")
 	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
 	return nil
 }
 
-// initForSystem reports whether a config file at path is for a service of
-// the whole system: a file outside the home directory, such as
-// /etc/kickd/config.yaml or C:\ProgramData\kickd\config.yaml.
-func initForSystem(path string) bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return true
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return true
-	}
-	rel, err := filepath.Rel(home, abs)
-	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+// perUser reports whether kickd service works on the service of the user
+// who runs kickd: a LaunchAgent on macOS or a unit of the systemd of the
+// user on Linux. As root, it works on the service of the whole machine,
+// and Windows has only the service of the whole machine.
+func perUser() bool {
+	return runtime.GOOS != "windows" && !config.System()
 }
 
 func cmdService(args []string) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		if len(args) > 0 && removedFlag(args[0]) != "" {
+			return errors.New(removedFlag(args[0]))
+		}
 		return errors.New("service action is required: install, uninstall, start, stop, restart, status")
 	}
 	action := args[0]
-	fs, cfgFlag := newFlags("service " + action)
-	user := fs.Bool("user", false, "per-user service (macOS LaunchAgent, systemd --user)")
-	name := fs.String("name", "kickd", "service name")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := noArgs("service "+action, args[1:]); err != nil {
 		return err
 	}
-	abs, err := filepath.Abs(config.Resolve(*cfgFlag))
-	if err != nil {
-		return err
+	if runtime.GOOS == "windows" && !config.System() {
+		return fmt.Errorf("kickd service needs a PowerShell opened as administrator: the Windows service runs as SYSTEM, with the config file %s",
+			filepath.Join(config.SystemDir(runtime.GOOS), "config.yaml"))
 	}
+	abs := config.Path()
 	if action == "install" {
 		if _, err := config.Load(abs); err != nil {
 			return fmt.Errorf("config must be valid before installing: %w", err)
 		}
 	}
-	svc, err := service.New(&program{}, serviceConfig(abs, *name, *user))
+	svc, err := service.New(&program{}, serviceConfig(abs, perUser()))
 	if err != nil {
 		return err
 	}
@@ -444,24 +452,15 @@ func cmdService(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s: %s\n", *name, statusName(st))
+		fmt.Printf("%s: %s\n", serviceName, statusName(st))
 		return nil
 	case "install", "uninstall", "start", "stop", "restart":
 		if err := service.Control(svc, action); err != nil {
 			return err
 		}
-		fmt.Printf("%s: %s done\n", *name, action)
+		fmt.Printf("%s: %s done\n", serviceName, action)
 		if action == "install" {
-			// Later service commands must repeat --user and --name to find
-			// the same service definition.
-			flags := ""
-			if *user {
-				flags += " --user"
-			}
-			if *name != "kickd" {
-				flags += " --name " + *name
-			}
-			fmt.Printf("config: %s\nstart it with: kickd service start%s\n", abs, flags)
+			fmt.Printf("config: %s\nstart it with: %skickd service start\n", abs, sudo(!perUser()))
 		}
 		return nil
 	default:
@@ -480,7 +479,13 @@ func statusName(st service.Status) string {
 	}
 }
 
-func serviceConfig(cfgPath, name string, user bool) *service.Config {
+// serviceName is the name of the service that kickd service installs.
+const serviceName = "kickd"
+
+// serviceConfig describes the service that runs "kickd run" on the config
+// file at cfgPath: the service of the user when user is true, and the
+// service of the whole machine otherwise.
+func serviceConfig(cfgPath string, user bool) *service.Config {
 	opts := service.KeyValue{
 		"Restart":                "always",  // systemd
 		"ReloadSignal":           "HUP",     // systemd: systemctl reload
@@ -495,10 +500,10 @@ func serviceConfig(cfgPath, name string, user bool) *service.Config {
 	}
 	opts["SystemdScript"] = systemdUnit(user)
 	return &service.Config{
-		Name:             name,
-		DisplayName:      name + " (event-driven command runner)",
+		Name:             serviceName,
+		DisplayName:      serviceName + " (event-driven command runner)",
 		Description:      "Runs configured commands on file changes, cron schedules and webhooks.",
-		Arguments:        []string{"run", "--config", cfgPath, "--name", name},
+		Arguments:        []string{"run"},
 		WorkingDirectory: filepath.Dir(cfgPath),
 		Option:           opts,
 	}

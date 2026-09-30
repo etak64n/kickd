@@ -8,23 +8,42 @@ An event lists **triggers**, the ways in which it fires: `kickd event NAME` on t
 An event fires only through the triggers that it lists, and it can list several of them.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, the **agent**, starts the event's command for each run.
 
-## Where kickd looks for the config file
+## Which config file kickd reads
 
-kickd uses the first of these that applies:
+The user who runs kickd decides which config file it reads, and every kickd command of that user reads the same file:
 
-1. The file given with `-c` or `--config`
-2. The file named by the environment variable `KICKD_CONFIG`
-3. `~/.kickd/config.yaml`, if it exists
-4. `kickd.yaml` in the current directory, if it exists
+| Who runs kickd | Config file |
+|---|---|
+| A user: without `sudo` on macOS and Linux, and in a PowerShell not opened as administrator on Windows | `~/.kickd/config.yaml` |
+| root on Linux: with `sudo`, and as a system-wide unit of systemd | `/etc/kickd/config.yaml` |
+| root on macOS: with `sudo`, and as a LaunchDaemon | `/Library/Application Support/kickd/config.yaml` |
+| An administrator on Windows: in a PowerShell opened as administrator, and as the Windows service | `C:\ProgramData\kickd\config.yaml` |
 
-`~/.kickd` is the directory `.kickd` in the home directory on every OS, `%USERPROFILE%\.kickd` on Windows.
-Without `-c`, `kickd init` writes two example files there: `config.yaml`, and `event.example.yaml` with example events.
+`~/.kickd` is the directory `.kickd` in the home directory, `%USERPROFILE%\.kickd` on Windows.
+On Windows, `C:\ProgramData` is the folder that the environment variable `ProgramData` names, which is `C:\ProgramData` unless Windows was set up otherwise.
+
+The config file of root and of administrators is the **config for the whole machine**.
+kickd for the whole machine runs the commands of its config as root, or as SYSTEM on Windows.
+Any program that runs as a user can change the files in the home directory of that user, so a config for the whole machine there would let such a program run commands as root.
+Only root and administrators can change the files in the directories of the config for the whole machine.
+
+A service runs `kickd run` as the user of the service, so it reads the config file of that user:
+
+- A LaunchAgent on macOS and a per-user unit of systemd on Linux run as the user who installed them, and read `~/.kickd/config.yaml` of that user.
+- A LaunchDaemon, a system-wide unit and the Windows service read the config for the whole machine.
+
+The commands that fire events and show runs, such as `kickd event` and `kickd runs`, find the database through the config file, so they reach the agent of the same user.
+`kickd event deploy` fires `deploy` of the kickd of the user, and `sudo kickd event deploy` fires `deploy` of the kickd for the whole machine.
+
+`kickd init` writes two example files next to the config file: `config.yaml`, and `event.example.yaml` with example events.
+`kickd check` prints the path of the config file that it read, and a command whose config file does not exist names the path that it looked for.
 
 Earlier versions of kickd read the config from the config directory of the OS, such as `~/Library/Application Support/kickd/config.yaml` on macOS and `~/.config/kickd/config.yaml` on Linux.
 When such a file exists and `~/.kickd/config.yaml` does not, kickd names the old file and asks to move it to `~/.kickd`.
 
-A kickd installed as a service reads the config file whose absolute path was recorded when the service was installed.
-After moving the config file, uninstall the service and install it again.
+kickd v0.4 and earlier also took the path of a config file: from `-c` or `--config`, from the environment variable `KICKD_CONFIG`, and as `kickd.yaml` in the current directory.
+Later versions read only the files of the table, and a command given `-c` or `--config` fails with the path of the file that it reads.
+A service that v0.4 or earlier installed starts `kickd run --config`, so install the service again after upgrading, with `kickd service uninstall` and then `kickd service install`.
 
 ## Where the log and the database go
 
@@ -46,16 +65,16 @@ events:
 Without `log.path`, kickd writes its log to standard error.
 Without `database.path`, the database is `kickd.db` in the directory of the config file.
 
-`kickd init` writes these paths for a config file inside the home directory, which is for a user's kickd, on every OS.
-A config file outside the home directory, such as `/etc/kickd/config.yaml`, is for a service of the whole system, and gets the usual places of the OS for such a service:
+`kickd init` writes these paths when a user runs it, on every OS.
+Run as root or as an administrator, `kickd init` writes the config for the whole machine, with the usual places of the OS for a service of the whole machine:
 
-| OS | Use | Log | Database |
+| OS | Config | Log | Database |
 |---|---|---|---|
-| macOS and Linux | A user | `~/.kickd/kickd.log` | `~/.kickd/kickd.db` |
-| Windows | A user | `~\.kickd\kickd.log` | `~\.kickd\kickd.db` |
-| macOS | The whole system | `/Library/Logs/kickd/kickd.log` | `/Library/Application Support/kickd/kickd.db` |
-| Linux | The whole system | `/var/log/kickd/kickd.log` | `/var/lib/kickd/kickd.db` |
-| Windows | The whole system | `C:\ProgramData\kickd\kickd.log` | `C:\ProgramData\kickd\kickd.db` |
+| macOS and Linux | Of a user | `~/.kickd/kickd.log` | `~/.kickd/kickd.db` |
+| Windows | Of a user | `~\.kickd\kickd.log` | `~\.kickd\kickd.db` |
+| macOS | For the whole machine | `/Library/Logs/kickd/kickd.log` | `/Library/Application Support/kickd/kickd.db` |
+| Linux | For the whole machine | `/var/log/kickd/kickd.log` | `/var/lib/kickd/kickd.db` |
+| Windows | For the whole machine | `C:\ProgramData\kickd\kickd.log` | `C:\ProgramData\kickd\kickd.db` |
 
 A user's kickd keeps its config, its events, its log and its database in `~/.kickd`, so one directory holds everything that it reads and writes.
 `kickd check` prints the resolved paths of the log and the database.
@@ -66,13 +85,6 @@ The events of a config file are written for one OS.
 The shell differs, `/bin/sh` on macOS and Linux and cmd on Windows, and so do the programs that commands call and the absolute paths of folders.
 kickd does not translate commands between operating systems, so each OS gets a config of its own.
 `kickd init` writes an example for the OS that it runs on: with shell commands on macOS and Linux, and with PowerShell scripts on Windows.
-
-To keep the configs of several machines in one place, such as a repository of dotfiles, give each OS a directory of its own, because kickd reads every YAML file next to the config file.
-`-c` or `KICKD_CONFIG` then names the config file for the machine:
-
-```sh
-kickd run -c ~/dotfiles/kickd/macos/config.yaml
-```
 
 A few things already work the same on every OS:
 

@@ -16,9 +16,10 @@ windows/   the tests on Windows: PowerShell scripts and batch files, and kickd a
 In each package:
 
 - `kickd_test.go` builds kickd and holds the harness: a home directory for each test, and helpers that run kickd and read its runs.
-- `testdata/` holds a directory for each config: `kickd.yaml`, and the scripts and files of its events, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` on Windows.
+- `testdata/` holds a directory for each config, laid out as a home directory: the config file `.kickd/config.yaml`, and the scripts and files of its events next to it, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` on Windows.
+- The tests on Windows run as an administrator, as the runners of GitHub Actions do, and kickd reads the config file of an administrator from the folder `kickd` of `ProgramData`. The folder of a test is also the `ProgramData` folder of its kickd, so the config file of a Windows test is `kickd\config.yaml`.
 - In the configs of `testdata/cron` and `testdata/cron-missed`, `{{at "ZONE"}}` stands for a cron schedule 25 seconds after the test starts, in the time zone ZONE.
-- kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: `edits/kickd.edited.yaml` and `edits/kickd.broken.yaml` are edits of a `kickd.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
+- kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: `edits/config.edited.yaml` and `edits/config.broken.yaml` are edits of a `config.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
 
 ## Running the tests
 
@@ -257,7 +258,7 @@ The examples of [Running commands](../../docs/commands.md).
 
 ### The commands of kickd
 
-The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, and where kickd finds and writes its config.
+The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, which config file kickd reads and writes, and the flags that kickd v0.4 and earlier took.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -265,14 +266,18 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, and
 | `TestCheckPrintsWhereTheLogAndTheDatabaseGo` | ✓ | ✓ | ✓ |
 | `TestCheckRejectsAnEventWithoutTriggers` | ✓ | ✓ | ✓ |
 | `TestCheckSaysThatWebhooksAreOffWhenWebhookEnabledIsFalse` | ✓ | ✓ | ✓ |
-| `TestCommandsFindKickdYamlInTheCurrentDirectory` | ✓ | ✓ | ✓ |
+| `TestCommandsDoNotReadKickdYamlInTheCurrentDirectory` | ✓ | ✓ | ✓ |
+| `TestCommandsOfAnAdministratorDoNotReadTheConfigInTheHomeFolder` |  |  | ✓ |
+| `TestCommandsOfAnAdministratorReadTheConfigInProgramData` |  |  | ✓ |
+| `TestCommandsReadTheConfigInTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestEventRefusesAnEventWithoutAManualTrigger` | ✓ | ✓ | ✓ |
 | `TestEventsListsTheEventsWithTheirTriggers` | ✓ | ✓ | ✓ |
 | `TestInitDoesNotOverwriteAConfig` | ✓ | ✓ | ✓ |
-| `TestInitPutsTheLogAndTheDatabaseInTheKickdDirectory` | ✓ | ✓ | ✓ |
+| `TestInitOfAnAdministratorPutsTheLogAndTheDatabaseInProgramData` |  |  | ✓ |
+| `TestInitOfAnAdministratorWritesTheConfigIntoProgramData` |  |  | ✓ |
+| `TestInitPutsTheLogAndTheDatabaseInTheKickdDirectory` | ✓ | ✓ |  |
 | `TestInitWritesAnEventsFileNextToTheConfig` | ✓ | ✓ | ✓ |
-| `TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome` | ✓ | ✓ | ✓ |
-| `TestKickdConfigNamesTheConfig` | ✓ | ✓ | ✓ |
+| `TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestLicensesPrintTheLicenses` | ✓ | ✓ | ✓ |
 | `TestLogLevelInTheEnvironmentOverridesTheConfig` | ✓ | ✓ | ✓ |
 | `TestQueueShowsTheRunsThatWait` | ✓ | ✓ | ✓ |
@@ -280,24 +285,26 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, and
 | `TestShowPrintsTheOutputOfARun` | ✓ | ✓ | ✓ |
 | `TestStatusReportsAStoppedAgent` | ✓ | ✓ |  |
 | `TestStatusReportsTheRunningAgent` | ✓ | ✓ | ✓ |
-| `TestTheConfigOfTheUserComesBeforeKickdYaml` | ✓ | ✓ | ✓ |
+| `TestTheConfigFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
+| `TestTheUserFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
 | `TestVersionPrintsTheVersion` | ✓ | ✓ | ✓ |
 
 ### Services
 
-kickd installed as a service as the installation guides do: launchd on macOS, systemd on Linux, and the Service Control Manager on Windows. They change the machine.
+kickd installed as a service as the installation guides do: launchd on macOS, systemd on Linux, and the Service Control Manager on Windows. The tests also run `kickd init` and `kickd check` with sudo, or as an administrator on Windows, on the config file for the whole machine. They change the machine.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
 | `TestServiceAcceptsAWebhookRequest` |  |  | ✓ |
+| `TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine` | ✓ | ✓ |  |
 | `TestServiceGivesCommandsTheProfileOfSystem` |  |  | ✓ |
 | `TestServiceGivesCommandsTheTempFolderOfWindows` |  |  | ✓ |
 | `TestServiceInitMakesTheConfigReadableOnlyByItsOwner` |  | ✓ |  |
-| `TestServiceInitWritesTheSystemPathsIntoAConfigOutsideTheHome` | ✓ | ✓ | ✓ |
+| `TestServiceInitOfAnAdministratorWritesTheConfigForTheWholeMachine` |  |  | ✓ |
+| `TestServiceInitWithSudoWritesTheConfigForTheWholeMachine` | ✓ | ✓ |  |
 | `TestServiceInstallEnablesTheSystemUnitForMultiUserTarget` |  | ✓ |  |
 | `TestServiceInstallEnablesTheUserUnitForDefaultTarget` |  | ✓ |  |
-| `TestServiceInstallWithUserInstallsTheServiceOfTheSystem` |  |  | ✓ |
-| `TestServiceInstallWritesALaunchAgentWithTheExecutableAndTheConfig` | ✓ |  |  |
+| `TestServiceInstallWritesALaunchAgentThatRunsKickdInTheKickdDirectory` | ✓ |  |  |
 | `TestServiceInstallWritesAUnitThatRestartsKickdAfter5Seconds` |  | ✓ |  |
 | `TestServiceOfTheSystemAcceptsAWebhookRequest` | ✓ | ✓ |  |
 | `TestServiceOfTheSystemReloadsTheConfigOnSystemctlReload` |  | ✓ |  |

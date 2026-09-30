@@ -4,9 +4,10 @@
 # The command starts PowerShell directly, without cmd, so the pipeline
 # needs no extra quoting.
 #
-# Service: kickd service install -c C:\ProgramData\kickd\config.yaml
-#          (in PowerShell opened as administrator)
-# By hand: kickd event clean-downloads -c C:\ProgramData\kickd\config.yaml
+# Config:  C:\ProgramData\kickd\config.yaml
+# Service: kickd service install
+# By hand: kickd event clean-downloads
+#          (both in PowerShell opened as administrator)
 
 log:
   path: 'C:\ProgramData\kickd\kickd.log'

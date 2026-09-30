@@ -7,7 +7,8 @@
 # files that the build writes do not fire it again.
 #
 # Needs:   make, and a Makefile with a build target in ~/project
-# Service: kickd service install --user
+# Config:  ~/.kickd/config.yaml
+# Service: kickd service install
 # By hand: kickd event rebuild
 
 # The usual places on Linux. On macOS, they are ~/Library/Logs/kickd/kickd.log

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The config of testdata/event-files is kickd.yaml, and deploy.yaml and
+// The config of testdata/event-files is config.yaml, and deploy.yaml and
 // notify.yml next to it add their events.
 
 func TestAnEventOfAnotherYAMLFileRuns(t *testing.T) {
@@ -47,7 +47,7 @@ func TestEventsListsTheFileOfEachEvent(t *testing.T) {
 	if err := json.Unmarshal([]byte(h.must("events", "--json")), &events); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"backup": h.path("kickd.yaml"), "deploy": h.path("deploy.yaml"), "notify": h.path("notify.yml")}
+	want := map[string]string{"backup": h.path("config.yaml"), "deploy": h.path("deploy.yaml"), "notify": h.path("notify.yml")}
 	for _, e := range events {
 		if e.File != want[e.Name] {
 			t.Errorf("%s is in %s, want %s", e.Name, e.File, want[e.Name])
@@ -63,7 +63,7 @@ func TestCheckListsTheFilesWhoseEventsItReads(t *testing.T) {
 	h := newHome(t, "event-files")
 	out := h.must("check")
 	for _, want := range []string{
-		"events: " + h.path("kickd.yaml") + " (1 event)",
+		"events: " + h.path("config.yaml") + " (1 event)",
 		"events: " + h.path("deploy.yaml") + " (1 event)",
 		"events: " + h.path("notify.yml") + " (1 event)",
 	} {
@@ -111,7 +111,7 @@ func TestCheckRejectsAnEventThatTwoFilesDefine(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "event-files-duplicate")
 	r := h.kickd("check")
-	if r.code != 1 || !strings.Contains(r.stderr, `nightly.yaml: event "backup": duplicate name, also in kickd.yaml`) {
+	if r.code != 1 || !strings.Contains(r.stderr, `nightly.yaml: event "backup": duplicate name, also in config.yaml`) {
 		t.Errorf("kickd check: exit %d\n%s", r.code, r.stderr)
 	}
 }

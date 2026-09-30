@@ -1,9 +1,10 @@
 //go:build e2e && darwin
 
 // Package macos runs the kickd executable on macOS the way its users do.
-// Each test copies a directory of testdata, which holds a config and the
-// scripts of its events, into a new home directory, starts kickd on it,
-// fires events, and checks the runs that kickd records. The tests build
+// Each test copies a directory of testdata into a new home directory. The
+// directory .kickd in it holds the config file, config.yaml, and the
+// scripts of its events. The test starts kickd there, fires events, and
+// checks the runs that kickd records. The tests build
 // with the tag e2e, and test/e2e/README.md lists them.
 package macos
 
@@ -55,30 +56,32 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// home is the home directory of one user, with a config in kickd.yaml,
-// the scripts of its events, and the kickd agent that runs on them.
+// home is the home directory of one user, with the config of kickd and
+// the scripts of its events in the directory .kickd, and the kickd agent
+// that runs on them.
 type home struct {
-	t      *testing.T
-	dir    string
-	at     time.Time // the time that {{at}} in kickd.yaml stands for
-	env    []string
-	agent  *exec.Cmd
-	exited chan struct{}
+	t       *testing.T
+	homeDir string    // the home directory
+	dir     string    // the directory .kickd of the home, with the config file
+	at      time.Time // the time that {{at}} in config.yaml stands for
+	env     []string
+	agent   *exec.Cmd
+	exited  chan struct{}
 }
 
 // newHome copies testdata/<fixture> into a new home directory. In
-// kickd.yaml, the template action at "ZONE" becomes a cron schedule for
-// 25 seconds from now in that time zone.
+// .kickd/config.yaml, the template action at "ZONE" becomes a cron
+// schedule for 25 seconds from now in that time zone.
 func newHome(t *testing.T, fixture string) *home {
 	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &home{t: t, dir: dir, at: time.Now().UTC().Truncate(time.Second).Add(25 * time.Second)}
+	h := &home{t: t, homeDir: dir, dir: filepath.Join(dir, ".kickd"), at: time.Now().UTC().Truncate(time.Second).Add(25 * time.Second)}
 	for _, kv := range os.Environ() {
 		switch k, _, _ := strings.Cut(kv, "="); k {
-		case "HOME", "KICKD_CONFIG", "LOG_LEVEL", "LOG_FORMAT":
+		case "HOME", "LOG_LEVEL", "LOG_FORMAT":
 			continue
 		}
 		h.env = append(h.env, kv)
@@ -91,13 +94,13 @@ func newHome(t *testing.T, fixture string) *home {
 }
 
 // copy copies the files under src into the home directory, and fills in
-// the times in kickd.yaml.
+// the times in the config file.
 func (h *home) copy(src string) {
 	h.t.Helper()
-	copyTree(h.t, src, h.dir)
+	copyTree(h.t, src, h.homeDir)
 	b, err := os.ReadFile(h.config())
 	if err == nil && bytes.Contains(b, []byte("{{")) {
-		h.write("kickd.yaml", string(h.fillTimes(b)))
+		h.write("config.yaml", string(h.fillTimes(b)))
 	}
 }
 
@@ -130,7 +133,7 @@ func copyTree(t *testing.T, src, dst string) {
 
 func (h *home) fillTimes(b []byte) []byte {
 	h.t.Helper()
-	tmpl, err := template.New("kickd.yaml").Funcs(template.FuncMap{
+	tmpl, err := template.New("config.yaml").Funcs(template.FuncMap{
 		"at": func(zone string) (string, error) {
 			loc, err := time.LoadLocation(zone)
 			if err != nil {
@@ -150,13 +153,19 @@ func (h *home) fillTimes(b []byte) []byte {
 	return out.Bytes()
 }
 
-// path returns the path of name in the home directory.
+// path returns the path of name in the directory .kickd, where the config
+// file is.
 func (h *home) path(name ...string) string {
 	return filepath.Join(append([]string{h.dir}, name...)...)
 }
 
-// config is the config file of the home.
-func (h *home) config() string { return h.path("kickd.yaml") }
+// inHome returns the path of name in the home directory.
+func (h *home) inHome(name ...string) string {
+	return filepath.Join(append([]string{h.homeDir}, name...)...)
+}
+
+// config is the config file that kickd reads for the user of the home.
+func (h *home) config() string { return h.path("config.yaml") }
 
 // result is what a kickd subcommand printed, and its exit code.
 type result struct {
@@ -164,17 +173,12 @@ type result struct {
 	code           int
 }
 
-// kickd runs kickd with args and the config of the home.
+// kickd runs kickd with args in the home directory, as the user of the
+// home.
 func (h *home) kickd(args ...string) result {
 	h.t.Helper()
-	return h.kickdRaw(append(args, "-c", h.config())...)
-}
-
-// kickdRaw runs kickd with args as they are.
-func (h *home) kickdRaw(args ...string) result {
-	h.t.Helper()
 	cmd := exec.Command(kickdPath, args...)
-	cmd.Env, cmd.Dir = h.env, h.dir
+	cmd.Env, cmd.Dir = h.env, h.homeDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -210,12 +214,12 @@ func (h *home) start() {
 	h.t.Helper()
 	log := h.logFile()
 	offset := fileSize(log)
-	out, err := os.OpenFile(h.path("agent.out"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	out, err := os.OpenFile(h.inHome("agent.out"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	cmd := exec.Command(kickdPath, "run", "-c", h.config())
-	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = h.env, h.dir, out, out
+	cmd := exec.Command(kickdPath, "run")
+	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = h.env, h.homeDir, out, out
 	if err := cmd.Start(); err != nil {
 		h.t.Fatal(err)
 	}
@@ -291,7 +295,7 @@ func records(text, msg string) int {
 func (h *home) waitFor(what string, timeout time.Duration, ok func() bool) {
 	h.t.Helper()
 	waitFor(h.t, what, timeout, ok, func() string {
-		b, _ := os.ReadFile(h.path("agent.out"))
+		b, _ := os.ReadFile(h.inHome("agent.out"))
 		return "agent output:\n" + string(b)
 	})
 }
@@ -444,18 +448,18 @@ func request(t *testing.T, method string, port int, path, body string, headers .
 	return response{res.StatusCode, string(b), res.Header}
 }
 
-// save replaces kickd.yaml with the file name in the home directory, as
-// saving an edited config does.
+// save replaces config.yaml with the file name in the directory .kickd,
+// as saving an edited config does.
 func (h *home) save(name string) {
 	h.t.Helper()
 	b, err := os.ReadFile(h.path(name))
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	h.write("kickd.yaml", string(b))
+	h.write("config.yaml", string(b))
 }
 
-// place copies the file src of the home directory to dst, as saving a
+// place copies the file src of the directory .kickd to dst, as saving a
 // new file does.
 func (h *home) place(src, dst string) {
 	h.t.Helper()
@@ -466,13 +470,19 @@ func (h *home) place(src, dst string) {
 	h.write(dst, string(b))
 }
 
-// write writes text to the file name in the home directory.
+// writeFile writes text to the file at path.
+func (h *home) writeFile(path, text string) {
+	h.t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
+// write writes text to the file name in the directory .kickd.
 func (h *home) write(name, text string) {
 	h.t.Helper()
-	if err := os.MkdirAll(filepath.Dir(h.path(name)), 0o755); err != nil {
-		h.t.Fatal(err)
-	}
-	if err := os.WriteFile(h.path(name), []byte(text), 0o644); err != nil {
-		h.t.Fatal(err)
-	}
+	h.writeFile(h.path(name), text)
 }

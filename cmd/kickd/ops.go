@@ -35,9 +35,10 @@ const (
 )
 
 // runOps runs one of the operation subcommands: event, events, queue,
-// runs, show, cancel and status. It returns the exit code.
-func runOps(args []string, stdout, stderr io.Writer) int {
-	c := &cli{stdout: stdout, stderr: stderr}
+// runs, show, cancel and status, on the config file at path. It returns
+// the exit code.
+func runOps(path string, args []string, stdout, stderr io.Writer) int {
+	c := &cli{path: path, stdout: stdout, stderr: stderr}
 	var err error
 	switch args[0] {
 	case "event":
@@ -65,6 +66,7 @@ func runOps(args []string, stdout, stderr io.Writer) int {
 var opsCommands = map[string]bool{"event": true, "events": true, "queue": true, "runs": true, "show": true, "cancel": true, "status": true}
 
 type cli struct {
+	path           string // the config file
 	stdout, stderr io.Writer
 }
 
@@ -101,13 +103,16 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 			continue
 		}
 		flags = append(flags, a)
-		name := strings.TrimLeft(a, "-")
-		if strings.Contains(name, "=") {
-			continue
-		}
+		name, _, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
 		f := fs.Lookup(name)
 		if f == nil {
+			if msg := removedFlag(a); msg != "" {
+				return nil, usageError{msg}
+			}
 			return nil, usageError{fmt.Sprintf("unknown flag %s", a)}
+		}
+		if hasValue {
+			continue
 		}
 		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
 			continue
@@ -124,14 +129,24 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 	return pos, nil
 }
 
-func configFlag(fs *flag.FlagSet) *string {
-	p := fs.String("config", "", "config file")
-	fs.StringVar(p, "c", "", "config file (shorthand)")
-	return p
+// removedFlag explains a flag that kickd v0.4 and earlier took, and
+// returns "" for any other argument.
+func removedFlag(arg string) string {
+	flag, _, _ := strings.Cut(arg, "=")
+	switch strings.TrimLeft(flag, "-") {
+	case "c", "config":
+		return fmt.Sprintf("kickd no longer takes %s: it reads %s, the config file for the user who runs kickd. "+
+			"A service that kickd v0.4 or earlier installed passes --config: install it again with kickd service uninstall and kickd service install", flag, config.Path())
+	case "user":
+		return "kickd no longer takes --user: kickd service works on the service of the user who runs it, and on the service of the whole machine as root or as an administrator"
+	case "name":
+		return "kickd no longer takes --name: the service is named kickd"
+	}
+	return ""
 }
 
-func (c *cli) load(flagValue string) (*config.Config, error) {
-	return config.Load(config.Resolve(flagValue))
+func (c *cli) load() (*config.Config, error) {
+	return config.Load(c.path)
 }
 
 func (c *cli) open(cfg *config.Config) (*queue.Store, error) {
@@ -158,7 +173,6 @@ func source() string {
 // kickd consumes.
 func (c *cli) event(args []string) int {
 	fs := flag.NewFlagSet("event", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	dataJSON := fs.String("data", "", "parameters as a JSON object of strings")
 	wait := fs.Bool("wait", false, "wait for the run and exit 0 only if it succeeds")
 	timeout := fs.Duration("timeout", 0, "with --wait: give up after this long (exit 124)")
@@ -171,7 +185,7 @@ func (c *cli) event(args []string) int {
 		return c.exit(usageError{"event name is required: kickd event NAME [KEY=VALUE ...]"})
 	}
 	name, kvs := pos[0], pos[1:]
-	cfg, err := c.load(*cfgPath)
+	cfg, err := c.load()
 	if err != nil {
 		return c.exit(err)
 	}
@@ -314,12 +328,11 @@ func (c *cli) reportRuns(runs []queue.Run, asJSON bool) int {
 
 func (c *cli) events(args []string) error {
 	fs := flag.NewFlagSet("events", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parse(fs, args); err != nil {
 		return err
 	}
-	cfg, err := c.load(*cfgPath)
+	cfg, err := c.load()
 	if err != nil {
 		return err
 	}
@@ -388,17 +401,15 @@ func triggerNames(e config.Event) []string {
 
 func (c *cli) queue(args []string) error {
 	fs := flag.NewFlagSet("queue", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parse(fs, args); err != nil {
 		return err
 	}
-	return c.listRuns(*cfgPath, queue.Filter{Statuses: []string{queue.StatusQueued, queue.StatusRunning, queue.StatusInterrupted}}, *asJSON, true)
+	return c.listRuns(queue.Filter{Statuses: []string{queue.StatusQueued, queue.StatusRunning, queue.StatusInterrupted}}, *asJSON, true)
 }
 
 func (c *cli) runs(args []string) error {
 	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	name := fs.String("event", "", "only this event")
 	status := fs.String("status", "", "only this status: queued, running, succeeded, failed, canceled, skipped, dropped, interrupted, retried, abandoned")
 	limit := fs.Int("limit", 20, "number of runs")
@@ -410,11 +421,11 @@ func (c *cli) runs(args []string) error {
 	if *status != "" {
 		f.Statuses = []string{*status}
 	}
-	return c.listRuns(*cfgPath, f, *asJSON, false)
+	return c.listRuns(f, *asJSON, false)
 }
 
-func (c *cli) listRuns(cfgPath string, f queue.Filter, asJSON, openOnly bool) error {
-	cfg, err := c.load(cfgPath)
+func (c *cli) listRuns(f queue.Filter, asJSON, openOnly bool) error {
+	cfg, err := c.load()
 	if err != nil {
 		return err
 	}
@@ -460,7 +471,6 @@ func (c *cli) listRuns(cfgPath string, f queue.Filter, asJSON, openOnly bool) er
 
 func (c *cli) show(args []string) error {
 	fs := flag.NewFlagSet("show", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -470,7 +480,7 @@ func (c *cli) show(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := c.load(*cfgPath)
+	cfg, err := c.load()
 	if err != nil {
 		return err
 	}
@@ -553,7 +563,6 @@ func (c *cli) show(args []string) error {
 
 func (c *cli) cancel(args []string) error {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -562,7 +571,7 @@ func (c *cli) cancel(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := c.load(*cfgPath)
+	cfg, err := c.load()
 	if err != nil {
 		return err
 	}
@@ -595,12 +604,11 @@ func (c *cli) cancel(args []string) error {
 
 func (c *cli) status(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	cfgPath := configFlag(fs)
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parse(fs, args); err != nil {
 		return err
 	}
-	cfg, err := c.load(*cfgPath)
+	cfg, err := c.load()
 	if err != nil {
 		return err
 	}

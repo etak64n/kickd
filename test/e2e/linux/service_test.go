@@ -37,7 +37,7 @@ func changesTheMachine(t *testing.T) {
 type service struct {
 	t        *testing.T
 	sudo     bool     // a system-wide unit
-	flags    []string // the flags of every kickd service action
+	flags    []string // the flags of systemctl and journalctl for the unit
 	env      []string
 	config   string
 	unit     string // the unit file that kickd service install writes
@@ -107,9 +107,10 @@ func (s *service) install() {
 	s.waitForAgent(0)
 }
 
-// action returns the arguments of kickd service ACTION for the service.
+// action returns the arguments of kickd service ACTION. kickd works on the
+// system-wide unit with sudo, and on the per-user unit without it.
 func (s *service) action(name string) []string {
-	return append([]string{"service", name}, s.flags...)
+	return []string{"service", name}
 }
 
 // removeAtEnd stops and uninstalls the service when the test ends, and
@@ -183,10 +184,11 @@ func (s *service) sudoMust(name string, args ...string) string {
 	return r.stdout
 }
 
-// kickd runs kickd with args and the config of the service.
+// kickd runs kickd with args, with sudo for the system-wide unit, so that
+// it reads the config of the service.
 func (s *service) kickd(args ...string) result {
 	s.t.Helper()
-	return s.run(kickdPath, append(args, "-c", s.config)...)
+	return s.run(kickdPath, args...)
 }
 
 // mustKickd runs a kickd subcommand that has to succeed.
@@ -305,16 +307,29 @@ func environment(r run) map[string]string {
 	return env
 }
 
-func TestServiceInitWritesTheSystemPathsIntoAConfigOutsideTheHome(t *testing.T) {
+func TestServiceInitWithSudoWritesTheConfigForTheWholeMachine(t *testing.T) {
 	changesTheMachine(t)
 	s := &service{t: t, sudo: true, env: os.Environ(), config: "/etc/kickd/config.yaml"}
 	s.removeAtEnd("/etc/kickd")
-	s.mustKickd("init")
+	if out := s.mustKickd("init"); !strings.HasPrefix(out, "wrote /etc/kickd/config.yaml\n") {
+		t.Errorf("sudo kickd init:\n%s", out)
+	}
 	text := s.must("cat", s.config)
 	for _, want := range []string{"path: '/var/log/kickd/kickd.log'", "path: '/var/lib/kickd/kickd.db'"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the config has no %q:\n%s", want, text)
 		}
+	}
+}
+
+func TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine(t *testing.T) {
+	changesTheMachine(t)
+	s := &service{t: t, sudo: true, env: os.Environ(), config: "/etc/kickd/config.yaml"}
+	s.removeAtEnd("/etc/kickd")
+	s.must("mkdir", "-p", "/etc/kickd")
+	s.must("cp", "testdata/service-system/config.yaml", s.config)
+	if out := s.mustKickd("check"); !strings.HasPrefix(out, "OK: /etc/kickd/config.yaml ") {
+		t.Errorf("sudo kickd check:\n%s", out)
 	}
 }
 

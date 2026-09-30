@@ -18,17 +18,17 @@ import (
 	"github.com/etak64n/kickd/internal/queue"
 )
 
-func ops(t *testing.T, args ...string) (int, string, string) {
+func ops(t *testing.T, cfg string, args ...string) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code := runOps(args, &out, &errOut)
+	code := runOps(cfg, args, &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
 func writeConfig(t *testing.T, body string) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "kickd.yaml")
+	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -37,60 +37,87 @@ func writeConfig(t *testing.T, body string) (string, string) {
 
 func TestParseInterleavedFlags(t *testing.T) {
 	fs := flag.NewFlagSet("event", flag.ContinueOnError)
-	cfg := configFlag(fs)
+	data := fs.String("data", "", "")
 	wait := fs.Bool("wait", false, "")
 	timeout := fs.Duration("timeout", 0, "")
-	pos, err := parse(fs, []string{"deploy", "--wait", "ref=main", "-c", "x.yaml", "--timeout=5s", "env=prod"})
+	pos, err := parse(fs, []string{"deploy", "--wait", "ref=main", "--data", "{}", "--timeout=5s", "env=prod"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(pos, " ") != "deploy ref=main env=prod" || !*wait || *cfg != "x.yaml" || *timeout != 5*time.Second {
-		t.Fatalf("pos=%v wait=%v cfg=%q timeout=%s", pos, *wait, *cfg, *timeout)
+	if strings.Join(pos, " ") != "deploy ref=main env=prod" || !*wait || *data != "{}" || *timeout != 5*time.Second {
+		t.Fatalf("pos=%v wait=%v data=%q timeout=%s", pos, *wait, *data, *timeout)
 	}
 	if _, err := parse(fs, []string{"--nope"}); err == nil {
 		t.Error("unknown flag must fail")
 	}
-	if _, err := parse(fs, []string{"-c"}); err == nil {
+	if _, err := parse(fs, []string{"--data"}); err == nil {
 		t.Error("missing value must fail")
+	}
+}
+
+// The flags of kickd v0.4 and earlier that chose the config file and the
+// service fail with the reason.
+
+func TestParseExplainsThatTheConfigFlagIsGone(t *testing.T) {
+	fs := flag.NewFlagSet("event", flag.ContinueOnError)
+	for arg, flag := range map[string]string{"-c": "-c", "--config": "--config", "--config=x.yaml": "--config"} {
+		if _, err := parse(fs, []string{"deploy", arg, "x.yaml"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes "+flag+": it reads "+config.Path()) {
+			t.Errorf("%s: %v", arg, err)
+		}
+	}
+}
+
+func TestNoArgsExplainsThatTheUserAndNameFlagsAreGone(t *testing.T) {
+	if err := noArgs("service install", []string{"--user"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes --user") {
+		t.Errorf("--user: %v", err)
+	}
+	if err := noArgs("run", []string{"--name", "kickd"}); err == nil || !strings.Contains(err.Error(), "kickd no longer takes --name") {
+		t.Errorf("--name: %v", err)
+	}
+}
+
+func TestNoArgsRefusesArguments(t *testing.T) {
+	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra" {
+		t.Errorf("noArgs: %v", err)
 	}
 }
 
 func TestOpsWithoutAgent(t *testing.T) {
 	_, cfg := writeConfig(t, eventConfig())
-	code, out, errOut := ops(t, "event", "deploy", "-c", cfg, "ref=v2")
+	code, out, errOut := ops(t, cfg, "event", "deploy", "ref=v2")
 	if code != 0 || !regexp.MustCompile(`^queued run 1 \(event deploy, request [0-9a-f]{16}\)\n$`).MatchString(out) || !strings.Contains(errOut, "the agent is not running") {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
 	}
-	if code, out, _ := ops(t, "queue", "-c", cfg); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+1\s+queued`).MatchString(out) {
+	if code, out, _ := ops(t, cfg, "queue"); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+1\s+queued`).MatchString(out) {
 		t.Errorf("queue: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "status", "-c", cfg); code != 0 || !strings.Contains(out, "agent: has not started") || !strings.Contains(out, "1 queued") {
+	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: has not started") || !strings.Contains(out, "1 queued") {
 		t.Errorf("status: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "show", "1", "-c", cfg); code != 0 || !strings.Contains(out, "ref=v2") || !strings.Contains(out, "attempt   1") {
+	if code, out, _ := ops(t, cfg, "show", "1"); code != 0 || !strings.Contains(out, "ref=v2") || !strings.Contains(out, "attempt   1") {
 		t.Errorf("show: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "cancel", "1", "-c", cfg); code != 0 || !strings.Contains(out, "had not started") {
+	if code, out, _ := ops(t, cfg, "cancel", "1"); code != 0 || !strings.Contains(out, "had not started") {
 		t.Errorf("cancel: %d %q", code, out)
 	}
-	if code, _, errOut := ops(t, "event", "nope", "-c", cfg); code != exitUsage || !strings.Contains(errOut, `"nope" is not defined`) || !strings.Contains(errOut, "deploy, boom, slow") {
+	if code, _, errOut := ops(t, cfg, "event", "nope"); code != exitUsage || !strings.Contains(errOut, `"nope" is not defined`) || !strings.Contains(errOut, "deploy, boom, slow") {
 		t.Errorf("unknown event: %d %q", code, errOut)
 	}
-	if code, _, errOut := ops(t, "event", "deploy", "colour=red", "-c", cfg); code != exitUsage || !strings.Contains(errOut, "unknown parameter colour") {
+	if code, _, errOut := ops(t, cfg, "event", "deploy", "colour=red"); code != exitUsage || !strings.Contains(errOut, "unknown parameter colour") {
 		t.Errorf("unknown param: %d %q", code, errOut)
 	}
-	if code, _, errOut := ops(t, "event", "deploy", "novalue", "-c", cfg); code != exitUsage || !strings.Contains(errOut, "KEY=VALUE") {
+	if code, _, errOut := ops(t, cfg, "event", "deploy", "novalue"); code != exitUsage || !strings.Contains(errOut, "KEY=VALUE") {
 		t.Errorf("bad arg: %d %q", code, errOut)
 	}
 	// An event without a manual trigger cannot be fired by hand.
-	if code, _, errOut := ops(t, "event", "nightly", "-c", cfg); code != exitUsage || !strings.Contains(errOut, `has no manual trigger`) || !strings.Contains(errOut, `add "- type: manual"`) {
+	if code, _, errOut := ops(t, cfg, "event", "nightly"); code != exitUsage || !strings.Contains(errOut, `has no manual trigger`) || !strings.Contains(errOut, `add "- type: manual"`) {
 		t.Errorf("event without a manual trigger: %d %q", code, errOut)
 	}
-	if code, _, errOut := ops(t, "cancel", "99", "-c", cfg); code != exitFailed || !strings.Contains(errOut, "not found") {
+	if code, _, errOut := ops(t, cfg, "cancel", "99"); code != exitFailed || !strings.Contains(errOut, "not found") {
 		t.Errorf("cancel missing: %d %q", code, errOut)
 	}
-	if code, out, _ := ops(t, "events", "-c", cfg); code != 0 ||
-		!regexp.MustCompile(`deploy\s+manual\s+skip\s+abandon\s+ref=main\s+kickd\.yaml\s+Deploy the app`).MatchString(out) ||
+	if code, out, _ := ops(t, cfg, "events"); code != 0 ||
+		!regexp.MustCompile(`deploy\s+manual\s+skip\s+abandon\s+ref=main\s+config\.yaml\s+Deploy the app`).MatchString(out) ||
 		!regexp.MustCompile(`boom\s+cron @yearly, manual`).MatchString(out) ||
 		!regexp.MustCompile(`slow\s+manual\s+skip\s+rerun \(max 3\)`).MatchString(out) {
 		t.Errorf("events: %d %q", code, out)
@@ -131,21 +158,21 @@ func TestOpsWithAgent(t *testing.T) {
 	stop := startAgent(t, cfg)
 	defer stop()
 
-	code, out, errOut := ops(t, "event", "deploy", "ref=v9", "--wait", "--timeout", "20s", "-c", cfg)
+	code, out, errOut := ops(t, cfg, "event", "deploy", "ref=v9", "--wait", "--timeout", "20s")
 	if code != 0 || !regexp.MustCompile(`\d+\s+deploy\s+1\s+succeeded\s+0\s+`).MatchString(out) || errOut != "" {
 		t.Fatalf("wait: code=%d out=%q err=%q", code, out, errOut)
 	}
 	id := regexp.MustCompile(`(?m)^(\d+)\s+deploy`).FindStringSubmatch(out)[1]
-	if code, out, _ := ops(t, "show", id, "-c", cfg); code != 0 || !strings.Contains(out, "deploying v9") || !strings.Contains(out, "trigger   manual") {
+	if code, out, _ := ops(t, cfg, "show", id); code != 0 || !strings.Contains(out, "deploying v9") || !strings.Contains(out, "trigger   manual") {
 		t.Errorf("show: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "event", "boom", "--wait", "--json", "-c", cfg); code != exitFailed || !strings.Contains(out, `"status": "failed"`) || !strings.Contains(out, `"exitCode": 7`) {
+	if code, out, _ := ops(t, cfg, "event", "boom", "--wait", "--json"); code != exitFailed || !strings.Contains(out, `"status": "failed"`) || !strings.Contains(out, `"exitCode": 7`) {
 		t.Errorf("failing wait: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "runs", "--event", "boom", "-c", cfg); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
+	if code, out, _ := ops(t, cfg, "runs", "--event", "boom"); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
 		t.Errorf("runs --event: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, "status", "-c", cfg); code != 0 || !strings.Contains(out, "agent: running") {
+	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: running") {
 		t.Errorf("status: %d %q", code, out)
 	}
 }
@@ -158,7 +185,7 @@ func TestWaitFollowsRerun(t *testing.T) {
 	stop := startAgent(t, cfg)
 	result := make(chan [3]string, 1)
 	go func() {
-		code, out, errOut := ops(t, "event", "slow", "--wait", "--timeout", "40s", "-c", cfg)
+		code, out, errOut := ops(t, cfg, "event", "slow", "--wait", "--timeout", "40s")
 		result <- [3]string{string(rune('0' + code)), out, errOut}
 	}()
 	db := filepath.Join(filepath.Dir(cfg), "kickd.db")
@@ -214,13 +241,13 @@ func waitAlive(t *testing.T, dbPath string) {
 
 func TestEventDataFlag(t *testing.T) {
 	_, cfg := writeConfig(t, eventConfig())
-	if code, _, errOut := ops(t, "event", "deploy", "--data", `{"ref":"from-data"}`, "ref=from-arg", "-c", cfg); code != 0 {
+	if code, _, errOut := ops(t, cfg, "event", "deploy", "--data", `{"ref":"from-data"}`, "ref=from-arg"); code != 0 {
 		t.Fatalf("event: %d %q", code, errOut)
 	}
-	if code, out, _ := ops(t, "show", "1", "-c", cfg); code != 0 || !strings.Contains(out, "ref=from-arg") {
+	if code, out, _ := ops(t, cfg, "show", "1"); code != 0 || !strings.Contains(out, "ref=from-arg") {
 		t.Errorf("KEY=VALUE must override --data: %d %q", code, out)
 	}
-	if code, _, errOut := ops(t, "event", "deploy", "--data", "not json", "-c", cfg); code != exitUsage || !strings.Contains(errOut, "--data must be a JSON object of strings") {
+	if code, _, errOut := ops(t, cfg, "event", "deploy", "--data", "not json"); code != exitUsage || !strings.Contains(errOut, "--data must be a JSON object of strings") {
 		t.Errorf("bad --data: %d %q", code, errOut)
 	}
 }
@@ -237,7 +264,7 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 		path   string
 		system bool
 	}{{user, false}, {system, true}} {
-		if err := cmdInit([]string{"-c", c.path}); err != nil {
+		if err := cmdInit(c.path, c.system, nil); err != nil {
 			t.Fatal(err)
 		}
 		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.ExampleConfig(runtime.GOOS, c.system) {
@@ -256,7 +283,7 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 			t.Errorf("%s permissions %o, want 600", path, st.Mode().Perm())
 		}
 	}
-	if err := cmdInit([]string{"-c", user}); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if err := cmdInit(user, false, nil); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("a second init must refuse to overwrite: %v", err)
 	}
 }
@@ -267,7 +294,7 @@ func TestInitRefusesToOverwriteTheEventsFile(t *testing.T) {
 	if err := os.WriteFile(events, []byte("events: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := cmdInit([]string{"-c", filepath.Join(dir, "config.yaml")}); err == nil || !strings.Contains(err.Error(), events+" already exists") {
+	if err := cmdInit(filepath.Join(dir, "config.yaml"), false, nil); err == nil || !strings.Contains(err.Error(), events+" already exists") {
 		t.Errorf("init over an events file: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err == nil {

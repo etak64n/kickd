@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -132,36 +131,6 @@ func TestRunIDRefusesNoIDAndTwoIDs(t *testing.T) {
 	}
 }
 
-// kickd init writes the paths of a service of the whole system into a
-// config outside the home directory.
-
-func TestInitForSystemIsFalseForAConfigInTheHomeDirectory(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if initForSystem(filepath.Join(home, ".config", "kickd", "config.yaml")) {
-		t.Error("a config in the home directory is for the system")
-	}
-}
-
-func TestInitForSystemIsTrueForAConfigOutsideTheHomeDirectory(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if !initForSystem(filepath.Join(filepath.Dir(home), "etc", "kickd", "config.yaml")) {
-		t.Error("a config outside the home directory is for a user")
-	}
-}
-
-func TestInitForSystemIsTrueForADirectoryThatOnlyStartsLikeTheHomeDirectory(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if !initForSystem(home + "-other" + string(os.PathSeparator) + "config.yaml") {
-		t.Error("a config next to the home directory is for a user")
-	}
-}
-
 // The columns of kickd runs, kickd queue and kickd show.
 
 func TestStatusTextSaysThatARunningRunWasAskedToStop(t *testing.T) {
@@ -259,11 +228,14 @@ func TestStatusNameNamesTheStatusOfAService(t *testing.T) {
 	}
 }
 
-func TestServiceConfigRunsTheAgentWithTheConfigAndTheName(t *testing.T) {
+// The service runs kickd run with no arguments, so the agent reads the
+// config file of the user that the service runs as. It starts in the
+// directory of that file.
+func TestServiceConfigRunsTheAgentInTheDirectoryOfTheConfig(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "kickd", "config.yaml")
-	c := serviceConfig(cfg, "kickd-staging", false)
-	if got, want := strings.Join(c.Arguments, " "), "run --config "+cfg+" --name kickd-staging"; got != want {
-		t.Errorf("arguments: %s, want %s", got, want)
+	c := serviceConfig(cfg, false)
+	if c.Name != "kickd" || strings.Join(c.Arguments, " ") != "run" {
+		t.Errorf("name %q, arguments %q", c.Name, c.Arguments)
 	}
 	if c.WorkingDirectory != filepath.Dir(cfg) {
 		t.Errorf("working directory: %s", c.WorkingDirectory)

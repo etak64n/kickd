@@ -13,9 +13,9 @@ The way the agent starts decides which user it runs as:
 |---|---|---|
 | `kickd run` in a terminal | macOS, Linux | The user of the terminal, or root with `sudo` |
 | `kickd run` in PowerShell | Windows | The user of PowerShell, with administrator rights when PowerShell was opened as administrator |
-| `kickd service install --user` | macOS | The user who installed the service. launchd starts the agent when that user logs in. |
+| `kickd service install` without `sudo` | macOS | The user who installed the service. launchd starts the agent when that user logs in. |
 | `sudo kickd service install` | macOS | root |
-| `kickd service install --user` | Linux | The user who installed the service, in that user's own instance of systemd |
+| `kickd service install` without `sudo` | Linux | The user who installed the service, in that user's own instance of systemd |
 | `sudo kickd service install` | Linux | root |
 | `kickd service install` in an administrator PowerShell | Windows | SYSTEM |
 
@@ -23,18 +23,29 @@ The service definitions that kickd writes name no user, so each service manager 
 The default is root for a system-wide definition of launchd or systemd, the owner for a per-user definition, and the SYSTEM account for a Windows service.
 `kickd service install` has no option to choose another user.
 
+The user of the agent also decides which config file the agent reads:
+
+- A user: `~/.kickd/config.yaml` in the home directory of that user.
+- root on Linux: `/etc/kickd/config.yaml`.
+- root on macOS: `/Library/Application Support/kickd/config.yaml`.
+- An administrator or SYSTEM on Windows: `C:\ProgramData\kickd\config.yaml`.
+
+The config file of root, administrators and SYSTEM is the config for the whole machine.
+Only root and administrators can change the files in its directory, because its commands run as root or as SYSTEM.
+
 ## The user of the commands
 
 kickd never switches users.
 A command starts as a child process of the agent and runs as the same user: with the same groups on macOS and Linux, and with the same access token on Windows.
 The command also inherits the environment of the agent, so `HOME` or `USERPROFILE` points to the home directory of that user, when the user has one.
 
-The user who fires an event does not matter.
-`kickd event` only writes a run into the database, and the agent runs the command later as its own user.
+The user who fires an event decides which kickd the event reaches, and the agent of that kickd runs the command as its own user.
+`kickd event` reads the config file of the user who runs it, writes a run into the database of that config, and the agent runs the command later.
 A run records who fired it in `source`, which the command reads as `KICKD_MANUAL_SOURCE`: the user and host of the `kickd event` process.
 Under `sudo`, that user is root.
 
 For example, with kickd installed as a system-wide unit on Linux, `sudo kickd event deploy` makes root run the deploy command, and so does a webhook request from another machine.
+`kickd event deploy` without `sudo` reaches the kickd of the user instead, with the config file in the home directory of that user.
 
 ## Who can fire an event
 
@@ -65,7 +76,7 @@ A command of an agent that runs as root writes files that belong to root, even i
 ## Choosing the user
 
 - **A per-user service**, a LaunchAgent on macOS or a per-user unit on Linux, suits events that work on the files of one user. The commands have the permissions of that user, and no more.
-- **A system-wide service**, as root on macOS and Linux or as SYSTEM on Windows, suits tasks for the whole machine. Every command in the config file then runs with full rights, so only root or administrators should be able to change the config file.
+- **A system-wide service**, as root on macOS and Linux or as SYSTEM on Windows, suits tasks for the whole machine. Every command in the config file then runs with full rights, and the config file is the config for the whole machine, which only root and administrators can change.
 - **Windows** has only the service that runs as SYSTEM.
 
 The service managers themselves can run a service as another user.
@@ -75,7 +86,8 @@ kickd does not set this up, and these settings have not been tested with kickd:
 - **launchd**: a `UserName` key in the definition file of a LaunchDaemon.
 - **Windows**: the Log On tab of the service in the Services list.
 
-The user then needs read access to the config file, and read and write access to the database and its directory.
+kickd then runs as that user, so it reads the config file of that user, `~/.kickd/config.yaml` in the home directory of the user.
+The user needs read access to that file, and read and write access to the database and its directory.
 Uninstalling the service and installing it again with kickd removes such a change.
 
 A command of an agent that runs as root can also switch users by itself, for example with `sudo -u alice ./task.sh` on macOS or `runuser -u alice -- ./task.sh` on Linux.
