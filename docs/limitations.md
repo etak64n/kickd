@@ -1,6 +1,6 @@
 # Known limitations
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 

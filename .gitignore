@@ -6,3 +6,6 @@
 *.db
 *.db-wal
 *.db-shm
+
+# The documentation site that mkdocs build writes
+/site/

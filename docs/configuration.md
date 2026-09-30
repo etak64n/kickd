@@ -1,6 +1,6 @@
 # Configuration
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 kickd reads a YAML config file, and the other YAML files next to it.
 The files define **events**, which are named commands.

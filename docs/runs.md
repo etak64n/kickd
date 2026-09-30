@@ -1,6 +1,6 @@
 # Runs
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 In kickd, a named command in the config file is an **event**, and asking kickd to run an event is **firing** it.
 Every firing is recorded as a **run** in the **database**, a SQLite file.

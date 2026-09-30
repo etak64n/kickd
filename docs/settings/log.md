@@ -1,6 +1,6 @@
 # Log settings
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 The long-running kickd process, called the **agent**, writes a **log**: one record for each thing that it does, such as loading its config, starting a command, or receiving a webhook request.
 The `log` section of the config file sets where the agent writes its records, which records it writes, and in what format:

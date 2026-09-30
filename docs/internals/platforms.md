@@ -1,6 +1,6 @@
 # Platform differences
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 kickd runs the same code on macOS, Linux and Windows, except where the operating systems differ.
 In kickd, a named command in the config file is an **event**, each firing of an event becomes a **run**, and the long-running kickd process is the **agent**.

@@ -1,6 +1,6 @@
 # Building kickd
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 kickd is written in Go and builds with Go 1.25 or later.
 The long-running agent and every other command are subcommands of one executable, `kickd`.

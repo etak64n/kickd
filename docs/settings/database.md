@@ -1,6 +1,6 @@
 # Database settings
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd records every run in its **database**, a SQLite file: runs that wait, runs that are running, and runs that have ended.

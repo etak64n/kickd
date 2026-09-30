@@ -1,6 +1,6 @@
 # Command-line reference
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 kickd is one executable with subcommands.
 `kickd run` starts the long-running kickd process, called the **agent**.

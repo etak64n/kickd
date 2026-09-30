@@ -1,6 +1,6 @@
 # Development
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 kickd needs Go 1.25 or later to build and test.
 
@@ -20,7 +20,7 @@ On all three OSes, it also runs the end-to-end tests of that OS.
 The end-to-end tests in `test/e2e` run the kickd executable the way its users do.
 Each OS has a package of its own, `test/e2e/macos`, `test/e2e/linux` and `test/e2e/windows`, with its own harness and its own test data.
 A test copies a directory of `testdata`, which holds a config and the scripts of its events, into a new home directory, starts `kickd run`, fires events through their triggers or with `kickd event`, and checks the runs that kickd records.
-Each test checks one behavior, which its name says, and [test/e2e/README.md](../test/e2e/README.md) lists them all.
+Each test checks one behavior, which its name says, and [test/e2e/README.md](https://github.com/etak64n/kickd/blob/main/test/e2e/README.md) lists them all.
 
 They build only with the tag `e2e`, and each package only on its own OS:
 
@@ -43,6 +43,12 @@ A runner cannot sleep, so the unit tests of `internal/trigger` check wake trigge
 
 Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
 
+## The documentation site
+
+The documentation site is built from the Markdown files in `docs` with MkDocs and its Material theme, as `mkdocs.yml` sets.
+GitHub Actions builds the site for every pull request that changes the docs, and a broken link or a link to a missing heading fails the build.
+For every release, it publishes the site to GitHub Pages, at https://etak64n.github.io/kickd/, so that the site describes the released version.
+
 govulncheck, the vulnerability checker of the Go team, checks the dependencies and the Go standard library for every push to `main`, every pull request, and once a week.
 
 After a change to the dependencies in `go.mod`, run `./scripts/third-party-licenses.sh` and commit `internal/licenses/licenses.txt`, the text that `kickd licenses` prints. CI fails while that file is out of date.
@@ -56,7 +62,7 @@ git push origin v0.2.0
 
 ```
 cmd/kickd/          The kickd command: the agent (run), run commands (event, events, queue, runs, show, cancel, status), setup (check, init, service)
-internal/config/    Loading, defaults and validation of the config, and the example config example.yaml
+internal/config/    Loading, defaults and validation of the config, and the examples that kickd init writes
 internal/queue/     The SQLite database: run records, recovery of interrupted runs, the heartbeat of the agent
 internal/runner/    Running commands, and consuming the queue: concurrency, reruns of interrupted runs
 internal/trigger/   Cron schedules (gocron), webhooks (net/http), file watching (fsnotify)
@@ -65,6 +71,7 @@ internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
 internal/licenses/  The license texts that kickd licenses prints
 test/e2e/           The end-to-end tests of each OS: the kickd executable run the way its users do
+docs/               The documentation, which mkdocs.yml builds into the documentation site
 scripts/            build-all.sh, the cross build for every platform; third-party-licenses.sh, the list of licenses
-.github/workflows/  ci.yml, the tests on every OS; vulncheck.yml, the vulnerability check; release.yml, the release workflow
+.github/workflows/  ci.yml, the tests on every OS; vulncheck.yml, the vulnerability check; release.yml, the release workflow; docs.yml, the documentation site
 ```

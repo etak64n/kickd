@@ -1,6 +1,6 @@
 # Database internals
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 The runs are kept in the **database**, a SQLite file, and the runs that have not started yet form the **queue**.

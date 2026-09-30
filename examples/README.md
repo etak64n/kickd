@@ -1,6 +1,6 @@
 # Examples
 
-[Documentation index](../README.md#documentation)
+[Documentation index](../docs/index.md)
 
 Each file here is a complete kickd config for one task.
 Copy a file to the location of the config file, such as `/etc/kickd/config.yaml`, then adjust the paths and the commands.

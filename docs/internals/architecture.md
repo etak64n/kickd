@@ -1,6 +1,6 @@
 # Architecture
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 kickd is one Go executable.
 `kickd run` starts the long-running process, called the **agent**.

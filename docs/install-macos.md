@@ -1,6 +1,6 @@
 # Installing on macOS
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 On macOS, **launchd** starts and restarts long-running programs.
 launchd reads a definition file for each program, starts the program as the file describes, and starts it again when it exits.
