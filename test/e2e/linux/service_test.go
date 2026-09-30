@@ -437,7 +437,8 @@ func TestServiceStatusReportsARunningService(t *testing.T) {
 }
 
 // systemdPath reports whether path is the PATH that systemd gives the
-// commands of a unit: its default, and on Ubuntu /snap/bin after it.
+// commands of a system-wide unit: its default, and on Ubuntu /snap/bin
+// after it.
 func systemdPath(path string) bool {
 	const def = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 	return path == def || path == def+":/snap/bin"
@@ -457,10 +458,27 @@ func TestServiceOfTheSystemRunsCommandsWithoutHome(t *testing.T) {
 	}
 }
 
-func TestServiceOfTheUserRunsCommandsWithThePathOfSystemd(t *testing.T) {
+// etcEnvironmentPath returns the PATH that /etc/environment sets.
+func etcEnvironmentPath(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("/etc/environment")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "PATH="); ok {
+			return strings.Trim(v, `"'`)
+		}
+	}
+	t.Fatalf("/etc/environment sets no PATH:\n%s", b)
+	return ""
+}
+
+func TestServiceOfTheUserRunsCommandsWithThePathOfEtcEnvironment(t *testing.T) {
 	s := userUnit(t)
-	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; !systemdPath(path) {
-		t.Errorf("PATH=%s", path)
+	want := etcEnvironmentPath(t)
+	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; !strings.HasPrefix(path, want) {
+		t.Errorf("PATH=%s, want the PATH of /etc/environment, %s", path, want)
 	}
 }
 

@@ -295,8 +295,8 @@ kickd installed as a service as the installation guides do: launchd on macOS, sy
 | `TestServiceOfTheUserGivesCommandsTheHomeOfTheUser` | ✓ | ✓ |  |
 | `TestServiceOfTheUserGivesCommandsTheRuntimeDirectoryOfTheUser` |  | ✓ |  |
 | `TestServiceOfTheUserRunsCommandsAsTheUser` | ✓ | ✓ |  |
+| `TestServiceOfTheUserRunsCommandsWithThePathOfEtcEnvironment` |  | ✓ |  |
 | `TestServiceOfTheUserRunsCommandsWithThePathOfLaunchd` | ✓ |  |  |
-| `TestServiceOfTheUserRunsCommandsWithThePathOfSystemd` |  | ✓ |  |
 | `TestServiceOfTheUserRunsCommandsWithoutLang` | ✓ |  |  |
 | `TestServiceOfTheUserStartsAgainAfterACrash` | ✓ | ✓ |  |
 | `TestServiceRunsCommandsAsSystem` |  |  | ✓ |
