@@ -7,9 +7,6 @@ A unit is a definition file that tells systemd how to start, stop and restart a 
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 
-For every change, the CI of kickd follows these steps from `kickd init` on, on the Ubuntu 24.04 machines of GitHub Actions, for both a system-wide unit and a per-user unit.
-It fires an event, checks the user who runs the command, and checks that systemd starts kickd again after a crash.
-
 ## 1. Place the executable
 
 Put the `kickd` executable in `/usr/local/bin`.
@@ -133,6 +130,17 @@ journalctl --user -u kickd -f
 Every `kickd service` action takes the same `--user` as `install`.
 Without `--user`, an action applies to the system-wide unit.
 
+## Uninstalling the service
+
+```sh
+sudo kickd service stop
+sudo kickd service uninstall
+```
+
+`uninstall` disables the unit and deletes the unit file.
+It leaves a running agent running, so stop the agent first.
+For a per-user unit, run both commands without `sudo` and with `--user`.
+
 ## Limit on watched directories
 
 On Linux, kickd watches files with the kernel's **inotify**.
@@ -147,13 +155,7 @@ echo fs.inotify.max_user_watches=524288 | sudo tee /etc/sysctl.d/90-kickd.conf
 sudo sysctl --system
 ```
 
-## Uninstalling the service
+## Where these steps are tested
 
-```sh
-sudo kickd service stop
-sudo kickd service uninstall
-```
-
-`uninstall` disables the unit and deletes the unit file.
-It leaves a running agent running, so stop the agent first.
-For a per-user unit, run both commands without `sudo` and with `--user`.
+For every change, the CI of kickd follows these steps from `kickd init` on, on the Ubuntu 24.04 machines of GitHub Actions, for both a system-wide unit and a per-user unit.
+It fires an event, checks the user who runs the command, and checks that systemd starts kickd again after a crash.

@@ -11,9 +11,6 @@ SYSTEM is the account that Windows itself uses, and it has more privileges than 
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 
-For every change, the CI of kickd follows these steps from `kickd init` on, on the Windows Server 2025 machines of GitHub Actions.
-It fires an event, checks that the command runs as SYSTEM, and checks that Windows starts kickd again after a crash.
-
 ## 1. Place the executable
 
 Put the executable at `C:\Program Files\kickd\kickd.exe`.
@@ -127,6 +124,16 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 Windows has no per-user form of service.
 kickd ignores `--user` on Windows and installs a service that runs as SYSTEM.
 
+## Uninstalling the service
+
+```powershell
+kickd service stop
+kickd service uninstall
+```
+
+`uninstall` deletes the service definition.
+It leaves a running agent running, so stop the agent first.
+
 ## The environment of commands run as SYSTEM
 
 Commands run as SYSTEM see a different environment from a logged-in user's:
@@ -148,12 +155,7 @@ New-NetFirewallRule -DisplayName kickd -Direction Inbound -Program 'C:\Program F
 The webhook server speaks plain HTTP without TLS, so tokens and request bodies cross the network unencrypted.
 Accept connections from other machines only on a trusted network, or put a reverse proxy that handles TLS in front of kickd.
 
-## Uninstalling the service
+## Where these steps are tested
 
-```powershell
-kickd service stop
-kickd service uninstall
-```
-
-`uninstall` deletes the service definition.
-It leaves a running agent running, so stop the agent first.
+For every change, the CI of kickd follows these steps from `kickd init` on, on the Windows Server 2025 machines of GitHub Actions.
+It fires an event, checks that the command runs as SYSTEM, and checks that Windows starts kickd again after a crash.

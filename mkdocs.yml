@@ -50,29 +50,29 @@ validation:
 
 nav:
   - Home: index.md
-  - Guides:
-      - Building kickd: build.md
+  - Getting started:
+      - Quick start: quickstart.md
       - Installing on macOS: install-macos.md
       - Installing on Linux: install-linux.md
       - Installing on Windows: install-windows.md
+  - Guides:
       - Configuration: configuration.md
       - Runs: runs.md
-      - Command-line reference: cli.md
-      - Webhooks: webhook.md
-      - Configuration reference: config-keys.md
-      - What a command receives: payload.md
       - Running commands: commands.md
-      - Logging: logging.md
-      - Known limitations: limitations.md
-      - Development: development.md
+      - Webhooks: webhook.md
       - Examples: https://github.com/etak64n/kickd/tree/main/examples
   - Settings:
+      - Configuration reference: config-keys.md
       - Log settings: settings/log.md
       - Webhook server settings: settings/webhook.md
       - Database settings: settings/database.md
       - Event settings: settings/events.md
       - Parameter settings: settings/params.md
       - Trigger settings: settings/triggers.md
+  - Reference:
+      - Command-line reference: cli.md
+      - What a command receives: payload.md
+      - Logging: logging.md
   - Internals:
       - Architecture: internals/architecture.md
       - Database internals: internals/database.md
@@ -80,3 +80,7 @@ nav:
       - How commands run: internals/execution.md
       - Platform differences: internals/platforms.md
       - User accounts: internals/users.md
+  - Project:
+      - Known limitations: limitations.md
+      - Building kickd: build.md
+      - Development: development.md

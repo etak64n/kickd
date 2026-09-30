@@ -101,6 +101,53 @@ Commands still running after 10 seconds are stopped with SIGKILL.
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
+## Running without a login
+
+To run kickd while no one is logged in, install it with `sudo` and without `--user`.
+This kind of launchd definition is called a **LaunchDaemon**.
+A LaunchDaemon runs as root from the time the Mac starts, and its definition file is `/Library/LaunchDaemons/kickd.plist`.
+
+A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
+Write absolute paths in the config file, and give the config file with `-c` when installing.
+A config file outside the home folder gets absolute paths from `kickd init`: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
+`kickd init` writes the example events to `event.example.yaml` in the same folder, and kickd reads the events of every YAML file of that folder.
+
+```sh
+sudo kickd init -c "/Library/Application Support/kickd/config.yaml"
+sudo kickd service install -c "/Library/Application Support/kickd/config.yaml"
+sudo kickd service start
+```
+
+If kickd fails to start, the output is written to `/var/log/kickd.err.log`.
+
+## Logs of the service
+
+The service writes its log as JSON to the file set by `log.path`, which is `~/.kickd/kickd.log` with the example config.
+When the file grows past `log.max_size_mb`, kickd renames it to `kickd.log.1` and keeps up to `log.max_backups` old files.
+If kickd fails before it opens the log file, launchd writes that output to `~/kickd.err.log`.
+launchd also creates `~/kickd.out.log`.
+Both files stay empty while kickd runs normally.
+
+## Updating the executable
+
+```sh
+kickd service stop --user
+sudo install -m 755 kickd /usr/local/bin/kickd
+kickd service start --user
+```
+
+Events fired with `kickd event` while the service is stopped, and runs that were waiting, stay in the queue and run after the service starts again.
+If kickd had Full Disk Access, remove it from the list and add it again.
+
+## Uninstalling the service
+
+```sh
+kickd service uninstall --user
+```
+
+`uninstall` stops kickd and deletes the definition file.
+The config file, the database and the logs stay.
+
 ## PATH under launchd
 
 The `PATH` of a kickd started by launchd is only `/usr/bin:/bin:/usr/sbin:/sbin`.
@@ -143,51 +190,7 @@ A new build of kickd has a different signature, so after replacing the executabl
 In cloud-synced folders, file changes are not always reported to programs that watch them.
 Before relying on a watch there, put a file in the folder and check that the event fires.
 
-## Logs of the service
+## Where these steps are tested
 
-The service writes its log as JSON to the file set by `log.path`, which is `~/.kickd/kickd.log` with the example config.
-When the file grows past `log.max_size_mb`, kickd renames it to `kickd.log.1` and keeps up to `log.max_backups` old files.
-If kickd fails before it opens the log file, launchd writes that output to `~/kickd.err.log`.
-launchd also creates `~/kickd.out.log`.
-Both files stay empty while kickd runs normally.
-
-## Updating the executable
-
-```sh
-kickd service stop --user
-sudo install -m 755 kickd /usr/local/bin/kickd
-kickd service start --user
-```
-
-Events fired with `kickd event` while the service is stopped, and runs that were waiting, stay in the queue and run after the service starts again.
-If kickd had Full Disk Access, remove it from the list and add it again.
-
-## Uninstalling the service
-
-```sh
-kickd service uninstall --user
-```
-
-`uninstall` stops kickd and deletes the definition file.
-The config file, the database and the logs stay.
-
-## Running without a login
-
-To run kickd while no one is logged in, install it with `sudo` and without `--user`.
-This kind of launchd definition is called a **LaunchDaemon**.
-A LaunchDaemon runs as root from the time the Mac starts, and its definition file is `/Library/LaunchDaemons/kickd.plist`.
-
-A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
-Write absolute paths in the config file, and give the config file with `-c` when installing.
-A config file outside the home folder gets absolute paths from `kickd init`: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
-`kickd init` writes the example events to `event.example.yaml` in the same folder, and kickd reads the events of every YAML file of that folder.
-
-```sh
-sudo kickd init -c "/Library/Application Support/kickd/config.yaml"
-sudo kickd service install -c "/Library/Application Support/kickd/config.yaml"
-sudo kickd service start
-```
-
-If kickd fails to start, the output is written to `/var/log/kickd.err.log`.
-For every change, the CI of kickd sets up a LaunchDaemon this way on the macOS 26 machines of GitHub Actions, and a LaunchAgent as well.
+For every change, the CI of kickd follows these steps for a LaunchAgent and for a LaunchDaemon on the macOS 26 machines of GitHub Actions.
 It fires an event, checks the user who runs the command, and checks that launchd starts kickd again after a crash.
