@@ -33,7 +33,6 @@ jobs:
       - name: Build
         run: ./scripts/build-all.sh "$GITHUB_REF_NAME"
 
-      # GitHub shows the SHA-256 digest of every file on the release page.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
