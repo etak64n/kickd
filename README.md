@@ -68,16 +68,14 @@ Each file is kickd for one platform, and needs no other files:
 | Windows on x64 | `kickd-windows-amd64.exe` |
 | Windows on ARM | `kickd-windows-arm64.exe` |
 
-The releases page shows the SHA-256 digest of every file.
-On Linux, these commands download kickd for x86-64, print its SHA-256 hash to compare with the digest on the page, and install it as `/usr/local/bin/kickd`:
+On Linux, these commands download kickd for x86-64 and install it as `/usr/local/bin/kickd`:
 
 ```sh
 curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-linux-amd64
-sha256sum kickd-linux-amd64
 sudo install -m 755 kickd-linux-amd64 /usr/local/bin/kickd
 ```
 
-On a Mac, the same commands work with the file name for the Mac, and with `shasum -a 256` in place of `sha256sum`.
+On a Mac, the same commands work with the file name for the Mac.
 
 With Go 1.25 or later, `go install` builds kickd from source instead.
 Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless Go is configured otherwise.
