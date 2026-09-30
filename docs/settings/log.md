@@ -39,12 +39,12 @@ Without `log.path`, the records go wherever the standard error of the agent goes
 - **A Windows service**: a Windows service has no standard error, so without `log.path` its records are lost.
 
 `kickd init` writes a `log.path` at the usual place of the OS.
-A config file inside the home directory is for a user's kickd, and one outside it is for a service of the whole system:
+Run by a user, it writes the config of that user, and run as root or as an administrator, it writes the config for the whole machine:
 
 | Config file | macOS | Linux | Windows |
 |---|---|---|---|
-| Inside the home directory | `~/.kickd/kickd.log` | `~/.kickd/kickd.log` | `~\.kickd\kickd.log` |
-| Outside the home directory | `/Library/Logs/kickd/kickd.log` | `/var/log/kickd/kickd.log` | `C:\ProgramData\kickd\kickd.log` |
+| Of a user | `~/.kickd/kickd.log` | `~/.kickd/kickd.log` | `~\.kickd\kickd.log` |
+| For the whole machine | `/Library/Logs/kickd/kickd.log` | `/var/log/kickd/kickd.log` | `C:\ProgramData\kickd\kickd.log` |
 
 ```yaml
 log:

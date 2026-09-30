@@ -178,7 +178,7 @@ func TestShowPrintsTheOutputOfARun(t *testing.T) {
 func TestVersionPrintsTheVersion(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
-	if r := h.kickdRaw("version"); r.code != 0 || !strings.HasPrefix(r.stdout, "kickd ") {
+	if r := h.kickd("version"); r.code != 0 || !strings.HasPrefix(r.stdout, "kickd ") {
 		t.Errorf("kickd version: exit %d, %q", r.code, r.stdout)
 	}
 }
@@ -186,16 +186,15 @@ func TestVersionPrintsTheVersion(t *testing.T) {
 func TestLicensesPrintTheLicenses(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
-	if r := h.kickdRaw("licenses"); r.code != 0 || !strings.Contains(r.stdout, "MIT License") {
+	if r := h.kickd("licenses"); r.code != 0 || !strings.Contains(r.stdout, "MIT License") {
 		t.Errorf("kickd licenses: exit %d, %.200q", r.code, r.stdout)
 	}
 }
 
-// eventNames returns the names of the events that kickd events lists,
-// with the config that kickd finds by itself.
+// eventNames returns the names of the events that kickd events lists.
 func (h *home) eventNames() string {
 	h.t.Helper()
-	r := h.kickdRaw("events", "--json")
+	r := h.kickd("events", "--json")
 	var events []struct{ Name string }
 	if err := json.Unmarshal([]byte(r.stdout), &events); err != nil {
 		h.t.Fatalf("kickd events: exit %d, %v\n%s", r.code, err, r.stderr)
@@ -207,36 +206,53 @@ func (h *home) eventNames() string {
 	return strings.Join(names, ", ")
 }
 
-func TestCommandsFindKickdYamlInTheCurrentDirectory(t *testing.T) {
+func TestCommandsOfAnAdministratorReadTheConfigInProgramData(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "config-here")
-	if got := h.eventNames(); got != "backup" {
-		t.Errorf("kickd events lists %s, want backup", got)
+	h := newHome(t, "cli")
+	if out := h.must("check"); !strings.HasPrefix(out, "OK: "+h.inHome("kickd", "config.yaml")+" ") {
+		t.Errorf("kickd check:\n%s", out)
 	}
 }
 
-func TestKickdConfigNamesTheConfig(t *testing.T) {
+func TestCommandsOfAnAdministratorDoNotReadTheConfigInTheHomeFolder(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "config-here")
-	h.env = append(h.env, "KICKD_CONFIG="+h.path("elsewhere", "kickd.yaml"))
-	if got := h.eventNames(); got != "deploy" {
-		t.Errorf("kickd events lists %s, want deploy", got)
-	}
-}
-
-func TestTheConfigOfTheUserComesBeforeKickdYaml(t *testing.T) {
-	t.Parallel()
-	h := newHome(t, "config-user")
+	h := newHome(t, "config-admin")
 	if got := h.eventNames(); got != "notify" {
 		t.Errorf("kickd events lists %s, want notify", got)
 	}
 }
 
-func TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome(t *testing.T) {
+func TestCommandsDoNotReadKickdYamlInTheCurrentDirectory(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "config-cwd")
+	if got := h.eventNames(); got != "notify" {
+		t.Errorf("kickd events lists %s, want notify", got)
+	}
+}
+
+func TestTheConfigFlagFailsWithTheReason(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "cli")
+	r := h.kickd("events", "-c", h.config())
+	if r.code != 2 || !strings.Contains(r.stderr, "kickd no longer takes -c: it reads "+h.config()) {
+		t.Errorf("kickd events -c: exit %d\n%s", r.code, r.stderr)
+	}
+}
+
+func TestTheUserFlagFailsWithTheReason(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "cli")
+	r := h.kickd("service", "install", "--user")
+	if r.code != 1 || !strings.Contains(r.stderr, "kickd no longer takes --user") {
+		t.Errorf("kickd service install --user: exit %d\n%s", r.code, r.stderr)
+	}
+}
+
+func TestInitOfAnAdministratorWritesTheConfigIntoProgramData(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
-	r := h.kickdRaw("init")
-	want := h.path(".kickd", "config.yaml")
+	r := h.kickd("init")
+	want := h.path("config.yaml")
 	if r.code != 0 || !hasLine(r.stdout, "wrote "+want) {
 		t.Errorf("kickd init: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
@@ -248,8 +264,8 @@ func TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome(t *testing.T) {
 func TestInitWritesAnEventsFileNextToTheConfig(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
-	r := h.kickdRaw("init")
-	want := h.path(".kickd", "event.example.yaml")
+	r := h.kickd("init")
+	want := h.path("event.example.yaml")
 	if r.code != 0 || !hasLine(r.stdout, "wrote "+want) {
 		t.Errorf("kickd init: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
@@ -258,11 +274,11 @@ func TestInitWritesAnEventsFileNextToTheConfig(t *testing.T) {
 	}
 }
 
-func TestInitPutsTheLogAndTheDatabaseInTheKickdDirectory(t *testing.T) {
+func TestInitOfAnAdministratorPutsTheLogAndTheDatabaseInProgramData(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
 	out := h.must("init")
-	for _, want := range []string{`log:      ~\.kickd\kickd.log`, `database: ~\.kickd\kickd.db`} {
+	for _, want := range []string{"log:      " + h.path("kickd.log"), "database: " + h.path("kickd.db")} {
 		if !hasLine(out, want) {
 			t.Errorf("kickd init has no line %q:\n%s", want, out)
 		}

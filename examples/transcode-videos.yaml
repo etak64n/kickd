@@ -6,7 +6,8 @@
 #
 # Needs:   ffmpeg. A service starts with a short PATH, so if kickd cannot
 #          find ffmpeg, write its absolute path in the command.
-# Service: kickd service install --user
+# Config:  ~/.kickd/config.yaml
+# Service: kickd service install
 # By hand: kickd event transcode
 
 # The usual places on Linux. On macOS, they are ~/Library/Logs/kickd/kickd.log

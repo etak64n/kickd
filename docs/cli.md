@@ -10,8 +10,16 @@ In kickd, a named command in the config file is an **event**.
 Each firing of an event is recorded as a **run** in the **database**, a SQLite file, and the agent starts the command of each run.
 A run that has not started yet waits in the **queue**.
 
-Every subcommand reads the config file.
-The file is the first of these that applies: `-c` or `--config`, the environment variable `KICKD_CONFIG`, `~/.kickd/config.yaml`, and `kickd.yaml` in the current directory.
+Every subcommand reads the config file of the user who runs it, and takes no option that names another file:
+
+| Who runs kickd | Config file |
+|---|---|
+| A user | `~/.kickd/config.yaml` |
+| root on Linux, as with `sudo` | `/etc/kickd/config.yaml` |
+| root on macOS, as with `sudo` | `/Library/Application Support/kickd/config.yaml` |
+| An administrator on Windows, as in a PowerShell opened as administrator | `C:\ProgramData\kickd\config.yaml` |
+
+The config file of root and of administrators is the config for the whole machine, which kickd for the whole machine reads when it runs as a service.
 Every subcommand also reads the events of the other `.yaml` and `.yml` files next to the config file that have an `events` section.
 The subcommands that work with runs read and write the database of the config file directly, the same database that the agent uses.
 
@@ -33,12 +41,18 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd licenses` | Prints the licenses of kickd and of the third-party software that its executables include. |
 | `kickd version` | Prints the version. |
 
-`kickd service` takes two more options:
+`kickd service` works on the service that runs the agent as the same user, with the same config file:
 
-- **--user**: installs a per-user service, which is a LaunchAgent on macOS and a per-user systemd unit on Linux. Windows ignores it.
-- **--name NAME**: sets the service name, `kickd` by default.
+| Who runs kickd service | Service |
+|---|---|
+| A user on macOS | A LaunchAgent, which launchd starts when the user logs in |
+| A user on Linux | A unit of the systemd of the user |
+| root on macOS, as with `sudo` | A LaunchDaemon, which launchd starts when the Mac starts |
+| root on Linux, as with `sudo` | A system-wide unit of systemd |
+| An administrator on Windows | A Windows service, which runs as SYSTEM |
 
-Every action on one service takes the same `--user` and `--name` as its `install`.
+The service is named `kickd`.
+On Windows, `kickd service` needs a PowerShell opened as administrator.
 
 The run ID is the number in the RUN column of `kickd queue` and `kickd runs`, and the `runId` in the agent's log.
 `--json` makes `event`, `events`, `queue`, `runs`, `show` and `status` print JSON.

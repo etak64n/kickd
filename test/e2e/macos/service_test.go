@@ -37,8 +37,7 @@ func changesTheMac(t *testing.T) {
 // runs as root and is set up with sudo, or a LaunchAgent of the user.
 type service struct {
 	t        *testing.T
-	sudo     bool     // a LaunchDaemon
-	flags    []string // the flags of every kickd service action
+	sudo     bool // a LaunchDaemon
 	config   string
 	log      string // where the config puts the log and the database
 	database string
@@ -74,7 +73,6 @@ func launchAgent(t *testing.T) *service {
 	}
 	s := &service{
 		t:        t,
-		flags:    []string{"--user"},
 		config:   filepath.Join(home, ".kickd", "config.yaml"),
 		log:      filepath.Join(home, ".kickd", "kickd.log"),
 		database: filepath.Join(home, ".kickd", "kickd.db"),
@@ -94,9 +92,10 @@ func (s *service) install() {
 	s.waitForAgent(0)
 }
 
-// action returns the arguments of kickd service ACTION for the service.
+// action returns the arguments of kickd service ACTION. kickd works on the
+// LaunchDaemon with sudo, and on the LaunchAgent without it.
 func (s *service) action(name string) []string {
-	return append([]string{"service", name}, s.flags...)
+	return []string{"service", name}
 }
 
 // removeAtEnd stops and uninstalls the service when the test ends, and
@@ -152,10 +151,11 @@ func (s *service) must(name string, args ...string) string {
 	return r.stdout
 }
 
-// kickd runs kickd with args and the config of the service.
+// kickd runs kickd with args, with sudo for the LaunchDaemon, so that it
+// reads the config of the service.
 func (s *service) kickd(args ...string) result {
 	s.t.Helper()
-	return s.run(kickdPath, append(args, "-c", s.config)...)
+	return s.run(kickdPath, args...)
 }
 
 // mustKickd runs a kickd subcommand that has to succeed.
@@ -274,16 +274,29 @@ func environment(r run) map[string]string {
 	return env
 }
 
-func TestServiceInitWritesTheSystemPathsIntoAConfigOutsideTheHome(t *testing.T) {
+func TestServiceInitWithSudoWritesTheConfigForTheWholeMachine(t *testing.T) {
 	changesTheMac(t)
 	s := &service{t: t, sudo: true, config: "/Library/Application Support/kickd/config.yaml"}
 	s.removeAtEnd(filepath.Dir(s.config))
-	s.mustKickd("init")
+	if out := s.mustKickd("init"); !strings.HasPrefix(out, "wrote "+s.config+"\n") {
+		t.Errorf("sudo kickd init:\n%s", out)
+	}
 	text := s.must("cat", s.config)
 	for _, want := range []string{"path: '/Library/Logs/kickd/kickd.log'", "path: '/Library/Application Support/kickd/kickd.db'"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the config has no %q:\n%s", want, text)
 		}
+	}
+}
+
+func TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine(t *testing.T) {
+	changesTheMac(t)
+	s := &service{t: t, sudo: true, config: "/Library/Application Support/kickd/config.yaml"}
+	s.removeAtEnd(filepath.Dir(s.config))
+	s.must("mkdir", "-p", filepath.Dir(s.config))
+	s.must("cp", "testdata/service-daemon/config.yaml", s.config)
+	if out := s.mustKickd("check"); !strings.HasPrefix(out, "OK: "+s.config+" ") {
+		t.Errorf("sudo kickd check:\n%s", out)
 	}
 }
 
@@ -344,11 +357,11 @@ func TestServiceOfTheUserStartsAgainAfterACrash(t *testing.T) {
 	t.Logf("launchd started kickd again %s after the crash", time.Since(killed).Round(time.Second))
 }
 
-func TestServiceInstallWritesALaunchAgentWithTheExecutableAndTheConfig(t *testing.T) {
+func TestServiceInstallWritesALaunchAgentThatRunsKickdInTheKickdDirectory(t *testing.T) {
 	s := launchAgent(t)
 	home, _ := os.UserHomeDir()
 	plist := s.must("cat", filepath.Join(home, "Library", "LaunchAgents", "kickd.plist"))
-	for _, want := range []string{"<string>" + kickdPath + "</string>", "<string>" + s.config + "</string>"} {
+	for _, want := range []string{"<string>" + kickdPath + "</string>", "<string>run</string>", "<string>" + filepath.Dir(s.config) + "</string>"} {
 		if !strings.Contains(plist, want) {
 			t.Errorf("kickd.plist has no %s:\n%s", want, plist)
 		}

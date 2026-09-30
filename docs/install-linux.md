@@ -33,14 +33,14 @@ Move the executable to `/usr/local/bin` before installing the service.
 
 ## 2. Create the config file
 
-A kickd installed as a system-wide unit runs the commands in its config as root.
-Keep the config in `/etc/kickd`, where only root can change it.
-`kickd init` writes two files there, each readable and writable only by its owner: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+A kickd installed as a system-wide unit runs as root, and runs the commands in its config as root.
+Run as root, kickd reads the config for the whole machine, `/etc/kickd/config.yaml`, in a directory that only root can change.
+With `sudo`, `kickd init` writes two files there, each readable and writable only by its owner: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
 
 ```sh
-sudo kickd init -c /etc/kickd/config.yaml
+sudo kickd init
 sudoedit /etc/kickd/event.example.yaml
-sudo kickd check -c /etc/kickd/config.yaml
+sudo kickd check
 ```
 
 The events are those of the README.
@@ -49,7 +49,7 @@ kickd reads the events of every `.yaml` and `.yml` file in `/etc/kickd` that has
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.
-The config file is outside the home directory, so `kickd init` puts the files where Linux keeps them for a service: the log in `/var/log` and the database in `/var/lib`, where data that changes lives:
+For the config for the whole machine, `kickd init` puts the files where Linux keeps them for a service: the log in `/var/log` and the database in `/var/lib`, where data that changes lives:
 
 ```yaml
 log:
@@ -59,7 +59,8 @@ database:
 ```
 
 kickd creates the directories when it first opens the files.
-The database belongs to root, so run `kickd event` and the other commands that read or write it with `sudo` as well.
+With `sudo`, every kickd command reads the config for the whole machine and its database, which belongs to root.
+Run `kickd event` and the other commands with `sudo` as well, such as `sudo kickd event deploy` and `sudo kickd runs`.
 
 systemd collects the standard error of units with **journald**, and `journalctl` reads what journald collected.
 Without `log.path`, kickd writes its log to standard error, so deleting the `path` line of `log` sends the log to journald.
@@ -75,7 +76,7 @@ The unit that kickd writes also reads environment variables from `/etc/sysconfig
 ## 3. Try it in the foreground
 
 ```sh
-sudo kickd run -c /etc/kickd/config.yaml
+sudo kickd run
 ```
 
 Ctrl+C stops it.
@@ -85,7 +86,7 @@ When `log.path` is set, the same records are also written to that file as JSON.
 ## 4. Run kickd as a system-wide unit
 
 ```sh
-sudo kickd service install -c /etc/kickd/config.yaml
+sudo kickd service install
 sudo kickd service start
 systemctl status kickd
 journalctl -u kickd -f
@@ -108,25 +109,24 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 systemd also runs one instance for each logged-in user.
 A unit registered with a user's instance is called a **per-user unit**.
 A per-user unit runs with that user's permissions, and systemd sets `HOME` for it.
-`kickd service install --user` installs kickd as a per-user unit: it writes `~/.config/systemd/user/kickd.service` and enables the unit, so the unit starts when the user's instance of systemd starts.
+`kickd service install`, run without `sudo`, installs kickd as a per-user unit of the user who runs it: it writes `~/.config/systemd/user/kickd.service` and enables the unit, so the unit starts when the user's instance of systemd starts.
 
 A user's instance of systemd normally runs only while the user is logged in.
 `loginctl enable-linger` keeps it running from boot, whether or not the user is logged in.
 
-A per-user unit reads its config from `~/.kickd`, where `kickd init` writes `config.yaml` and `event.example.yaml`, and the config puts the log and the database in `~/.kickd` as well.
+A per-user unit runs as the user, so it reads its config from `~/.kickd`, where `kickd init` writes `config.yaml` and `event.example.yaml`, and the config puts the log and the database in `~/.kickd` as well.
 
 ```sh
 kickd init
 "${EDITOR:-vi}" ~/.kickd/event.example.yaml
 kickd check
 sudo loginctl enable-linger "$USER"
-kickd service install --user
-kickd service start --user
+kickd service install
+kickd service start
 journalctl --user -u kickd -f
 ```
 
-Every `kickd service` action takes the same `--user` as `install`.
-Without `--user`, an action applies to the system-wide unit.
+`kickd service` without `sudo` works on the per-user unit, and with `sudo` on the system-wide unit.
 
 ## Uninstalling the service
 
@@ -137,7 +137,7 @@ sudo kickd service uninstall
 
 `uninstall` disables the unit and deletes the unit file.
 It leaves a running agent running, so stop the agent first.
-For a per-user unit, run both commands without `sudo` and with `--user`.
+For a per-user unit, run both commands without `sudo`.
 
 ## Limit on watched directories
 

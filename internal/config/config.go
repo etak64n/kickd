@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -41,35 +42,24 @@ const ExampleEventsName = "event.example.yaml"
 // into a new config.
 type InitPaths struct{ Log, Database string }
 
-// initPaths are the usual places for the log and the database on each
-// OS: for a user's program, and for a service of the whole system.
-var initPaths = map[string]struct{ user, system InitPaths }{
-	"darwin": {
-		InitPaths{"~/.kickd/kickd.log", "~/.kickd/kickd.db"},
-		InitPaths{"/Library/Logs/kickd/kickd.log", "/Library/Application Support/kickd/kickd.db"},
-	},
-	"linux": {
-		InitPaths{"~/.kickd/kickd.log", "~/.kickd/kickd.db"},
-		InitPaths{"/var/log/kickd/kickd.log", "/var/lib/kickd/kickd.db"},
-	},
-	"windows": {
-		InitPaths{`~\.kickd\kickd.log`, `~\.kickd\kickd.db`},
-		InitPaths{`C:\ProgramData\kickd\kickd.log`, `C:\ProgramData\kickd\kickd.db`},
-	},
-}
-
 // PathsFor returns the log file and the database that "kickd init" writes
-// on the OS goos, as runtime.GOOS names it: those of a service of the whole
-// system when system is true, and those of a user otherwise.
+// on the OS goos, as runtime.GOOS names it: the usual places for a service
+// of the whole machine when system is true, and the directory .kickd of
+// the home directory otherwise.
 func PathsFor(goos string, system bool) InitPaths {
-	p, ok := initPaths[goos]
-	if !ok {
-		p = initPaths["linux"]
+	switch {
+	case !system && goos == "windows":
+		return InitPaths{`~\.kickd\kickd.log`, `~\.kickd\kickd.db`}
+	case !system:
+		return InitPaths{"~/.kickd/kickd.log", "~/.kickd/kickd.db"}
+	case goos == "darwin":
+		return InitPaths{"/Library/Logs/kickd/kickd.log", "/Library/Application Support/kickd/kickd.db"}
+	case goos == "windows":
+		dir := SystemDir(goos)
+		return InitPaths{dir + `\kickd.log`, dir + `\kickd.db`}
+	default:
+		return InitPaths{"/var/log/kickd/kickd.log", "/var/lib/kickd/kickd.db"}
 	}
-	if system {
-		return p.system
-	}
-	return p.user
 }
 
 // ExampleConfig returns the annotated config file that "kickd init" writes
@@ -400,8 +390,8 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(abs)
-	if errors.Is(err, fs.ErrNotExist) && abs == DefaultPath() {
-		return nil, missingDefault(err)
+	if errors.Is(err, fs.ErrNotExist) && abs == Path() {
+		return nil, missing(err, System())
 	}
 	if err != nil {
 		return nil, err
@@ -566,14 +556,27 @@ func parse(data []byte, path string, others []eventsFile) (*Config, error) {
 	return &cfg, nil
 }
 
-// missingDefault explains a missing config file at the default path, and
-// names the file of an earlier version of kickd when one is there.
-func missingDefault(err error) error {
+// missing explains a missing config file at Path, for the whole machine
+// when system is true and for the user otherwise. For the user, it names
+// the file of an earlier version of kickd, and the config file for the
+// whole machine, when one of them is there.
+func missing(err error, system bool) error {
+	root, sudo := "as root", "with sudo"
+	if runtime.GOOS == "windows" {
+		root, sudo = "as an administrator", "in an administrator PowerShell"
+	}
+	if system {
+		return fmt.Errorf("%w; %s, kickd reads the config file for the whole machine, and kickd init writes an example there", err, root)
+	}
+	user := userPath()
 	if dir, derr := os.UserConfigDir(); derr == nil {
 		if old := filepath.Join(dir, "kickd", "config.yaml"); fileExists(old) {
 			return fmt.Errorf("%w; kickd reads its config from %s, and no longer from %s: move that file, and the files that it names, into %s",
-				err, DefaultPath(), old, filepath.Dir(DefaultPath()))
+				err, user, old, filepath.Dir(user))
 		}
+	}
+	if machine := systemPath(); fileExists(machine) {
+		return fmt.Errorf("%w; kickd init writes an example there, and %s, kickd reads %s instead", err, sudo, machine)
 	}
 	return fmt.Errorf("%w; kickd init writes an example there", err)
 }
@@ -1077,9 +1080,19 @@ func renamedKeys(data []byte) error {
 	return &ValidationError{Problems: errs}
 }
 
-// DefaultPath is the config file used when nothing else is specified:
-// config.yaml in the directory .kickd of the home directory, on every OS.
-func DefaultPath() string {
+// Path returns the config file of kickd, which the user who runs kickd
+// decides: config.yaml in SystemDir when kickd runs for the whole machine,
+// as System reports, and config.yaml in the directory .kickd of the home
+// directory otherwise.
+func Path() string {
+	if System() {
+		return systemPath()
+	}
+	return userPath()
+}
+
+// userPath is the config file of the user who runs kickd.
+func userPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
@@ -1091,24 +1104,34 @@ func DefaultPath() string {
 	return abs
 }
 
-// Resolve picks the config file: the flag value, then $KICKD_CONFIG, then
-// DefaultPath if it exists, then ./kickd.yaml if it exists, else
-// DefaultPath.
-func Resolve(flagValue string) string {
-	if flagValue != "" {
-		return flagValue
+// systemPath is the config file of kickd for the whole machine.
+func systemPath() string {
+	return filepath.Join(SystemDir(runtime.GOOS), "config.yaml")
+}
+
+// SystemDir returns the directory of the config file of kickd for the
+// whole machine on the OS goos, as runtime.GOOS names it. Only root and
+// administrators can change the files in it, and kickd for the whole
+// machine runs the commands of its config as root or as SYSTEM.
+func SystemDir(goos string) string {
+	switch goos {
+	case "darwin":
+		return "/Library/Application Support/kickd"
+	case "windows":
+		return programData() + `\kickd`
+	default:
+		return "/etc/kickd"
 	}
-	if p := os.Getenv("KICKD_CONFIG"); p != "" {
-		return p
+}
+
+// programData is the folder in which Windows keeps the data of programs
+// for all users: the value of the environment variable ProgramData, which
+// is C:\ProgramData unless Windows was set up otherwise.
+func programData() string {
+	if dir := strings.TrimRight(os.Getenv("ProgramData"), `\`); dir != "" {
+		return dir
 	}
-	def := DefaultPath()
-	if fileExists(def) {
-		return def
-	}
-	if fileExists("kickd.yaml") {
-		return "kickd.yaml"
-	}
-	return def
+	return `C:\ProgramData`
 }
 
 func fileExists(p string) bool {

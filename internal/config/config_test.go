@@ -390,14 +390,26 @@ func TestLogEnvironmentOverrides(t *testing.T) {
 	}
 }
 
-func TestResolve(t *testing.T) {
-	t.Setenv("KICKD_CONFIG", "")
-	if got := Resolve("x.yaml"); got != "x.yaml" {
-		t.Errorf("flag = %q", got)
+func TestSystemDirIsTheUsualDirectoryOfTheConfigOfAServiceOnEachOS(t *testing.T) {
+	t.Setenv("ProgramData", "")
+	for goos, want := range map[string]string{
+		"linux":   "/etc/kickd",
+		"darwin":  "/Library/Application Support/kickd",
+		"windows": `C:\ProgramData\kickd`,
+	} {
+		if got := SystemDir(goos); got != want {
+			t.Errorf("SystemDir(%q) = %q, want %q", goos, got, want)
+		}
 	}
-	t.Setenv("KICKD_CONFIG", "/etc/kickd/config.yaml")
-	if got := Resolve(""); got != "/etc/kickd/config.yaml" {
-		t.Errorf("env = %q", got)
+}
+
+func TestSystemDirOnWindowsIsInTheFolderThatProgramDataNames(t *testing.T) {
+	t.Setenv("ProgramData", `D:\Data\`)
+	if got := SystemDir("windows"); got != `D:\Data\kickd` {
+		t.Errorf("SystemDir = %q", got)
+	}
+	if p := PathsFor("windows", true); p.Log != `D:\Data\kickd\kickd.log` || p.Database != `D:\Data\kickd\kickd.db` {
+		t.Errorf("PathsFor = %+v", p)
 	}
 }
 

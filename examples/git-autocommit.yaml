@@ -6,7 +6,8 @@
 # finds nothing to commit.
 #
 # Needs:   git, and ~/wiki as a clone with a remote that accepts pushes
-# Service: kickd service install --user
+# Config:  ~/.kickd/config.yaml
+# Service: kickd service install
 # By hand: kickd event git-sync
 
 # The usual places on Linux. On macOS, they are ~/Library/Logs/kickd/kickd.log

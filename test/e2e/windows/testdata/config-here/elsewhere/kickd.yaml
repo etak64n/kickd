@@ -1,5 +1,0 @@
-events:
-  - name: deploy
-    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
-    triggers:
-      - type: manual

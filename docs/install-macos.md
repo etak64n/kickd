@@ -7,7 +7,7 @@ launchd reads a definition file for each program, starts the program as the file
 
 A launchd definition that runs with the permissions of a logged-in user is called a **LaunchAgent**.
 A LaunchAgent runs while that user is logged in.
-`kickd service install --user` installs kickd as a LaunchAgent.
+`kickd service install`, run without `sudo`, installs kickd as a LaunchAgent of the user who runs it.
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 
@@ -79,17 +79,17 @@ With the example config, the same records are also written as JSON to `~/.kickd/
 ## 4. Run kickd as a LaunchAgent
 
 ```sh
-kickd service install --user
-kickd service start --user
-kickd service status --user
+kickd service install
+kickd service start
+kickd service status
 ```
 
-`install` writes the definition file `~/Library/LaunchAgents/kickd.plist`, which holds the absolute paths of the executable and the config file.
+`install` writes the definition file `~/Library/LaunchAgents/kickd.plist`, which starts `kickd run` with the absolute path of the executable.
+The LaunchAgent runs as the user, so its agent reads `~/.kickd/config.yaml`, the config file of the user.
 `start` starts the agent, and from then on launchd starts it at every login.
 When the agent exits, launchd starts it again.
 
-Every `kickd service` action takes the same `--user` as `install`.
-Without `--user`, an action applies to the system-wide definition in `/Library/LaunchDaemons`.
+`kickd service` without `sudo` works on this LaunchAgent, and with `sudo` on the system-wide definition in `/Library/LaunchDaemons`.
 
 On macOS 13 and later, a "Background Items Added" notification may appear when the service is installed.
 When background activity for kickd is turned off in System Settings > General > Login Items & Extensions, launchd does not start kickd.
@@ -101,20 +101,23 @@ When the agent starts again, it handles each interrupted run as the event's `on_
 
 ## Running without a login
 
-To run kickd while no one is logged in, install it with `sudo` and without `--user`.
+To run kickd while no one is logged in, install it with `sudo`.
 This kind of launchd definition is called a **LaunchDaemon**.
 A LaunchDaemon runs as root from the time the Mac starts, and its definition file is `/Library/LaunchDaemons/kickd.plist`.
 
-A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
-Write absolute paths in the config file, and give the config file with `-c` when installing.
-A config file outside the home folder gets absolute paths from `kickd init`: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
+A LaunchDaemon runs as root, so its agent reads the config for the whole machine, `/Library/Application Support/kickd/config.yaml`.
+Only root can change the files of that folder, because the commands of the config run as root.
+`~` in that config file does not refer to the home folder of a user, so write absolute paths there.
+Run with `sudo`, `kickd init` writes that config file with absolute paths: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
 `kickd init` writes the example events to `event.example.yaml` in the same folder, and kickd reads the events of every YAML file of that folder.
 
 ```sh
-sudo kickd init -c "/Library/Application Support/kickd/config.yaml"
-sudo kickd service install -c "/Library/Application Support/kickd/config.yaml"
+sudo kickd init
+sudo kickd service install
 sudo kickd service start
 ```
+
+With `sudo`, every kickd command reads the config for the whole machine, so the other commands for the LaunchDaemon run with `sudo` too, such as `sudo kickd event notify` and `sudo kickd runs`.
 
 If kickd fails to start, the output is written to `/var/log/kickd.err.log`.
 
@@ -129,9 +132,9 @@ Both files stay empty while kickd runs normally.
 ## Updating the executable
 
 ```sh
-kickd service stop --user
+kickd service stop
 sudo install -m 755 kickd /usr/local/bin/kickd
-kickd service start --user
+kickd service start
 ```
 
 Events fired with `kickd event` while the service is stopped, and runs that were waiting, stay in the queue and run after the service starts again.
@@ -140,7 +143,7 @@ If kickd had Full Disk Access, remove it from the list and add it again.
 ## Uninstalling the service
 
 ```sh
-kickd service uninstall --user
+kickd service uninstall
 ```
 
 `uninstall` stops kickd and deletes the definition file.
@@ -179,7 +182,7 @@ To watch a protected folder, or to run commands that read or write one, grant ki
 
 1. Open System Settings > Privacy & Security > Full Disk Access.
 2. Click "+" and add `/usr/local/bin/kickd`. In the file dialog, Command+Shift+G opens a field for typing the path.
-3. Restart kickd with `kickd service stop --user` and `kickd service start --user`.
+3. Restart kickd with `kickd service stop` and `kickd service start`.
 
 Commands started by kickd get their access from kickd's permission.
 macOS ties the permission to the code signature of the executable.

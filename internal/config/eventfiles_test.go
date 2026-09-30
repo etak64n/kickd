@@ -1,8 +1,10 @@
 package config
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -246,22 +248,23 @@ func homeDir(t *testing.T, dir string) {
 	t.Setenv("APPDATA", filepath.Join(dir, "AppData", "Roaming"))
 }
 
-func TestDefaultPathIsConfigYamlInTheKickdDirectoryOfTheHome(t *testing.T) {
+func TestUserPathIsConfigYamlInTheKickdDirectoryOfTheHome(t *testing.T) {
 	home := t.TempDir()
 	homeDir(t, home)
-	if got, want := DefaultPath(), filepath.Join(home, ".kickd", "config.yaml"); got != want {
-		t.Errorf("DefaultPath() = %s, want %s", got, want)
+	if got, want := userPath(), filepath.Join(home, ".kickd", "config.yaml"); got != want {
+		t.Errorf("userPath() = %s, want %s", got, want)
 	}
 }
 
-func TestLoadOfAMissingDefaultConfigSaysThatInitWritesOne(t *testing.T) {
+func TestLoadOfAMissingConfigAtPathSaysThatInitWritesOne(t *testing.T) {
 	homeDir(t, t.TempDir())
-	if _, err := Load(DefaultPath()); err == nil || !strings.Contains(err.Error(), "kickd init writes an example there") {
+	t.Setenv("ProgramData", t.TempDir()) // the folder of the config for the whole machine on Windows
+	if _, err := Load(Path()); err == nil || !strings.Contains(err.Error(), "kickd init writes an example there") {
 		t.Errorf("Load: %v", err)
 	}
 }
 
-func TestLoadOfAMissingDefaultConfigNamesTheConfigOfAnEarlierVersion(t *testing.T) {
+func TestAMissingConfigOfAUserNamesTheConfigOfAnEarlierVersion(t *testing.T) {
 	homeDir(t, t.TempDir())
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -269,7 +272,31 @@ func TestLoadOfAMissingDefaultConfigNamesTheConfigOfAnEarlierVersion(t *testing.
 	}
 	old := filepath.Join(dir, "kickd", "config.yaml")
 	writeFiles(t, filepath.Dir(old), map[string]string{"config.yaml": event("backup")})
-	if _, err := Load(DefaultPath()); err == nil || !strings.Contains(err.Error(), "no longer from "+old) {
-		t.Errorf("Load: %v", err)
+	if err := missing(fs.ErrNotExist, false); !strings.Contains(err.Error(), "no longer from "+old) {
+		t.Errorf("missing: %v", err)
+	}
+}
+
+func TestAMissingConfigOfAUserNamesTheConfigForTheWholeMachine(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the config for the whole machine is in /etc or /Library, where a test cannot write")
+	}
+	homeDir(t, t.TempDir())
+	machine := t.TempDir()
+	t.Setenv("ProgramData", machine)
+	writeFiles(t, filepath.Join(machine, "kickd"), map[string]string{"config.yaml": event("backup")})
+	want := "in an administrator PowerShell, kickd reads " + filepath.Join(machine, "kickd", "config.yaml") + " instead"
+	if err := missing(fs.ErrNotExist, false); !strings.Contains(err.Error(), want) {
+		t.Errorf("missing: %v", err)
+	}
+}
+
+func TestAMissingConfigForTheWholeMachineSaysWhoReadsIt(t *testing.T) {
+	want := "as root, kickd reads the config file for the whole machine"
+	if runtime.GOOS == "windows" {
+		want = "as an administrator, kickd reads the config file for the whole machine"
+	}
+	if err := missing(fs.ErrNotExist, true); !strings.Contains(err.Error(), want) {
+		t.Errorf("missing: %v", err)
 	}
 }

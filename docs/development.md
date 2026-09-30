@@ -19,7 +19,8 @@ On all three OSes, it also runs the end-to-end tests of that OS.
 
 The end-to-end tests in `test/e2e` run the kickd executable the way its users do.
 Each OS has a package of its own, `test/e2e/macos`, `test/e2e/linux` and `test/e2e/windows`, with its own harness and its own test data.
-A test copies a directory of `testdata`, which holds a config and the scripts of its events, into a new home directory, starts `kickd run`, fires events through their triggers or with `kickd event`, and checks the runs that kickd records.
+A test copies a directory of `testdata` into a new home directory, where `.kickd` holds the config file and the scripts of its events, starts `kickd run`, fires events through their triggers or with `kickd event`, and checks the runs that kickd records.
+The runners of GitHub Actions run the Windows tests as an administrator, and an administrator's kickd reads the config file in the folder `kickd` of `ProgramData`, so the folder of each Windows test is also the `ProgramData` folder of its kickd.
 Each test checks one behavior, which its name says, and [test/e2e/README.md](https://github.com/etak64n/kickd/blob/main/test/e2e/README.md) lists them all.
 
 They build only with the tag `e2e`, and each package only on its own OS:

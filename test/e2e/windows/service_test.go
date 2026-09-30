@@ -40,8 +40,8 @@ type service struct {
 }
 
 // windowsService installs kickd as a Windows service with the config of
-// testdata/service, and starts it. flags go to kickd service install.
-func windowsService(t *testing.T, flags ...string) *service {
+// testdata/service, and starts it.
+func windowsService(t *testing.T) *service {
 	t.Helper()
 	changesTheMachine(t)
 	s := &service{
@@ -52,7 +52,7 @@ func windowsService(t *testing.T, flags ...string) *service {
 	}
 	s.removeAtEnd()
 	copyTree(t, `testdata\service`, `C:\ProgramData\kickd`)
-	s.mustKickd(append([]string{"service", "install"}, flags...)...)
+	s.mustKickd("service", "install")
 	s.mustKickd("service", "start")
 	s.waitForAgent(0)
 	return s
@@ -87,10 +87,11 @@ func (s *service) run(name string, args ...string) result {
 	return result{stdout.String(), stderr.String(), cmd.ProcessState.ExitCode()}
 }
 
-// kickd runs kickd with args and the config of the service.
+// kickd runs kickd with args as an administrator, so that it reads the
+// config of the service.
 func (s *service) kickd(args ...string) result {
 	s.t.Helper()
-	return s.run(kickdPath, append(args, "-c", s.config)...)
+	return s.run(kickdPath, args...)
 }
 
 // mustKickd runs a kickd subcommand that has to succeed.
@@ -202,11 +203,13 @@ func environment(r run) map[string]string {
 	return env
 }
 
-func TestServiceInitWritesTheSystemPathsIntoAConfigOutsideTheHome(t *testing.T) {
+func TestServiceInitOfAnAdministratorWritesTheConfigForTheWholeMachine(t *testing.T) {
 	changesTheMachine(t)
 	s := &service{t: t, config: `C:\ProgramData\kickd\config.yaml`}
 	s.removeAtEnd()
-	s.mustKickd("init")
+	if out := s.mustKickd("init"); !strings.HasPrefix(out, "wrote "+s.config+"\n") {
+		t.Errorf("kickd init:\n%s", out)
+	}
 	b, err := os.ReadFile(s.config)
 	if err != nil {
 		t.Fatal(err)
@@ -275,13 +278,6 @@ func TestServiceGivesCommandsTheTempFolderOfWindows(t *testing.T) {
 	s := windowsService(t)
 	if got := environment(s.waitForRun(s.fire("show-env")))["TEMP"]; !strings.EqualFold(got, `C:\Windows\TEMP`) {
 		t.Errorf("TEMP=%s", got)
-	}
-}
-
-func TestServiceInstallWithUserInstallsTheServiceOfTheSystem(t *testing.T) {
-	s := windowsService(t, "--user")
-	if r := s.waitForRun(s.fire("whoami")); strings.TrimSpace(r.Output) != `nt authority\system` {
-		t.Errorf("whoami: %s\n%s", r.Status, r.Output)
 	}
 }
 

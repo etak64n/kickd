@@ -22,7 +22,7 @@ func TestStartupDoesNotFireWhenTheConfigIsSaved(t *testing.T) {
 	h.start()
 	h.waitForRuns("prepare", 1)
 	offset := fileSize(h.path("kickd.log"))
-	h.save("edits/kickd.edited.yaml")
+	h.save("edits/config.edited.yaml")
 	h.waitForLog(h.path("kickd.log"), offset, "Config reloaded", 1)
 	time.Sleep(2 * time.Second)
 	if rs := h.runs("prepare"); len(rs) != 1 {

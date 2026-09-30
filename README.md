@@ -90,8 +90,9 @@ The installation guides for [macOS](docs/install-macos.md), [Linux](docs/install
 
 With `kickd` installed, these steps define an event, run the agent and fire the event.
 
-1. In an empty directory, create a config file named `kickd.yaml` that defines one event, `hello`.
-   Without `database.path`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
+1. Create the config file `~/.kickd/config.yaml`, `%USERPROFILE%\.kickd\config.yaml` on Windows, with one event, `hello`.
+   kickd reads this file for the user who runs it, so run the steps without `sudo`, and on Windows in a PowerShell that was not opened as administrator.
+   Without `database.path`, kickd keeps its database, `kickd.db`, next to the config file.
 
    ```yaml
    events:
@@ -105,14 +106,14 @@ With `kickd` installed, these steps define an event, run the agent and fire the 
    Ctrl+C stops it.
 
    ```sh
-   kickd run -c kickd.yaml
+   kickd run
    ```
 
 3. In another terminal, fire the event.
    With `--wait`, `kickd event` waits for the run to finish and prints the result.
 
    ```sh
-   kickd event hello --wait -c kickd.yaml
+   kickd event hello --wait
    ```
 
    ```text
@@ -123,21 +124,23 @@ With `kickd` installed, these steps define an event, run the agent and fire the 
 4. Show the run, including the output of its command.
 
    ```sh
-   kickd show 1 -c kickd.yaml
+   kickd show 1
    ```
 
 To keep kickd running in the background, install it as a service by following the installation guide for the OS.
 
 ## The config file
 
-kickd reads its settings from `~/.kickd/config.yaml`, on every OS, and its events from the YAML files in `~/.kickd`.
+kickd reads its settings from `~/.kickd/config.yaml`, and its events from the YAML files in `~/.kickd`.
+Run as root with `sudo`, or as an administrator on Windows, kickd reads the config for the whole machine instead: from `/etc/kickd` on Linux, `/Library/Application Support/kickd` on macOS, and `C:\ProgramData\kickd` on Windows.
+A service of the whole machine runs its commands as root, or as SYSTEM on Windows, so only root and administrators can change the files of that config.
 `config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default.
 Events are listed under `events`, in `config.yaml` or in any other `.yaml` or `.yml` file of the directory: kickd reads every file there that has an `events` section, so each group of events, such as those of one app, can have a file of its own.
 
 Commands, shells and paths differ between operating systems, so the files are written for one OS.
 `kickd init` writes two files for the OS that it runs on: `config.yaml`, and `event.example.yaml` with one event for each of the manual, cron, webhook and file triggers.
 Every event there has a manual trigger, and notify follows a backup that fails with an after trigger.
-On Windows, the files are for a service of the whole system, in `C:\ProgramData\kickd`, because Windows has no service for one user:
+On Windows, the files are the config for the whole machine in `C:\ProgramData\kickd`, which `kickd init` writes in a PowerShell opened as administrator, because Windows has no service for one user:
 
 <details open>
 <summary>macOS and Linux</summary>

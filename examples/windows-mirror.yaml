@@ -12,9 +12,10 @@
 # The kickd service runs as SYSTEM, so the paths are absolute, and a local
 # drive is used: SYSTEM cannot use a network drive that a user mapped.
 #
-# Service: kickd service install -c C:\ProgramData\kickd\config.yaml
-#          (in PowerShell opened as administrator)
-# By hand: kickd event mirror-documents -c C:\ProgramData\kickd\config.yaml
+# Config:  C:\ProgramData\kickd\config.yaml
+# Service: kickd service install
+# By hand: kickd event mirror-documents
+#          (both in PowerShell opened as administrator)
 
 log:
   path: 'C:\ProgramData\kickd\kickd.log'

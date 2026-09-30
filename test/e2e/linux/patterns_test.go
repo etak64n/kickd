@@ -42,7 +42,7 @@ func TestAProgramIsFoundInThePathOfTheEvent(t *testing.T) {
 	h := newHome(t, "patterns")
 	h.start()
 	r := h.waitForRun(h.fire("greet"))
-	if r.Status != "succeeded" || r.line("greet") != "hello" || r.line("program") != filepath.Join(h.path("bin"), "greet") {
+	if r.Status != "succeeded" || r.line("greet") != "hello" || r.line("program") != filepath.Join(h.inHome("bin"), "greet") {
 		t.Errorf("greet: %s\n%s", r.Status, r.Output)
 	}
 }
