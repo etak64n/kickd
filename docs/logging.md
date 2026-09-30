@@ -71,6 +71,11 @@ The same two records in text format:
 | `Missed schedule caught up` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and one run makes up for them, as `missed: run` says | `event`, `schedule`, `scheduledAt`, `count`, `detail` |
 | `Missed schedule skipped` | INFO | Scheduled times passed while the machine slept or kickd was stopped, and kickd skips them, as `missed: skip` says | `event`, `schedule`, `scheduledAt`, `count`, `nextRunAt` |
 | `Webhook server listening` | INFO | The webhook server started listening | `listen`, `count` |
+| `Startup trigger fired` | INFO | The agent started and fired an event with a startup trigger | `event` |
+| `Wake watch started` | INFO | The agent started to watch for the machine waking from sleep | `count` |
+| `Wake detected` | INFO | The machine woke from sleep, and the events with wake triggers fire | `sleptAt`, `durationMs`, `count` |
+| `Sleep clock unavailable` | WARN | Reading the clocks of the OS that measure sleep failed | `detail` |
+| `After trigger fired` | INFO | A run ended, and an event with an after trigger for it fires | `event`, `runId`, `afterEvent`, `afterRunId`, `status` |
 | `Webhook triggers disabled` | INFO | `webhook.enabled` is `false`, so the webhook server does not start and the webhook triggers do not fire | `count` |
 | `Run started` | INFO | The command of a run started | `event`, `trigger`, `triggerId`, `runId`, `attempt`, `source` |
 | `Run completed` | INFO | The command exited with code 0 | `exitCode`, `durationMs`, `skipped` |

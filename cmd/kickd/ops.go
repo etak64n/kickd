@@ -375,6 +375,10 @@ func triggerNames(e config.Event) []string {
 			out = append(out, "webhook "+t.Path)
 		case config.TriggerFile:
 			out = append(out, "file "+t.Path)
+		case config.TriggerAfter:
+			out = append(out, "after "+t.Event)
+		case config.TriggerStartup, config.TriggerWake:
+			out = append(out, t.Type)
 		}
 	}
 	return out

@@ -40,13 +40,16 @@ go test -tags usecase ./test/usecase
 
 A kind of command whose program is not installed is skipped, and with `KICKD_USECASE_ALL=1` it fails the test instead.
 
-The service tests install kickd as a service of the whole system and as a per-user service, the way the installation guides do.
-They write the config, the log and the database to the places of the OS, such as `/etc/kickd`, and need sudo on macOS and Linux and an administrator on Windows.
-So they run only with `KICKD_SERVICE_TEST=1`, on a machine that can be thrown away, such as a runner of GitHub Actions:
+Some tests change the machine.
+The service tests install kickd as a service of the whole system and as a per-user service, the way the installation guides do, and write the config, the log and the database to the places of the OS, such as `/etc/kickd`.
+Another test moves the wall clock 2 minutes ahead and back, to check that wake triggers do not take it for a sleep.
+These tests need sudo on macOS and Linux and an administrator on Windows, so they run only with `KICKD_MACHINE_TEST=1`, on a machine that can be thrown away, such as a runner of GitHub Actions:
 
 ```sh
-KICKD_SERVICE_TEST=1 go test -tags usecase -run TestService ./test/usecase
+KICKD_MACHINE_TEST=1 go test -tags usecase -run 'TestService|TestMachine' ./test/usecase
 ```
+
+A runner cannot sleep, so the unit tests of `internal/trigger` check wake triggers with a clock that the test moves, and the use-case tests check that wake triggers do not fire while the machine is awake.
 
 Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
 

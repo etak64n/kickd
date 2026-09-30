@@ -110,6 +110,9 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 			msg = "Config reloaded"
 		}
 		log.Info(msg, "file", cfg.Path, "eventCount", len(cfg.Events), "triggerCount", countTriggers(cfg))
+		if first {
+			fireStartup(cfg, disp, log)
+		}
 
 		next, err := waitForChange(ctx, log, opts.ConfigPath, reload, errCh)
 		switch {
@@ -221,6 +224,7 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 	cronSched := trigger.NewCronScheduler(log, state)
 	var hook *trigger.WebhookServer
 	disabledHooks := 0
+	wakes := map[string]event.Handler{}
 	type runnable struct {
 		name string
 		run  func(context.Context) error
@@ -273,8 +277,14 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 					Logger:    log,
 				}
 				runnables = append(runnables, runnable{event.KindFile, func(ctx context.Context) error { return fw.Run(ctx, h) }})
+			case config.TriggerWake:
+				wakes[e.Name] = h
 			}
 		}
+	}
+	if len(wakes) > 0 {
+		ww := &trigger.WakeWatcher{Events: wakes, Logger: log}
+		runnables = append(runnables, runnable{event.KindWake, ww.Run})
 	}
 	if cronSched.Len() > 0 {
 		runnables = append(runnables, runnable{event.KindCron, cronSched.Run})
@@ -319,6 +329,12 @@ func specs(cfg *config.Config) []runner.Spec {
 		for _, p := range e.Params {
 			defaults[p.Name] = p.Default
 		}
+		var after []runner.AfterTrigger
+		for _, t := range e.Triggers {
+			if t.Type == config.TriggerAfter {
+				after = append(after, runner.AfterTrigger{Event: t.Event, Statuses: t.Status})
+			}
+		}
 		out[i] = runner.Spec{
 			Name:        e.Name,
 			Command:     e.Command,
@@ -332,9 +348,26 @@ func specs(cfg *config.Config) []runner.Spec {
 			Stdin:       e.Stdin,
 			LogOutput:   e.LogsOutput(),
 			Defaults:    defaults,
+			After:       after,
 		}
 	}
 	return out
+}
+
+// fireStartup fires the events with a startup trigger. The agent calls it
+// once, when it starts; a reload does not fire them.
+func fireStartup(cfg *config.Config, disp *runner.Dispatcher, log *slog.Logger) {
+	now := time.Now()
+	for _, e := range cfg.Events {
+		for _, t := range e.Triggers {
+			if t.Type != config.TriggerStartup {
+				continue
+			}
+			ev := event.Event{RequestID: event.NewID(), Trigger: event.KindStartup, TriggerID: "startup", Time: now}
+			disp.Handler(e.Name).Dispatch(ev)
+			log.Info("Startup trigger fired", "requestId", ev.RequestID, "event", e.Name)
+		}
+	}
 }
 
 func countTriggers(cfg *config.Config) int {

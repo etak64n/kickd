@@ -57,7 +57,7 @@ events:
         debounce: 2s
       - type: manual         # kickd event build also runs it
 
-  # Manual: only by hand, with kickd event notify.
+  # Manual and after: by hand with kickd event notify, and when a backup fails.
   - name: notify
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
     workdir: 'C:\app'
@@ -66,3 +66,6 @@ events:
     on_interrupt: abandon
     triggers:
       - type: manual
+      - type: after             # a backup that failed or was given up
+        event: backup
+        status: [failed, abandoned]

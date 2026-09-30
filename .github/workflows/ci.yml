@@ -76,11 +76,12 @@ jobs:
         env:
           KICKD_USECASE_ALL: '1'
 
-      # The runner is a throwaway machine, so the tests may install services.
-      - name: Services
-        run: go test -tags usecase -count=1 -v -run TestService ./test/usecase
+      # The runner is a throwaway machine, so the tests may install services
+      # and move the clock.
+      - name: Tests that change the machine
+        run: go test -tags usecase -count=1 -v -run 'TestService|TestMachine' ./test/usecase
         env:
-          KICKD_SERVICE_TEST: '1'
+          KICKD_MACHINE_TEST: '1'
 
   # go.mod promises that Go 1.25 builds kickd.
   minimum-go:

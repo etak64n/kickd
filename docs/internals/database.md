@@ -62,8 +62,12 @@ The `runs` table holds one row per run:
 | `skipped` | How many firings were skipped while this run was active |
 | `cancel_requested` | Set by `kickd cancel` for a running run |
 | `created_at`, `started_at`, `finished_at`, `duration_ms` | Times, in milliseconds since 1970 |
+| `followed` | Set when the dispatcher has handed the run, which has ended, to after triggers |
 
 The `agent` table holds a single row about the agent: its process ID, version, host, start time, last heartbeat and stop time.
+
+When a run ends, the dispatcher reads it among the ended runs whose `followed` is not set, inserts the runs that after triggers fire for it, and sets `followed`, all in one transaction.
+So a crash of the agent neither loses the runs of after triggers nor inserts them twice, and a run that another process ends, such as one that `kickd cancel` cancels while it waits, reaches after triggers as well.
 
 The `cron_state` table holds, for each cron trigger, the time kickd last handled it.
 A start compares that time with the schedule of the trigger, to find the scheduled times that passed while kickd was stopped.

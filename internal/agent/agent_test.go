@@ -338,3 +338,42 @@ func TestAgentHandlesCronMissedWhileStopped(t *testing.T) {
 		})
 	}
 }
+
+// A startup trigger fires once when the agent starts: a reload does not
+// fire it, and the next start does.
+func TestAgentFiresStartupOncePerStart(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	out := filepath.Join(dir, "started.txt")
+	body := "events:\n  - name: prepare\n" + helperEvent("append-event", out) + "    triggers: [{type: startup}]\n"
+	writeFile(t, cfgPath, body)
+	log, loaded := messageLogger("Config reloaded", slog.LevelInfo)
+	cancel, done := startAgentWith(t, cfgPath, log)
+	waitForFile(t, out, "trigger=startup", 10*time.Second)
+
+	writeFile(t, cfgPath, body+"  - name: other\n"+helperEvent("append", filepath.Join(dir, "other.txt"))+"    triggers: [{type: manual}]\n")
+	select {
+	case <-loaded:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the config was not reloaded")
+	}
+	time.Sleep(time.Second)
+	stopAgent(t, cancel, done)
+	if b, _ := os.ReadFile(out); strings.Count(string(b), "trigger=startup") != 1 {
+		t.Fatalf("after a reload: %q, want one startup", b)
+	}
+
+	cancel, done = startAgent(t, cfgPath)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		b, _ := os.ReadFile(out)
+		if strings.Count(string(b), "trigger=startup") == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after a restart: %q, want two startups", b)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	stopAgent(t, cancel, done)
+}

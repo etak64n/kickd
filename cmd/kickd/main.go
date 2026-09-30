@@ -266,6 +266,12 @@ func describeKick(e config.Event) string {
 
 func describeTrigger(t config.Trigger) string {
 	switch t.Type {
+	case config.TriggerAfter:
+		return "after    " + t.Event + " (" + strings.Join(t.Status, ", ") + ")"
+	case config.TriggerStartup:
+		return "startup  when the agent starts"
+	case config.TriggerWake:
+		return "wake     when the machine wakes from sleep"
 	case config.TriggerFile:
 		s := fmt.Sprintf("file     %s (changes=%s, debounce=%s", t.Path, strings.Join(t.Changes, ","), t.Debounce)
 		if t.Recursive {

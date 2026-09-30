@@ -153,7 +153,21 @@ func TestParseErrors(t *testing.T) {
 		{"unknown trigger type", "events:\n  - name: a" + ok + "    triggers: [{type: timer}]", "unknown type"},
 		{"no triggers", "events:\n  - name: a" + ok, "triggers is required"},
 		{"two manual triggers", "events:\n  - name: a" + ok + "    triggers: [{type: manual}, {type: manual}]", "already has a manual trigger"},
-		{"key on a manual trigger", "events:\n  - name: a" + ok + "    triggers: [{type: manual, schedule: '@hourly'}]", "no keys other than type"},
+		{"key on a manual trigger", "events:\n  - name: a" + ok + "    triggers: [{type: manual, schedule: '@hourly'}]", "schedule is not allowed on a manual trigger"},
+		{"after without event", "events:\n  - name: a" + ok + "    triggers: [{type: after, status: [failed]}]", "event is required"},
+		{"after itself", "events:\n  - name: a" + ok + "    triggers: [{type: after, event: a, status: [failed]}]", "cannot follow itself"},
+		{"after an unknown event", "events:\n  - name: a" + ok + "    triggers: [{type: after, event: nope, status: [failed]}]", `unknown event "nope"`},
+		{"after without status", "events:\n  - name: a" + ok + "  - name: b" + ok + "    triggers: [{type: after, event: a}]", "status is required"},
+		{"after an unknown status", "events:\n  - name: a" + ok + "  - name: b" + ok + "    triggers: [{type: after, event: a, status: [retried]}]", `unknown status "retried"`},
+		{"after a status twice", "events:\n  - name: a" + ok + "  - name: b" + ok + "    triggers: [{type: after, event: a, status: [failed, failed]}]", "duplicate status failed"},
+		{"after one event twice", "events:\n  - name: a" + ok + "  - name: b" + ok + "    triggers: [{type: after, event: a, status: [failed]}, {type: after, event: a, status: [succeeded]}]", "already follows a"},
+		{"key on an after trigger", "events:\n  - name: a" + ok + "  - name: b" + ok + "    triggers: [{type: after, event: a, status: [failed], path: /x}]", "path is not allowed on an after trigger"},
+		{"after cycle", "events:\n  - name: a" + ok + "    triggers: [{type: after, event: b, status: [failed]}]\n  - name: b" + ok + "    triggers: [{type: after, event: a, status: [failed]}]", "cycle, in which each run fires the next one forever: a follows b, and b follows a"},
+		{"longer after cycle", "events:\n  - name: a" + ok + "    triggers: [{type: after, event: c, status: [failed]}]\n  - name: b" + ok + "    triggers: [{type: after, event: a, status: [failed]}]\n  - name: c" + ok + "    triggers: [{type: after, event: b, status: [failed]}]", "a follows c, c follows b, and b follows a"},
+		{"required param with after", "events:\n  - name: a" + ok + "  - name: b\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: after, event: a, status: [failed]}]", "cannot supply required parameters"},
+		{"two startup triggers", "events:\n  - name: a" + ok + "    triggers: [{type: startup}, {type: startup}]", "already has a startup trigger"},
+		{"key on a wake trigger", "events:\n  - name: a" + ok + "    triggers: [{type: wake, schedule: '@hourly'}]", "schedule is not allowed on a wake trigger"},
+		{"required param with wake", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: wake}]", "cannot supply required parameters"},
 		{"bad cron", "events:\n  - name: a" + ok + "    triggers: [{type: cron, schedule: 'every day'}]", "schedule"},
 		{"bad timezone", "events:\n  - name: a" + ok + "    triggers: [{type: cron, schedule: '@hourly', timezone: Mars/Olympus}]", "timezone"},
 		{"webhook path without slash", "events:\n  - name: a" + ok + "    triggers: [{type: webhook, path: hooks}]", "must start with /"},
@@ -219,6 +233,35 @@ events:
 		if e.Shell != want.shell || !slices.Equal(e.Command, want.args) {
 			t.Errorf("%s: shell %q, command %q", e.Name, e.Shell, e.Command)
 		}
+	}
+}
+
+// after, startup and wake triggers load with their keys.
+func TestAfterStartupWakeTriggers(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: backup
+    command: [x]
+    triggers: [{type: manual}]
+  - name: notify
+    command: [x]
+    triggers:
+      - type: after
+        event: backup
+        status: [Failed, abandoned]
+      - type: startup
+      - type: wake
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := cfg.EventByName("notify")
+	if after := e.Triggers[0]; after.Event != "backup" || !slices.Equal(after.Status, []string{"failed", "abandoned"}) {
+		t.Errorf("after = %+v", after)
+	}
+	if e.Triggers[1].Type != TriggerStartup || e.Triggers[2].Type != TriggerWake {
+		t.Errorf("triggers = %+v", e.Triggers)
 	}
 }
 

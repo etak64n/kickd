@@ -67,6 +67,15 @@ type Spec struct {
 	LogOutput   bool
 	// Defaults fills in parameters that a firing does not set.
 	Defaults map[string]string
+	// After lists the events whose runs fire this event when they end.
+	After []AfterTrigger
+}
+
+// AfterTrigger fires an event when a run of Event ends with one of
+// Statuses.
+type AfterTrigger struct {
+	Event    string
+	Statuses []string
 }
 
 // Stats counts job runs since the runner was created.

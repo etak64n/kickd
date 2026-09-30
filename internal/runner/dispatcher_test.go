@@ -491,3 +491,51 @@ func TestFullScanIsFollowedAtOnce(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// An after trigger fires its event when a run of the followed event ends
+// with a listed status, and passes that run in the payload. A run that
+// ends with another status, or one that another process ends, is handed
+// over as well, and fires only the triggers that list its status.
+func TestAfterTriggersFollowEndedRuns(t *testing.T) {
+	failing := helperJob("exit")
+	failing.Name = "backup"
+	notify := helperJob("env")
+	notify.Name = "notify"
+	notify.After = []AfterTrigger{{Event: "backup", Statuses: []string{"failed", "canceled"}}}
+	report := helperJob("env")
+	report.Name = "report"
+	report.After = []AfterTrigger{{Event: "notify", Statuses: []string{"succeeded"}}}
+	env := newDispatcher(t, failing, notify, report)
+	ctx := context.Background()
+
+	env.d.Handler("backup").Dispatch(fired("backup"))
+	env.rec.waitFor(t, "After trigger fired", 2, 15*time.Second)
+	runs, err := env.store.ListRuns(ctx, queue.Filter{Event: "notify"})
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("notify runs = %+v, %v", runs, err)
+	}
+	r := waitRun(t, env.store, runs[0].ID, queue.StatusSucceeded)
+	var ev event.Event
+	if err := json.Unmarshal(r.Payload, &ev); err != nil || r.Trigger != event.KindAfter || r.TriggerID != "after:backup" ||
+		ev.After == nil || ev.After.Event != "backup" || ev.After.Status != queue.StatusFailed || ev.After.ExitCode == nil || *ev.After.ExitCode != 3 {
+		t.Fatalf("notify: %+v, after %+v, %v", r, ev.After, err)
+	}
+	if !strings.Contains(r.Output, "KICKD_TRIGGER=after") {
+		t.Errorf("the command of notify got:\n%s", r.Output)
+	}
+	// report follows notify, which succeeded.
+	if runs, err := env.store.ListRuns(ctx, queue.Filter{Event: "report"}); err != nil || len(runs) != 1 || runs[0].TriggerID != "after:notify" {
+		t.Fatalf("report runs = %+v, %v", runs, err)
+	}
+
+	// A run canceled while it waits, as kickd cancel does from its own
+	// process, fires notify too.
+	id, _, err := env.store.Enqueue(ctx, queue.Run{RequestID: "waiting", Event: "backup", Trigger: event.KindManual, TriggerID: "manual", Payload: []byte(`{}`), CreatedAt: time.Now().Add(time.Hour)}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.RequestCancel(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	env.rec.waitFor(t, "After trigger fired", 3, 15*time.Second)
+}
