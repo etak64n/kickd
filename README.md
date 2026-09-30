@@ -26,12 +26,15 @@ An event holds the command to run and a list of triggers.
 Firing an event requests one run of its command.
 
 A **trigger** fires an event.
-kickd has four kinds of trigger:
+kickd has seven kinds of trigger:
 
 - **Manual**: `kickd event NAME` fires the event.
 - **Cron**: the event fires at the times given by a cron expression.
 - **Webhook**: the event fires when an HTTP request arrives at a path that kickd listens on.
 - **File**: the event fires when files are created, written, removed or renamed in a directory.
+- **After**: the event fires when a run of another event ends with one of the given statuses, such as a backup that failed.
+- **Startup**: the event fires once when the agent starts.
+- **Wake**: the event fires when the machine wakes from sleep.
 
 An event fires only through the triggers that it lists, and it can list several of them.
 
@@ -47,7 +50,7 @@ Only `events` is required, and every other key has a default.
 Commands, shells and paths differ between operating systems, so a config file is written for one OS.
 `kickd init` writes these files, the one for the OS that it runs on.
 The paths of the log and the database depend on where the config file is: these files have them for a config file in the home directory on macOS and Linux, and in `C:\ProgramData\kickd` on Windows.
-Each file defines one event for each kind of trigger, and gives the other events a manual trigger as well:
+Each file defines one event for each of the manual, cron, webhook and file triggers, gives every event a manual trigger, and lets notify follow a backup that fails with an after trigger:
 
 <details open>
 <summary>macOS</summary>
@@ -112,7 +115,7 @@ events:
         debounce: 2s
       - type: manual         # kickd event build also runs it
 
-  # Manual: only by hand, with kickd event notify.
+  # Manual and after: by hand with kickd event notify, and when a backup fails.
   - name: notify
     command: ['./notify.sh']
     workdir: '~/app'
@@ -121,6 +124,9 @@ events:
     on_interrupt: abandon
     triggers:
       - type: manual
+      - type: after             # a backup that failed or was given up
+        event: backup
+        status: [failed, abandoned]
 ```
 
 </details>
@@ -188,7 +194,7 @@ events:
         debounce: 2s
       - type: manual         # kickd event build also runs it
 
-  # Manual: only by hand, with kickd event notify.
+  # Manual and after: by hand with kickd event notify, and when a backup fails.
   - name: notify
     command: ['./notify.sh']
     workdir: '~/app'
@@ -197,6 +203,9 @@ events:
     on_interrupt: abandon
     triggers:
       - type: manual
+      - type: after             # a backup that failed or was given up
+        event: backup
+        status: [failed, abandoned]
 ```
 
 </details>
@@ -264,7 +273,7 @@ events:
         debounce: 2s
       - type: manual         # kickd event build also runs it
 
-  # Manual: only by hand, with kickd event notify.
+  # Manual and after: by hand with kickd event notify, and when a backup fails.
   - name: notify
     command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
     workdir: 'C:\app'
@@ -273,6 +282,9 @@ events:
     on_interrupt: abandon
     triggers:
       - type: manual
+      - type: after             # a backup that failed or was given up
+        event: backup
+        status: [failed, abandoned]
 ```
 
 </details>

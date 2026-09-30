@@ -103,5 +103,36 @@ An event lists it at most once.
 Patterns use the syntax of Go's `path.Match`: `*`, `?` and `[...]`.
 `**` is not supported.
 
+## After trigger keys
+
+An after trigger fires the event when a run of another event ends with one of the given statuses.
+Only the last attempt of a firing counts: a run that a stop or a crash cut off, and that runs again under `on_interrupt: rerun`, fires nothing until its rerun ends.
+The run that ended passes its event, its run ID, its status and its exit code to the command.
+After triggers must not form a cycle, such as two events that follow each other, because each run would fire the next one forever.
+
+| Key | Description |
+|---|---|
+| `type` | `after`, required |
+| `event` | The event whose runs the trigger follows, required. It must be another event in the config. |
+| `status` | The statuses that fire the event, required: `succeeded`, `failed`, `canceled`, `skipped`, `dropped` and `abandoned`. |
+
+## Startup trigger keys
+
+A startup trigger fires the event once when the agent starts, including when a service manager starts the agent again after a crash.
+Saving the config does not fire it.
+
+| Key | Description |
+|---|---|
+| `type` | `startup`, required. A startup trigger has no other keys. |
+
+## Wake trigger keys
+
+A wake trigger fires the event when the machine wakes from a sleep of at least one second.
+kickd measures the sleep with two clocks of the OS, one that stops while the machine sleeps and one that does not, so a change of the wall clock does not fire it.
+
+| Key | Description |
+|---|---|
+| `type` | `wake`, required. A wake trigger has no other keys. |
+
 Each trigger accepts only the keys of its own type.
 For example, `schedule` on a file trigger is an error.

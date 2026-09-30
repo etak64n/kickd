@@ -26,7 +26,7 @@ func TestUseCaseCLI(t *testing.T) {
 	// kickd check validates the config and shows where everything goes.
 	out := h.must("check")
 	for _, want := range []string{
-		"OK: " + h.cfg + " (4 events, 6 triggers)",
+		"OK: " + h.cfg + " (4 events, 7 triggers)",
 		"log: " + h.log + " (level=info format=auto max_size_mb=10 max_backups=5)",
 		"database: " + h.db + " (retention 168h0m0s)",
 		"webhook: listen=127.0.0.1:" + h.port,
@@ -69,7 +69,7 @@ func TestUseCaseCLI(t *testing.T) {
 		"backup skip rerun [cron 0 3 * * * manual]",
 		"deploy queue abandon [webhook /hooks/deploy manual]",
 		"build queue abandon [file " + src + "]",
-		"notify parallel abandon [manual]",
+		"notify parallel abandon [manual after backup]",
 	}
 	for i, e := range events {
 		if got := e.Name + " " + e.Concurrency + " " + e.OnInterrupt + " [" + strings.Join(e.Triggers, " ") + "]"; i >= len(want) || got != want[i] {

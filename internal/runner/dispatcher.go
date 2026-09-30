@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -47,6 +48,7 @@ type Dispatcher struct {
 
 	mu         sync.Mutex
 	specs      map[string]Spec
+	follows    map[string][]follower // event -> the events that follow its runs
 	running    map[string]int
 	active     map[string]*activeRun // skip and queue policies: the run in progress
 	cancels    map[int64]context.CancelCauseFunc
@@ -58,6 +60,16 @@ type Dispatcher struct {
 	limitMu    sync.Mutex
 	errLimitAt map[string]time.Time
 }
+
+// follower is an event with an after trigger: it fires when a run of the
+// followed event ends with one of statuses.
+type follower struct {
+	event    string
+	statuses []string
+}
+
+// followBatch is how many ended runs follow reads at a time.
+const followBatch = 100
 
 type activeRun struct {
 	runID     int64
@@ -86,11 +98,15 @@ func NewDispatcher(r *Runner, store *queue.Store, log *slog.Logger, retention ti
 // definition they started with.
 func (d *Dispatcher) Configure(specs []Spec) {
 	m := make(map[string]Spec, len(specs))
+	follows := map[string][]follower{}
 	for _, s := range specs {
 		m[s.Name] = s
+		for _, a := range s.After {
+			follows[a.Event] = append(follows[a.Event], follower{s.Name, a.Statuses})
+		}
 	}
 	d.mu.Lock()
-	d.specs = m
+	d.specs, d.follows = m, follows
 	d.mu.Unlock()
 	d.poke()
 }
@@ -313,7 +329,78 @@ func (d *Dispatcher) step(ctx context.Context) {
 		return
 	}
 	d.processCancels(ctx)
+	d.follow(ctx)
 	d.schedule(ctx)
+}
+
+// follow hands the runs that ended to the after triggers that follow their
+// events: each matching trigger queues a run of its own event. A run is
+// marked as handed in the same transaction as the runs it fires, whether
+// or not a trigger matches, so that a crash neither loses nor repeats a
+// firing. A run that ended in another process, such as one that "kickd
+// cancel" canceled while it waited, is handed as well.
+func (d *Dispatcher) follow(ctx context.Context) {
+	for {
+		ended, err := d.store.UnfollowedRuns(ctx, followBatch)
+		if err != nil {
+			d.queueError(d.log, "follow", err)
+			return
+		}
+		fired := false
+		for _, r := range ended {
+			d.mu.Lock()
+			followers, specs := d.follows[r.Event], d.specs
+			d.mu.Unlock()
+			var runs []queue.Run
+			var maxQueued []int
+			if r.Status != queue.StatusRetried {
+				for _, f := range followers {
+					spec, ok := specs[f.event]
+					if !ok || !slices.Contains(f.statuses, r.Status) {
+						continue
+					}
+					ev := event.Event{
+						RequestID: event.NewID(), Name: f.event, Trigger: event.KindAfter, TriggerID: "after:" + r.Event, Time: time.Now(),
+						Data:  WithDefaults(nil, spec.Defaults),
+						After: &event.AfterInfo{Event: r.Event, RunID: r.ID, Status: r.Status, ExitCode: r.ExitCode},
+					}
+					payload, err := json.Marshal(ev)
+					if err != nil {
+						d.log.Error("After trigger failed", "event", f.event, "after", r.Event, logging.Err(err))
+						continue
+					}
+					runs = append(runs, queue.Run{RequestID: ev.RequestID, Event: f.event, Trigger: ev.Trigger, TriggerID: ev.TriggerID,
+						Payload: payload, Attempt: 1, CreatedAt: ev.Time})
+					max := 0
+					if spec.Concurrency == PolicyQueue {
+						max = MaxQueuedPerEvent
+					}
+					maxQueued = append(maxQueued, max)
+				}
+			}
+			ids, dropped, err := d.store.Follow(ctx, r.ID, runs, maxQueued)
+			if err != nil {
+				d.queueError(d.log, "follow", err)
+				return
+			}
+			for i, id := range ids {
+				log := d.log.With("requestId", runs[i].RequestID, "event", runs[i].Event, "trigger", event.KindAfter, "runId", id)
+				if dropped[i] {
+					d.r.dropped.Add(1)
+					log.Warn("Run dropped, queue full", "thresholdCount", maxQueued[i])
+					continue
+				}
+				log.Info("After trigger fired", "afterEvent", r.Event, "afterRunId", r.ID, "status", r.Status)
+				fired = true
+			}
+		}
+		if fired {
+			d.poke()
+		}
+		if len(ended) < followBatch {
+			return
+		}
+	}
 }
 
 func (d *Dispatcher) processCancels(ctx context.Context) {

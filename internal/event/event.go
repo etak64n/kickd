@@ -21,6 +21,9 @@ const (
 	KindCron    = "cron"
 	KindWebhook = "webhook"
 	KindFile    = "file"
+	KindAfter   = "after"   // a run of another event ended
+	KindStartup = "startup" // the agent started
+	KindWake    = "wake"    // the machine woke from sleep
 )
 
 // NewID returns a random 16 character hex ID for requestId.
@@ -61,6 +64,23 @@ type Event struct {
 	Files   []FileChange `json:"files"`
 	Cron    *CronInfo    `json:"cron"`
 	Webhook *WebhookInfo `json:"webhook"`
+	After   *AfterInfo   `json:"after"`
+	Wake    *WakeInfo    `json:"wake"`
+}
+
+// AfterInfo carries the run of another event whose end fired the event.
+type AfterInfo struct {
+	Event    string `json:"event"`
+	RunID    int64  `json:"runId"`
+	Status   string `json:"status"`
+	ExitCode *int   `json:"exitCode"`
+}
+
+// WakeInfo carries the sleep that the machine woke from.
+type WakeInfo struct {
+	// SleptAt is when kickd last saw the machine awake before it slept.
+	SleptAt      time.Time `json:"sleptAt"`
+	SleptSeconds int64     `json:"sleptSeconds"`
 }
 
 // FileChange is one file system change collected by a file trigger.
@@ -150,6 +170,19 @@ func (e Event) Env() []string {
 		filePath, fileOp, fileCount = last.Path, last.Op, strconv.Itoa(len(e.Files))
 		filePaths = strings.Join(paths, string(os.PathListSeparator))
 	}
+	var afterEvent, afterRunID, afterStatus, afterExitCode string
+	if e.After != nil {
+		afterEvent, afterStatus = e.After.Event, e.After.Status
+		afterRunID = strconv.FormatInt(e.After.RunID, 10)
+		if e.After.ExitCode != nil {
+			afterExitCode = strconv.Itoa(*e.After.ExitCode)
+		}
+	}
+	var wakeSleptAt, wakeSleptSeconds string
+	if e.Wake != nil {
+		wakeSleptAt = e.Wake.SleptAt.UTC().Format(time.RFC3339)
+		wakeSleptSeconds = strconv.FormatInt(e.Wake.SleptSeconds, 10)
+	}
 	return append(env,
 		"KICKD_MANUAL_SOURCE="+e.Source,
 		"KICKD_CRON_SCHEDULE="+cronSchedule,
@@ -162,6 +195,12 @@ func (e Event) Env() []string {
 		"KICKD_FILE_OP="+fileOp,
 		"KICKD_FILE_COUNT="+fileCount,
 		"KICKD_FILE_PATHS="+filePaths,
+		"KICKD_AFTER_EVENT="+afterEvent,
+		"KICKD_AFTER_RUN_ID="+afterRunID,
+		"KICKD_AFTER_STATUS="+afterStatus,
+		"KICKD_AFTER_EXIT_CODE="+afterExitCode,
+		"KICKD_WAKE_SLEPT_AT="+wakeSleptAt,
+		"KICKD_WAKE_SLEPT_SECONDS="+wakeSleptSeconds,
 	)
 }
 

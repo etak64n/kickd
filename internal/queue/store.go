@@ -47,7 +47,7 @@ func Final(status string) bool {
 // ErrNotFound is returned when a run does not exist.
 var ErrNotFound = errors.New("not found")
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 // schemaV2 creates the tables of version 2, the first released version.
 var schemaV2 = []string{
@@ -101,6 +101,15 @@ var schemaV3 = []string{
 		trigger_key TEXT    PRIMARY KEY,
 		last_at     INTEGER NOT NULL
 	)`,
+}
+
+// schemaV4 records which ended runs the agent has handed to after
+// triggers. The runs that ended before the upgrade count as handed, so an
+// upgrade fires nothing.
+var schemaV4 = []string{
+	`ALTER TABLE runs ADD COLUMN followed INTEGER NOT NULL DEFAULT 0`,
+	`UPDATE runs SET followed = 1 WHERE status NOT IN ('queued', 'running', 'interrupted')`,
+	`CREATE INDEX runs_unfollowed ON runs (id) WHERE followed = 0`,
 }
 
 // Store is an open kickd database: the record of every run.
@@ -223,7 +232,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	steps := []struct {
 		version int
 		stmts   []string
-	}{{2, schemaV2}, {3, schemaV3}}
+	}{{2, schemaV2}, {3, schemaV3}, {4, schemaV4}}
 	for _, step := range steps {
 		if v >= step.version {
 			continue
@@ -343,17 +352,27 @@ func queryRuns(ctx context.Context, q querier, query string, args ...any) ([]Run
 // the event already has that many queued runs, the firing is recorded as
 // dropped instead. It returns the run ID and whether it was dropped.
 func (s *Store) Enqueue(ctx context.Context, r Run, maxQueued int) (int64, bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, err
+	}
+	defer tx.Rollback()
+	id, dropped, err := insertRun(ctx, tx, r, maxQueued)
+	if err != nil {
+		return 0, false, err
+	}
+	return id, dropped, tx.Commit()
+}
+
+// insertRun adds the run r as queued, or as dropped when its event already
+// has maxQueued queued runs.
+func insertRun(ctx context.Context, tx *sql.Tx, r Run, maxQueued int) (int64, bool, error) {
 	if r.CreatedAt.IsZero() {
 		r.CreatedAt = time.Now()
 	}
 	if r.Attempt == 0 {
 		r.Attempt = 1
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, false, err
-	}
-	defer tx.Rollback()
 	status, reason := StatusQueued, ""
 	var finished any
 	if maxQueued > 0 {
@@ -373,10 +392,65 @@ func (s *Store) Enqueue(ctx context.Context, r Run, maxQueued int) (int64, bool,
 		return 0, false, err
 	}
 	id, err := res.LastInsertId()
+	return id, status == StatusDropped, err
+}
+
+// Ended is a run that has ended, as after triggers see it.
+type Ended struct {
+	ID       int64
+	Event    string
+	Status   string
+	ExitCode *int
+}
+
+// UnfollowedRuns returns, oldest first, up to limit runs that have ended
+// and that the agent has not yet handed to after triggers. Retried runs,
+// which a rerun replaces, are among them, so that the agent marks them.
+func (s *Store) UnfollowedRuns(ctx context.Context, limit int) ([]Ended, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, event, status, exit_code FROM runs
+		WHERE followed = 0 AND status NOT IN (?, ?, ?) ORDER BY id LIMIT ?`,
+		StatusQueued, StatusRunning, StatusInterrupted, limit)
 	if err != nil {
-		return 0, false, err
+		return nil, err
 	}
-	return id, status == StatusDropped, tx.Commit()
+	defer rows.Close()
+	var out []Ended
+	for rows.Next() {
+		var e Ended
+		var exit sql.NullInt64
+		if err := rows.Scan(&e.ID, &e.Event, &e.Status, &exit); err != nil {
+			return nil, err
+		}
+		if exit.Valid {
+			code := int(exit.Int64)
+			e.ExitCode = &code
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// Follow marks the run id as handed to after triggers, and adds the runs
+// that it fires, in one transaction, so that a crash neither loses them
+// nor adds them twice. maxQueued[i] limits the queued runs of the event of
+// runs[i] as in Enqueue. Follow returns the IDs of the new runs, and
+// whether each was dropped.
+func (s *Store) Follow(ctx context.Context, id int64, runs []Run, maxQueued []int) ([]int64, []bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+	ids, dropped := make([]int64, len(runs)), make([]bool, len(runs))
+	for i, r := range runs {
+		if ids[i], dropped[i], err = insertRun(ctx, tx, r, maxQueued[i]); err != nil {
+			return nil, nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE runs SET followed = 1 WHERE id = ?`, id); err != nil {
+		return nil, nil, err
+	}
+	return ids, dropped, tx.Commit()
 }
 
 func nullID(id int64) any {

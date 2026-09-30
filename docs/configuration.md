@@ -4,7 +4,7 @@
 
 kickd reads one YAML config file.
 The file defines **events**, which are named commands.
-An event lists **triggers**, the ways in which it fires: `kickd event NAME` on the command line, a cron schedule, a webhook, or changes in a directory.
+An event lists **triggers**, the ways in which it fires: `kickd event NAME` on the command line, a cron schedule, a webhook, changes in a directory, the end of a run of another event, the start of the agent, or the machine waking from sleep.
 An event fires only through the triggers that it lists, and it can list several of them.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, the **agent**, starts the event's command for each run.
 
@@ -272,6 +272,51 @@ curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:8787/hooks/dep
 A command such as `openssl rand -hex 32` generates a suitable token.
 With `wait: true`, the webhook responds after the run finishes, with the exit code and the output as JSON.
 With `concurrency: queue`, firings that arrive while a deploy is running wait, and run one at a time in the order they arrived.
+
+## Example: a notification when a backup fails
+
+An after trigger fires an event when a run of another event ends.
+This event sends a notification when the backup fails, or when kickd gives it up after an interruption:
+
+```yaml
+events:
+  - name: backup
+    command: 'rsync -a "$HOME/notes/" "$HOME/backup/notes/"'
+    triggers:
+      - type: cron
+        schedule: '30 3 * * *'
+  - name: notify-failure
+    command: 'echo "backup run $KICKD_AFTER_RUN_ID ended as $KICKD_AFTER_STATUS" | mail -s kickd me@example.com'
+    triggers:
+      - type: after
+        event: backup
+        status: [failed, abandoned]
+```
+
+The command receives the run that ended in `KICKD_AFTER_EVENT`, `KICKD_AFTER_RUN_ID`, `KICKD_AFTER_STATUS` and `KICKD_AFTER_EXIT_CODE`.
+An after trigger also joins steps: a deploy with `status: [succeeded]` after a build runs only when the build succeeds.
+
+## Example: work after a start and after a wake
+
+A startup trigger fires once when the agent starts, and a wake trigger fires when the machine wakes from sleep:
+
+```yaml
+events:
+  - name: clean-tmp
+    command: 'find "$HOME/tmp" -type f -mtime +7 -delete'
+    triggers:
+      - type: startup
+  - name: sync-notes
+    command: ['git', 'pull', '--ff-only']
+    workdir: '~/notes'
+    triggers:
+      - type: wake
+      - type: cron
+        schedule: '0 * * * *'
+```
+
+`sync-notes` pulls every hour, and at once when the machine wakes, instead of waiting for the next hour.
+The command of a wake trigger receives how long the machine slept in `KICKD_WAKE_SLEPT_SECONDS`.
 
 ## Example: a PowerShell script on Windows
 

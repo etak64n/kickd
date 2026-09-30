@@ -103,7 +103,29 @@ const (
 	TriggerCron    = "cron"
 	TriggerWebhook = "webhook"
 	TriggerFile    = "file"
+	TriggerAfter   = "after"   // a run of another event ended
+	TriggerStartup = "startup" // the agent started
+	TriggerWake    = "wake"    // the machine woke from sleep
 )
+
+// triggerKeys are the keys, other than type, that each type of trigger
+// takes.
+var triggerKeys = map[string][]string{
+	TriggerManual:  nil,
+	TriggerCron:    {"schedule", "timezone", "missed"},
+	TriggerWebhook: {"path", "methods", "token", "secret", "wait"},
+	TriggerFile:    {"path", "recursive", "include", "exclude", "changes", "debounce"},
+	TriggerAfter:   {"event", "status"},
+	TriggerStartup: nil,
+	TriggerWake:    nil,
+}
+
+// triggerTypes names the types of trigger in messages.
+const triggerTypes = "manual, cron, webhook, file, after, startup or wake"
+
+// AfterStatuses are the statuses of a run that has ended, which an after
+// trigger can wait for.
+var AfterStatuses = []string{"succeeded", "failed", "canceled", "skipped", "dropped", "abandoned"}
 
 // Defaults applied when a field is left empty.
 const (
@@ -316,6 +338,31 @@ type Trigger struct {
 	Exclude   []string      `yaml:"exclude"`
 	Changes   []string      `yaml:"changes"`
 	Debounce  time.Duration `yaml:"debounce"`
+
+	// after: the event whose runs are followed, and the statuses of those
+	// runs that fire.
+	Event  string   `yaml:"event"`
+	Status []string `yaml:"status"`
+}
+
+// setKeys returns the keys of t that have a value, other than type, as the
+// config names them.
+func (t Trigger) setKeys() []string {
+	var keys []string
+	for _, k := range []struct {
+		set  bool
+		name string
+	}{
+		{t.Path != "", "path"}, {t.Schedule != "", "schedule"}, {t.Timezone != "", "timezone"}, {t.Missed != "", "missed"},
+		{len(t.Methods) > 0, "methods"}, {t.Token != "", "token"}, {t.Secret != "", "secret"}, {t.Wait, "wait"},
+		{t.Recursive, "recursive"}, {len(t.Include) > 0, "include"}, {len(t.Exclude) > 0, "exclude"},
+		{len(t.Changes) > 0, "changes"}, {t.Debounce != 0, "debounce"}, {t.Event != "", "event"}, {len(t.Status) > 0, "status"},
+	} {
+		if k.set {
+			keys = append(keys, k.name)
+		}
+	}
+	return keys
 }
 
 // Load reads, resolves and validates the file at path.
@@ -438,6 +485,11 @@ func (c *Config) applyDefaults() {
 				for m := range t.Methods {
 					t.Methods[m] = strings.ToUpper(strings.TrimSpace(t.Methods[m]))
 				}
+			case TriggerAfter:
+				t.Event = strings.TrimSpace(t.Event)
+				for k := range t.Status {
+					t.Status[k] = strings.ToLower(strings.TrimSpace(t.Status[k]))
+				}
 			}
 		}
 	}
@@ -487,6 +539,10 @@ func (c *Config) validate() error {
 	}
 	names := map[string]bool{}
 	hookPaths := map[string]bool{}
+	defined := map[string]bool{}
+	for _, e := range c.Events {
+		defined[e.Name] = true
+	}
 	for i, e := range c.Events {
 		where := fmt.Sprintf("events[%d]", i)
 		switch {
@@ -544,18 +600,26 @@ func (c *Config) validate() error {
 		if len(e.Triggers) == 0 {
 			fail("%s: triggers is required, with at least one trigger; a manual trigger (- type: manual) lets kickd event fire the event", where)
 		}
-		manual := false
+		seen := map[string]bool{}    // manual, startup and wake: at most one each
+		follows := map[string]bool{} // the events that after triggers follow
 		for k, t := range e.Triggers {
 			twhere := fmt.Sprintf("%s triggers[%d]", where, k)
-			switch t.Type {
-			case TriggerManual:
-				if manual {
-					fail("%s: the event already has a manual trigger", twhere)
+			allowed, known := triggerKeys[t.Type]
+			if known {
+				for _, key := range t.setKeys() {
+					if !slices.Contains(allowed, key) {
+						fail("%s: %s is not allowed on %s %s trigger", twhere, key, article(t.Type), t.Type)
+					}
 				}
-				manual = true
-				if t.Path != "" || t.Recursive || len(t.Include) > 0 || len(t.Exclude) > 0 || len(t.Changes) > 0 || t.Debounce != 0 ||
-					t.Schedule != "" || t.Timezone != "" || t.Missed != "" || t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
-					fail("%s: a manual trigger has no keys other than type", twhere)
+			}
+			switch t.Type {
+			case TriggerManual, TriggerStartup, TriggerWake:
+				if seen[t.Type] {
+					fail("%s: the event already has a %s trigger", twhere, t.Type)
+				}
+				seen[t.Type] = true
+				if t.Type != TriggerManual && hasRequired {
+					fail("%s: a %s trigger cannot supply required parameters", twhere, t.Type)
 				}
 			case TriggerCron:
 				if t.Schedule == "" {
@@ -568,10 +632,6 @@ func (c *Config) validate() error {
 				}
 				if hasRequired {
 					fail("%s: a cron trigger cannot supply required parameters", twhere)
-				}
-				if t.Path != "" || t.Recursive || len(t.Include) > 0 || len(t.Exclude) > 0 || len(t.Changes) > 0 || t.Debounce != 0 ||
-					t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
-					fail("%s: file and webhook fields are not allowed on a cron trigger", twhere)
 				}
 			case TriggerWebhook:
 				switch {
@@ -591,10 +651,6 @@ func (c *Config) validate() error {
 						fail("%s: methods must not contain an empty entry", twhere)
 					}
 				}
-				if t.Recursive || len(t.Include) > 0 || len(t.Exclude) > 0 || len(t.Changes) > 0 || t.Debounce != 0 ||
-					t.Schedule != "" || t.Timezone != "" || t.Missed != "" {
-					fail("%s: file and cron fields are not allowed on a webhook trigger", twhere)
-				}
 			case TriggerFile:
 				if t.Path == "" {
 					fail("%s: path is required", twhere)
@@ -612,20 +668,109 @@ func (c *Config) validate() error {
 				if hasRequired {
 					fail("%s: a file trigger cannot supply required parameters", twhere)
 				}
-				if t.Schedule != "" || t.Timezone != "" || t.Missed != "" || t.Token != "" || t.Secret != "" || len(t.Methods) > 0 || t.Wait {
-					fail("%s: cron and webhook fields are not allowed on a file trigger", twhere)
+			case TriggerAfter:
+				switch {
+				case t.Event == "":
+					fail("%s: event is required: the event whose runs this trigger follows", twhere)
+				case t.Event == e.Name:
+					fail("%s: an event cannot follow itself", twhere)
+				case !defined[t.Event]:
+					fail("%s: unknown event %q", twhere, t.Event)
+				case follows[t.Event]:
+					fail("%s: the event already follows %s", twhere, t.Event)
+				}
+				follows[t.Event] = true
+				if len(t.Status) == 0 {
+					fail("%s: status is required: the statuses of the runs that fire the event (%s)", twhere, strings.Join(AfterStatuses, ", "))
+				}
+				statuses := map[string]bool{}
+				for _, st := range t.Status {
+					switch {
+					case !slices.Contains(AfterStatuses, st):
+						fail("%s: unknown status %q (valid: %s)", twhere, st, strings.Join(AfterStatuses, ", "))
+					case statuses[st]:
+						fail("%s: duplicate status %s", twhere, st)
+					}
+					statuses[st] = true
+				}
+				if hasRequired {
+					fail("%s: an after trigger cannot supply required parameters", twhere)
 				}
 			case "":
-				fail("%s: type is required (manual, cron, webhook or file)", twhere)
+				fail("%s: type is required (%s)", twhere, triggerTypes)
 			default:
-				fail("%s: unknown type %q (manual, cron, webhook or file)", twhere, t.Type)
+				fail("%s: unknown type %q (%s)", twhere, t.Type, triggerTypes)
 			}
 		}
+	}
+	if cycle := afterCycle(c.Events); cycle != "" {
+		fail("after triggers form a cycle, in which each run fires the next one forever: %s", cycle)
 	}
 	if len(errs) == 0 {
 		return nil
 	}
 	return &ValidationError{Problems: errs}
+}
+
+// article returns the indefinite article for the type of trigger typ.
+func article(typ string) string {
+	if strings.HasPrefix(typ, "a") {
+		return "an"
+	}
+	return "a"
+}
+
+// afterCycle returns a cycle of after triggers, such as "a follows b, and
+// b follows a", or "" when there is none.
+func afterCycle(events []Event) string {
+	follows := map[string][]string{}
+	for _, e := range events {
+		for _, t := range e.Triggers {
+			if t.Type == TriggerAfter && t.Event != "" && t.Event != e.Name {
+				follows[e.Name] = append(follows[e.Name], t.Event)
+			}
+		}
+	}
+	const visiting, done = 1, 2
+	state := map[string]int{}
+	var path []string
+	var found []string
+	var visit func(string) bool
+	visit = func(n string) bool {
+		switch state[n] {
+		case visiting:
+			found = append(slices.Clone(path[slices.Index(path, n):]), n)
+			return true
+		case done:
+			return false
+		}
+		state[n] = visiting
+		path = append(path, n)
+		for _, m := range follows[n] {
+			if visit(m) {
+				return true
+			}
+		}
+		path = path[:len(path)-1]
+		state[n] = done
+		return false
+	}
+	for _, e := range events {
+		if visit(e.Name) {
+			break
+		}
+	}
+	if found == nil {
+		return ""
+	}
+	var parts []string
+	for i := 0; i+1 < len(found); i++ {
+		parts = append(parts, found[i]+" follows "+found[i+1])
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + ", and " + parts[len(parts)-1]
 }
 
 // ValidationError lists every problem found in a configuration.

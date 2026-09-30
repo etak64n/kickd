@@ -20,22 +20,58 @@ import (
 	"time"
 )
 
-// The tests in this file install kickd as a service of the OS, the way the
-// installation guides do, which changes the machine. They run only with
-// KICKD_SERVICE_TEST=1, which the CI sets on its throwaway machines.
+// The tests in this file change the machine: they install kickd as a
+// service of the OS, the way the installation guides do, and move the wall
+// clock. They run only with KICKD_MACHINE_TEST=1, which the CI sets on its
+// throwaway machines.
 
-func requireServiceTest(t *testing.T) {
+func requireMachineTest(t *testing.T) {
 	t.Helper()
-	if os.Getenv("KICKD_SERVICE_TEST") != "1" {
-		t.Skip("installs kickd as a service; set KICKD_SERVICE_TEST=1 to run it")
+	if os.Getenv("KICKD_MACHINE_TEST") != "1" {
+		t.Skip("changes the machine; set KICKD_MACHINE_TEST=1 to run it")
 	}
+}
+
+// A change of the wall clock is not a sleep: wake triggers do not fire
+// when the clock jumps 2 minutes ahead and back.
+func TestMachineClockJump(t *testing.T) {
+	requireMachineTest(t)
+	h := setup(t)
+	h.addEvents("\n  - name: resync\n    command: " + noop() + "\n    triggers:\n      - type: wake\n")
+	offset := fileSize(h.log)
+	h.start()
+	h.waitLog(offset, "Wake watch started", 30*time.Second)
+	m := &machine{t: t, sudo: runtime.GOOS != "windows", env: os.Environ()}
+	shiftClock(m, 2*time.Minute)
+	time.Sleep(5 * time.Second)
+	shiftClock(m, -2*time.Minute)
+	time.Sleep(5 * time.Second)
+	if rs := h.runs("resync"); len(rs) != 0 {
+		t.Errorf("a jump of the wall clock fired wake: %v", rs)
+	}
+	h.stop()
+}
+
+// shiftClock moves the wall clock of the machine by d.
+func shiftClock(m *machine, d time.Duration) {
+	m.t.Helper()
+	to := time.Now().Add(d).UTC()
+	switch runtime.GOOS {
+	case "linux":
+		m.must("date", "-u", "-s", to.Format("2006-01-02 15:04:05"))
+	case "darwin":
+		m.must("date", "-u", to.Format("010215042006.05"))
+	case "windows":
+		m.must("powershell", "-NoProfile", "-Command", fmt.Sprintf("Set-Date -Adjust ([TimeSpan]::FromSeconds(%d)) | Out-Null", int(d.Seconds())))
+	}
+	m.t.Logf("moved the wall clock by %s", d)
 }
 
 // kickd installed as a service of the whole system: the config at the
 // usual place of the OS, and the service running as root, or as SYSTEM on
 // Windows.
 func TestServiceSystem(t *testing.T) {
-	requireServiceTest(t)
+	requireMachineTest(t)
 	m := &machine{t: t, sudo: runtime.GOOS != "windows", env: os.Environ(), who: "root"}
 	switch runtime.GOOS {
 	case "linux":
@@ -58,7 +94,7 @@ func TestServiceSystem(t *testing.T) {
 // kickd installed as a per-user service: a LaunchAgent on macOS, and a
 // per-user systemd unit on Linux.
 func TestServiceUser(t *testing.T) {
-	requireServiceTest(t)
+	requireMachineTest(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows has no per-user services")
 	}

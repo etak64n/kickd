@@ -36,7 +36,8 @@ Every firing takes the same path, whatever fired it:
 4. The runner starts the command in a new process and waits for it to exit.
 5. The dispatcher writes the outcome to the database: the status, the exit code, the duration and the start of the output.
 
-Cron, webhook and file triggers run inside the agent, so they insert their runs through the dispatcher and wake it at once.
+Cron, webhook, file, startup and wake triggers run inside the agent, so they insert their runs through the dispatcher and wake it at once.
+An after trigger has no part of its own: when a run ends, the dispatcher finds the events that follow it and inserts their runs.
 `kickd event`, the command of manual triggers, runs in a process of its own and inserts the run into the database directly.
 The agent notices writes from other processes by checking the database every 0.2 seconds.
 

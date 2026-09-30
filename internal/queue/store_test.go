@@ -347,4 +347,39 @@ func TestOpenUpgradesVersion2(t *testing.T) {
 	if err := s.SetLastCron(ctx, "k", time.Now()); err != nil {
 		t.Fatalf("the cron state table must exist: %v", err)
 	}
+	if ended, err := s.UnfollowedRuns(ctx, 10); err != nil || len(ended) != 0 {
+		t.Fatalf("a run that ended before the upgrade must not reach after triggers: %+v, %v", ended, err)
+	}
+}
+
+// A run that ends reaches after triggers once: Follow adds the runs that
+// it fires and marks it in one step.
+func TestFollowEndedRuns(t *testing.T) {
+	s, _ := openTemp(t)
+	id, _ := fire(s, t, "backup", "r1", 0)
+	if ended, err := s.UnfollowedRuns(ctx, 10); err != nil || len(ended) != 0 {
+		t.Fatalf("a queued run has not ended: %+v, %v", ended, err)
+	}
+	if _, err := s.StartRun(ctx, id, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	code := 3
+	if err := s.FinishRun(ctx, id, Finish{Status: StatusFailed, Reason: "exit_code", ExitCode: &code, At: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	ended, err := s.UnfollowedRuns(ctx, 10)
+	if err != nil || len(ended) != 1 || ended[0].ID != id || ended[0].Event != "backup" || ended[0].Status != StatusFailed || ended[0].ExitCode == nil || *ended[0].ExitCode != 3 {
+		t.Fatalf("ended = %+v, %v", ended, err)
+	}
+	next := Run{RequestID: "r2", Event: "notify", Trigger: "after", TriggerID: "after:backup", Payload: []byte(`{}`)}
+	ids, dropped, err := s.Follow(ctx, id, []Run{next}, []int{0})
+	if err != nil || len(ids) != 1 || dropped[0] {
+		t.Fatalf("Follow = %v, %v, %v", ids, dropped, err)
+	}
+	if r, err := s.GetRun(ctx, ids[0]); err != nil || r.Status != StatusQueued || r.Event != "notify" || r.Trigger != "after" {
+		t.Fatalf("the run that the after trigger fired: %+v, %v", r, err)
+	}
+	if ended, err := s.UnfollowedRuns(ctx, 10); err != nil || len(ended) != 0 {
+		t.Fatalf("a followed run must not come back: %+v, %v", ended, err)
+	}
 }
