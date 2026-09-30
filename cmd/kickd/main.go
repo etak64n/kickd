@@ -70,10 +70,14 @@ func main() {
 		case errors.Is(err, flag.ErrHelp):
 			os.Exit(exitOK)
 		case errors.Is(err, errLogged):
-			os.Exit(1)
+			os.Exit(exitFailed)
 		}
 		fmt.Fprintln(os.Stderr, "kickd:", err)
-		os.Exit(1)
+		var ue usageError
+		if errors.As(err, &ue) {
+			os.Exit(exitUsage)
+		}
+		os.Exit(exitFailed)
 	}
 }
 
@@ -95,7 +99,7 @@ func noArgs(cmd string, args []string) error {
 		fmt.Print(text)
 		return flag.ErrHelp
 	}
-	return fmt.Errorf("kickd %s takes no arguments: %s", cmd, strings.Join(args, " "))
+	return usageError{fmt.Sprintf("kickd %s takes no arguments: %s; kickd help %s shows its usage", cmd, strings.Join(args, " "), strings.Fields(cmd)[0])}
 }
 
 // sudo is the prefix of a kickd command that works on the config for the
@@ -403,9 +407,14 @@ func cmdService(args []string) error {
 		return noArgs("service", args)
 	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return errors.New("service action is required: install, uninstall, start, stop, restart, status")
+		return usageError{"kickd service needs an action: install, uninstall, start, stop, restart or status"}
 	}
 	action := args[0]
+	switch action {
+	case "install", "uninstall", "start", "stop", "restart", "status":
+	default:
+		return usageError{fmt.Sprintf("unknown service action %q; kickd help service lists the actions", action)}
+	}
 	if err := noArgs("service "+action, args[1:]); err != nil {
 		return err
 	}
@@ -439,10 +448,8 @@ func cmdService(args []string) error {
 		if action == "install" {
 			fmt.Printf("config: %s\nstart it with: %skickd service start\n", abs, sudo(!perUser()))
 		}
-		return nil
-	default:
-		return fmt.Errorf("unknown service action %q", action)
 	}
+	return nil
 }
 
 func statusName(st service.Status) string {

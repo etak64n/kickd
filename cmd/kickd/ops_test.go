@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -55,8 +56,22 @@ func TestParseInterleavedFlags(t *testing.T) {
 	}
 }
 
+func TestServiceNeedsAnAction(t *testing.T) {
+	var ue usageError
+	if err := cmdService(nil); !errors.As(err, &ue) || !strings.Contains(err.Error(), "kickd service needs an action") {
+		t.Errorf("cmdService: %v", err)
+	}
+}
+
+func TestServiceRefusesAnUnknownAction(t *testing.T) {
+	var ue usageError
+	if err := cmdService([]string{"instal"}); !errors.As(err, &ue) || !strings.Contains(err.Error(), `unknown service action "instal"; kickd help service lists the actions`) {
+		t.Errorf("cmdService: %v", err)
+	}
+}
+
 func TestNoArgsRefusesArguments(t *testing.T) {
-	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra" {
+	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra; kickd help check shows its usage" {
 		t.Errorf("noArgs: %v", err)
 	}
 }
