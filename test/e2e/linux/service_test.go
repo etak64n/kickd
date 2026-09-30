@@ -68,7 +68,9 @@ func systemUnit(t *testing.T) *service {
 
 // userUnit installs kickd as a per-user unit with the config of
 // testdata/service-user, and starts it. Lingering keeps the systemd of the
-// user running, as the runner of the CI does not log in.
+// user running, as the runner of the CI does not log in. The tests leave
+// it on: turned off, the systemd of the user stops while the next test
+// starts it again.
 func userUnit(t *testing.T) *service {
 	t.Helper()
 	changesTheMachine(t)
@@ -87,10 +89,8 @@ func userUnit(t *testing.T) *service {
 		database: filepath.Join(u.HomeDir, ".local", "state", "kickd", "kickd.db"),
 	}
 	s.sudoMust("loginctl", "enable-linger", u.Username)
-	t.Cleanup(func() { s.sudoRun("loginctl", "disable-linger", u.Username) })
-	waitFor(t, "the systemd of the user", 30*time.Second, func() bool {
-		_, err := os.Stat(runtimeDir + "/bus")
-		return err == nil
+	waitFor(t, "the systemd of the user answers", 60*time.Second, func() bool {
+		return s.systemctl("show-environment").code == 0
 	}, s.describe)
 	s.removeAtEnd(filepath.Dir(s.config), filepath.Dir(s.log))
 	s.must("mkdir", "-p", filepath.Dir(s.config))
@@ -113,11 +113,17 @@ func (s *service) action(name string) []string {
 }
 
 // removeAtEnd stops and uninstalls the service when the test ends, and
-// removes the directories of its files.
+// removes the directories of its files. It also removes a unit file that a
+// failed install left, which would make the next install fail.
 func (s *service) removeAtEnd(dirs ...string) {
 	s.t.Cleanup(func() {
 		s.kickd(s.action("stop")...)
 		s.kickd(s.action("uninstall")...)
+		if s.unit != "" {
+			s.run("rm", "-f", s.unit)
+			s.systemctl("daemon-reload")
+			s.systemctl("reset-failed", "kickd")
+		}
 		for _, d := range dirs {
 			if filepath.Base(d) != "kickd" {
 				s.t.Errorf("not removing %s, which is not a directory of kickd", d)
@@ -430,9 +436,16 @@ func TestServiceStatusReportsARunningService(t *testing.T) {
 	}
 }
 
+// systemdPath reports whether path is the PATH that systemd gives the
+// commands of a unit: its default, and on Ubuntu /snap/bin after it.
+func systemdPath(path string) bool {
+	const def = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+	return path == def || path == def+":/snap/bin"
+}
+
 func TestServiceOfTheSystemRunsCommandsWithThePathOfSystemd(t *testing.T) {
 	s := systemUnit(t)
-	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; path != "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin" {
+	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; !systemdPath(path) {
 		t.Errorf("PATH=%s", path)
 	}
 }
@@ -446,7 +459,7 @@ func TestServiceOfTheSystemRunsCommandsWithoutHome(t *testing.T) {
 
 func TestServiceOfTheUserRunsCommandsWithThePathOfSystemd(t *testing.T) {
 	s := userUnit(t)
-	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; path != "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin" {
+	if path := environment(s.waitForRun(s.fire("show-env")))["PATH"]; !systemdPath(path) {
 		t.Errorf("PATH=%s", path)
 	}
 }
