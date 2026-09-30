@@ -12,13 +12,11 @@ In kickd, a named command in the config file is an **event**, and the long-runni
 Put the `kickd` executable in `/usr/local/bin`.
 
 The releases page of kickd has an executable for each CPU: `kickd-linux-amd64` for x86-64, and `kickd-linux-arm64` for 64-bit ARM.
-The page also shows the SHA-256 digest of every file.
 `uname -m` prints the CPU: `x86_64` calls for amd64, and `aarch64` for arm64.
-These commands download the executable for x86-64, print its SHA-256 hash to compare with the digest on the page, and install it:
+These commands download the executable for x86-64 and install it:
 
 ```sh
 curl -fLO https://github.com/etak64n/kickd/releases/latest/download/kickd-linux-amd64
-sha256sum kickd-linux-amd64
 sudo install -m 755 kickd-linux-amd64 /usr/local/bin/kickd
 kickd version
 ```

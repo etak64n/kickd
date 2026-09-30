@@ -28,13 +28,6 @@ $p = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 
 PowerShell windows opened after this find `kickd` by name.
 
-The releases page shows the SHA-256 digest of every file.
-This command prints the SHA-256 hash of the downloaded file, which must match the digest on the page:
-
-```powershell
-(Get-FileHash 'C:\Program Files\kickd\kickd.exe' -Algorithm SHA256).Hash.ToLower()
-```
-
 With Go installed, `go install github.com/etak64n/kickd/cmd/kickd@latest` builds `kickd.exe` into `$(go env GOPATH)\bin` instead.
 Copy that file to `C:\Program Files\kickd\kickd.exe`.
 
