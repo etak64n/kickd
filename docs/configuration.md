@@ -149,7 +149,8 @@ events:
 
 A service starts kickd with a shorter `PATH` than a terminal has.
 Under launchd on macOS, it is `/usr/bin:/bin:/usr/sbin:/sbin`.
-systemd gives units `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, and a Windows service sees only the system `PATH`.
+systemd gives a system-wide unit `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, with `/snap/bin` after them on Ubuntu, and a per-user unit the `PATH` of the systemd of the user.
+A Windows service sees only the system `PATH`.
 `kickd check` prints the working directory of each event, and the `PATH` that an event sets.
 [Running commands](commands.md) lists the environment that each kind of service gives commands, and shows how to run Python and Node.js.
 
@@ -166,7 +167,10 @@ Waiting runs of events that the new config no longer defines are recorded as `dr
 
 When the new config has errors, the agent logs them and keeps running with the previous config.
 It switches to the new config when a valid version is saved.
-A change to `database.path` takes effect only when the agent restarts.
+
+The agent opens its log and its database once, when it starts, so changes to the `log` and `database` sections take effect only when the agent starts again.
+`on_interrupt` and `max_attempts` also take effect at the next start, because the agent handles the runs that a stop or a crash cut off when it starts.
+The [configuration reference](config-keys.md#when-changes-take-effect) lists when each key takes effect.
 
 ## Differences between operating systems
 
