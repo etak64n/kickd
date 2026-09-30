@@ -1,0 +1,44 @@
+log:
+  path: 'kickd.log'
+events:
+  # A deploy takes a second, and deploys wait for each other.
+  - name: deploy
+    command: ['./deploy.sh']
+    concurrency: queue
+    triggers:
+      - type: manual
+  # A backup takes 3 seconds, and a firing while it runs is skipped.
+  - name: backup
+    command: ['./backup.sh']
+    concurrency: skip
+    triggers:
+      - type: manual
+  # A notification takes 3 seconds, and notifications run at the same time.
+  - name: notify
+    command: ['./notify.sh']
+    concurrency: parallel
+    triggers:
+      - type: manual
+  # A sync takes 4 seconds, and runs again when a stop or a crash cut it off.
+  - name: sync
+    command: ['./sync.sh']
+    on_interrupt: rerun
+    triggers:
+      - type: manual
+  # A release takes 4 seconds, and is given up when a stop or a crash cut it off.
+  - name: release
+    command: ['./release.sh']
+    on_interrupt: abandon
+    triggers:
+      - type: manual
+  # A report takes a minute, and kickd stops it after 2 seconds.
+  - name: report
+    command: ['./report.sh']
+    timeout: 2s
+    triggers:
+      - type: manual
+  # An import takes a minute, unless kickd cancel stops it.
+  - name: import
+    command: ['./import.sh']
+    triggers:
+      - type: manual

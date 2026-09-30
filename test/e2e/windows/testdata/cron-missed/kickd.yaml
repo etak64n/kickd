@@ -1,0 +1,21 @@
+# A time 25 seconds after the test starts, which the test lets pass while
+# kickd is not running. The test fills in the schedules.
+log:
+  path: 'kickd.log'
+events:
+  # A backup that runs late rather than not at all.
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    triggers:
+      - type: cron
+        schedule: '{{at "UTC"}}'
+        timezone: UTC
+        missed: run
+  # A digest that is of no use late, so it waits for the next time.
+  - name: digest
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'digest.ps1']
+    triggers:
+      - type: cron
+        schedule: '{{at "UTC"}}'
+        timezone: UTC
+        missed: skip

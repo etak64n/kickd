@@ -1,0 +1,95 @@
+# Perl is missing: Perl on Windows gets its arguments in the ANSI code
+# page, so it cannot open a script whose name has other letters.
+log:
+  path: 'kickd.log'
+events:
+  # Commands of Windows in a string, which cmd runs.
+  - name: cmd-string
+    command: 'chcp 65001 >nul& echo event=%KICKD_EVENT%& echo trigger=%KICKD_TRIGGER%& echo msg=%KICKD_DATA_MSG%& echo dir=%CD%& set /p "=payload=" <nul& type "%KICKD_PAYLOAD_FILE%"& echo.& echo to stderr 1>&2& exit /b %KICKD_DATA_CODE%'
+    workdir: '作業 フォルダ\cmd-string'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A batch file, which cmd runs.
+  - name: cmd
+    command: '"報告 スクリプト.cmd"'
+    workdir: '作業 フォルダ\cmd'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Python. PYTHONUTF8 makes Python print UTF-8.
+  - name: python
+    command: ['python', '報告 スクリプト.py']
+    workdir: '作業 フォルダ\python'
+    env:
+      PYTHONUTF8: '1'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Node.js.
+  - name: node
+    command: ['node', '報告 スクリプト.js']
+    workdir: '作業 フォルダ\node'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Ruby.
+  - name: ruby
+    command: ['ruby', '報告 スクリプト.rb']
+    workdir: '作業 フォルダ\ruby'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A program in Rust, which the test builds with rustc.
+  - name: rust
+    command: ['.\報告 スクリプト.exe']
+    workdir: '作業 フォルダ\rust'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of PowerShell 7.
+  - name: pwsh
+    command: ['pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '報告 スクリプト.ps1']
+    workdir: '作業 フォルダ\pwsh'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Windows PowerShell.
+  - name: powershell
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '報告 スクリプト.ps1']
+    workdir: '作業 フォルダ\powershell'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual

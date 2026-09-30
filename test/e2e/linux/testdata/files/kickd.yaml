@@ -1,0 +1,39 @@
+log:
+  path: 'kickd.log'
+events:
+  # Builds when anything under src changes, also in its subdirectories.
+  - name: build
+    command: ['./build.sh']
+    concurrency: queue
+    triggers:
+      - type: file
+        path: 'src'
+        recursive: true
+        debounce: 500ms
+  # Publishes the Markdown files of docs, except drafts.
+  - name: publish
+    command: ['./publish.sh']
+    concurrency: queue
+    triggers:
+      - type: file
+        path: 'docs'
+        include: ['*.md']
+        exclude: ['draft*']
+        debounce: 300ms
+  # Imports each new file in uploads.
+  - name: import
+    command: ['./import.sh']
+    concurrency: queue
+    triggers:
+      - type: file
+        path: 'uploads'
+        changes: [create]
+        debounce: 300ms
+  # Reloads the app when a file directly in conf changes.
+  - name: reload
+    command: ['./reload.sh']
+    concurrency: queue
+    triggers:
+      - type: file
+        path: 'conf'
+        debounce: 300ms

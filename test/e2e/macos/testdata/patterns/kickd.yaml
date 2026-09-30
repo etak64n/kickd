@@ -1,0 +1,39 @@
+log:
+  path: 'kickd.log'
+events:
+  # A Python script in its virtual environment, which the test creates as
+  # docs/commands.md says, with no activation.
+  - name: report
+    command: ['.venv/bin/python', 'report.py']
+    workdir: 'reports'
+    triggers:
+      - type: manual
+  # A script of package.json, with npm run.
+  - name: build-site
+    command: ['npm', 'run', 'build']
+    workdir: 'site'
+    triggers:
+      - type: manual
+  # A program in ~/bin, which the PATH of the event holds.
+  - name: greet
+    command: ['greet', 'hello']
+    env:
+      PATH: '${HOME}/bin:${PATH}'
+    triggers:
+      - type: manual
+  # The payload on standard input, read by Python, Node.js and cat.
+  - name: stdin-python
+    command: ['python3', '-c', 'import json, sys; print("event=" + json.load(sys.stdin)["event"])']
+    stdin: payload
+    triggers:
+      - type: manual
+  - name: stdin-node
+    command: ['node', '-e', 'let s = ""; process.stdin.on("data", d => s += d).on("end", () => console.log("event=" + JSON.parse(s).event))']
+    stdin: payload
+    triggers:
+      - type: manual
+  - name: stdin-cat
+    command: ['cat']
+    stdin: payload
+    triggers:
+      - type: manual

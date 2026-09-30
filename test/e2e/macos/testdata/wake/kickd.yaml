@@ -1,0 +1,8 @@
+log:
+  path: 'kickd.log'
+events:
+  # Syncs when the machine wakes from sleep.
+  - name: resync
+    command: ['./resync.sh']
+    triggers:
+      - type: wake

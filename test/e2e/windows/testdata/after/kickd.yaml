@@ -1,0 +1,27 @@
+log:
+  path: 'kickd.log'
+events:
+  # A check that exits with the code in its parameter code: 3 unless given.
+  - name: check
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'check.ps1']
+    params:
+      - name: code
+        default: '3'
+    triggers:
+      - type: manual
+  # Alerts when a check fails, or when kickd cancel cancels it.
+  - name: alert
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'alert.ps1']
+    concurrency: queue
+    triggers:
+      - type: after
+        event: check
+        status: [failed, canceled]
+  # Reports after each alert that succeeds.
+  - name: report
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'report.ps1']
+    concurrency: queue
+    triggers:
+      - type: after
+        event: alert
+        status: [succeeded]

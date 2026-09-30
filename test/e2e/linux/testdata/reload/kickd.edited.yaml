@@ -1,0 +1,15 @@
+log:
+  path: 'kickd.log'
+events:
+  # Builds when a source file changes.
+  - name: build
+    command: ['./build.sh']
+    triggers:
+      - type: file
+        path: 'src'
+      - type: manual
+  # Added while kickd runs.
+  - name: test
+    command: ['./test.sh']
+    triggers:
+      - type: manual

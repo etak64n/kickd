@@ -75,7 +75,7 @@ kickd run
 ```
 
 In the foreground, log records appear in the terminal as text, colored by level.
-With the example config, the same records are also written as JSON to `~/Library/Application Support/kickd/kickd.log`.
+With the example config, the same records are also written as JSON to `~/Library/Logs/kickd/kickd.log`.
 
 ## 4. Run kickd as a LaunchAgent
 
@@ -144,7 +144,7 @@ Before relying on a watch there, put a file in the folder and check that the eve
 
 ## Logs of the service
 
-The service writes its log as JSON to the file set by `log.path`, which is `~/Library/Application Support/kickd/kickd.log` with the example config.
+The service writes its log as JSON to the file set by `log.path`, which is `~/Library/Logs/kickd/kickd.log` with the example config.
 When the file grows past `log.max_size_mb`, kickd renames it to `kickd.log.1` and keeps up to `log.max_backups` old files.
 If kickd fails before it opens the log file, launchd writes that output to `~/kickd.err.log`.
 launchd also creates `~/kickd.out.log`.

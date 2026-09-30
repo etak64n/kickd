@@ -1,0 +1,12 @@
+webhook:
+  enabled: false
+events:
+  # Deploys on a webhook request, which kickd does not take while
+  # webhook.enabled is false, and by hand.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        token: 'deploy-token'
+      - type: manual

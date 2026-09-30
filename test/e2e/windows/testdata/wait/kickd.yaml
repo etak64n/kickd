@@ -1,0 +1,18 @@
+log:
+  path: 'kickd.log'
+events:
+  # Backs up in a second.
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    triggers:
+      - type: manual
+  # Verifies the backup, which is broken, so it fails.
+  - name: verify
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'verify.ps1']
+    triggers:
+      - type: manual
+  # Restores the backup, which takes a minute.
+  - name: restore
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'restore.ps1']
+    triggers:
+      - type: manual

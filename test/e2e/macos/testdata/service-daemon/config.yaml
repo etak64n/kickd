@@ -1,0 +1,21 @@
+# The config of kickd as a LaunchDaemon, at
+# /Library/Application Support/kickd/config.yaml.
+log:
+  path: '/Library/Logs/kickd/kickd.log'
+database:
+  path: '/Library/Application Support/kickd/kickd.db'
+events:
+  # Prints the user that runs the commands of kickd.
+  - name: whoami
+    command: ['id', '-un']
+    triggers:
+      - type: webhook
+        path: '/hooks/whoami'
+        token: 'whoami-token'
+      - type: manual
+  # Prints the environment that the commands of kickd get, as
+  # docs/commands.md shows.
+  - name: show-env
+    command: ['env']
+    triggers:
+      - type: manual

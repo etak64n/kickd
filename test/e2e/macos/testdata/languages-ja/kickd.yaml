@@ -1,0 +1,91 @@
+log:
+  path: 'kickd.log'
+events:
+  # Commands of macOS in a string, which /bin/sh runs.
+  - name: shell-string
+    command: 'echo "event=$KICKD_EVENT"; echo "trigger=$KICKD_TRIGGER"; echo "msg=$KICKD_DATA_MSG"; echo "dir=$(pwd -P)"; echo "payload=$(cat "$KICKD_PAYLOAD_FILE")"; echo "to stderr" >&2; exit "$KICKD_DATA_CODE"'
+    workdir: '作業 フォルダ/shell-string'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of sh, run directly.
+  - name: sh
+    command: ['./報告 スクリプト.sh']
+    workdir: '作業 フォルダ/sh'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Python.
+  - name: python
+    command: ['python3', '報告 スクリプト.py']
+    workdir: '作業 フォルダ/python'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Node.js.
+  - name: node
+    command: ['node', '報告 スクリプト.js']
+    workdir: '作業 フォルダ/node'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Ruby.
+  - name: ruby
+    command: ['ruby', '報告 スクリプト.rb']
+    workdir: '作業 フォルダ/ruby'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of Perl.
+  - name: perl
+    command: ['perl', '報告 スクリプト.pl']
+    workdir: '作業 フォルダ/perl'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A program in Rust, which the test builds with rustc.
+  - name: rust
+    command: ['./報告 スクリプト']
+    workdir: '作業 フォルダ/rust'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual
+  # A script of PowerShell.
+  - name: pwsh
+    command: ['pwsh', '-NoProfile', '-File', '報告 スクリプト.ps1']
+    workdir: '作業 フォルダ/pwsh'
+    concurrency: queue
+    params:
+      - name: msg
+      - name: code
+        default: '0'
+    triggers:
+      - type: manual

@@ -1,0 +1,5 @@
+events:
+  - name: notify
+    command: ['./notify.sh']
+    triggers:
+      - type: manual

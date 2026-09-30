@@ -1,0 +1,13 @@
+log:
+  path: 'kickd.log'
+events:
+  # Deploys the ref given, to staging unless a target is given.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    params:
+      - name: ref
+        required: true
+      - name: target
+        default: staging
+    triggers:
+      - type: manual

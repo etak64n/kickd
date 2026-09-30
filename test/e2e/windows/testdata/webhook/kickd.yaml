@@ -1,0 +1,35 @@
+log:
+  path: 'kickd.log'
+webhook:
+  listen: '127.0.0.1:18787'
+  max_body_bytes: 1024
+events:
+  # Deploys on a request signed with the secret, as GitHub signs its
+  # requests.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        secret: 'webhook-secret'
+  # Builds ref, main unless the query gives another, and answers with the
+  # result of the build.
+  - name: build
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    params:
+      - name: ref
+        default: main
+    triggers:
+      - type: webhook
+        path: '/hooks/build'
+        token: 'webhook-token'
+        methods: [POST]
+        wait: true
+  # Runs the tests and answers with the result, a failure.
+  - name: test
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'test.ps1']
+    triggers:
+      - type: webhook
+        path: '/hooks/test'
+        token: 'webhook-token'
+        wait: true

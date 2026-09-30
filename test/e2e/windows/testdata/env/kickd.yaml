@@ -1,0 +1,22 @@
+log:
+  path: 'kickd.log'
+events:
+  # Greets with a variable of the event, which holds a variable of kickd.
+  - name: greet
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'greet.ps1']
+    env:
+      GREETING: 'hello from ${USERPROFILE}'
+    triggers:
+      - type: manual
+  # Deploys the ref of the firing, and main when the firing gives none.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    env:
+      KICKD_DATA_REF: 'main'
+    triggers:
+      - type: manual
+  # Runs in the directory of the config, as it has no workdir.
+  - name: where
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'where.ps1']
+    triggers:
+      - type: manual

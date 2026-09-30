@@ -1,0 +1,4 @@
+events:
+  # A backup whose triggers are missing, so nothing could fire it.
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']

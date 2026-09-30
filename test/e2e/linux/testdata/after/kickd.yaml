@@ -1,0 +1,27 @@
+log:
+  path: 'kickd.log'
+events:
+  # A check that exits with the code in its parameter code: 3 unless given.
+  - name: check
+    command: ['./check.sh']
+    params:
+      - name: code
+        default: '3'
+    triggers:
+      - type: manual
+  # Alerts when a check fails, or when kickd cancel cancels it.
+  - name: alert
+    command: ['./alert.sh']
+    concurrency: queue
+    triggers:
+      - type: after
+        event: check
+        status: [failed, canceled]
+  # Reports after each alert that succeeds.
+  - name: report
+    command: ['./report.sh']
+    concurrency: queue
+    triggers:
+      - type: after
+        event: alert
+        status: [succeeded]
