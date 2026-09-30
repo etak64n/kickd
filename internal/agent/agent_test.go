@@ -377,3 +377,33 @@ func TestAgentFiresStartupOncePerStart(t *testing.T) {
 	}
 	stopAgent(t, cancel, done)
 }
+
+func TestAgentFiresAnAfterTriggerWhenTheFollowedRunFails(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	alerts := filepath.Join(dir, "alerts.txt")
+	writeFile(t, cfgPath, "events:\n  - name: check\n"+helperEvent("fail", filepath.Join(dir, "checks.txt"))+"    triggers: [{type: manual}]\n"+
+		"  - name: alert\n"+helperEvent("append-after", alerts)+"    triggers: [{type: after, event: check, status: [failed]}]\n")
+	cancel, done := startAgent(t, cfgPath)
+	defer stopAgent(t, cancel, done)
+	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
+	kickEvent(t, store, "check", nil)
+	waitForFile(t, alerts, "after=check status=failed exit=3", 15*time.Second)
+}
+
+func TestAgentDoesNotFireAnAfterTriggerForAStatusThatIsNotListed(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	alerts := filepath.Join(dir, "alerts.txt")
+	writeFile(t, cfgPath, "events:\n  - name: check\n"+helperEvent("append", filepath.Join(dir, "checks.txt"), "HELPER_TEXT", "ok")+"    triggers: [{type: manual}]\n"+
+		"  - name: alert\n"+helperEvent("append-after", alerts)+"    triggers: [{type: after, event: check, status: [failed]}]\n")
+	cancel, done := startAgent(t, cfgPath)
+	defer stopAgent(t, cancel, done)
+	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
+	waitStatus(t, store, kickEvent(t, store, "check", nil), queue.StatusSucceeded)
+	time.Sleep(2 * time.Second)
+	if _, err := os.Stat(alerts); err == nil {
+		b, _ := os.ReadFile(alerts)
+		t.Errorf("alert ran after a check that succeeded: %q", b)
+	}
+}
