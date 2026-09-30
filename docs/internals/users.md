@@ -1,6 +1,6 @@
 # User accounts
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 In kickd, a named command in the config file is an **event**, each firing of an event becomes a **run**, and the long-running kickd process is the **agent**.
 The agent starts the command of every run as a child process.

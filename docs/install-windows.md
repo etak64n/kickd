@@ -1,6 +1,6 @@
 # Installing on Windows
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 On Windows, kickd runs as a **Windows service**.
 A Windows service is a program that runs from the time Windows starts, whether or not anyone is logged in.

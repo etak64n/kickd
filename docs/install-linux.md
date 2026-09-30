@@ -1,6 +1,6 @@
 # Installing on Linux
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 On Linux with systemd, kickd runs as a systemd **unit**.
 A unit is a definition file that tells systemd how to start, stop and restart a program.

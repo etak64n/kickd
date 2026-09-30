@@ -1,0 +1,55 @@
+# Builds the documentation site with MkDocs for every pull request that
+# changes the docs, and publishes it to GitHub Pages for every release, so
+# that the site describes the released version.
+name: Docs
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install MkDocs
+        run: |
+          python3 -m venv "$RUNNER_TEMP/mkdocs"
+          "$RUNNER_TEMP/mkdocs/bin/pip" install --quiet 'mkdocs-material~=9.5'
+
+      # mkdocs.yml sets strict, so a broken link or anchor fails the build.
+      - name: Build
+        run: '"$RUNNER_TEMP/mkdocs/bin/mkdocs" build'
+
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

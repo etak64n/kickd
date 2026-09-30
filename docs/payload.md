@@ -1,6 +1,6 @@
 # What a command receives
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 The information about one run that kickd passes to the command is called the **payload**.

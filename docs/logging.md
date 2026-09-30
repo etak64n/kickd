@@ -1,6 +1,6 @@
 # Logging
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 The long-running kickd process, called the **agent**, logs what it does: starting, loading its config, starting and finishing runs, and receiving webhooks.
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.

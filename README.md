@@ -333,41 +333,7 @@ To keep kickd running in the background, install it as a service by following th
 
 ## Documentation
 
-### Guides
-
-- [Building kickd](docs/build.md): building from source, cross builds for other platforms, release builds, versions
-- [Installing on macOS](docs/install-macos.md): the executable, the config file, running as a LaunchAgent, access to protected folders
-- [Installing on Linux](docs/install-linux.md): the executable, the config file, running as a systemd unit, per-user units
-- [Installing on Windows](docs/install-windows.md): the executable, the config file, running as a Windows service, the SYSTEM account
-- [Configuration](docs/configuration.md): where the config file lives, defining events, applying changes, examples
-- [Runs](docs/runs.md): how firings become runs, run statuses, interrupted runs, the database
-- [Command-line reference](docs/cli.md): every subcommand, firing events with parameters, exit codes
-- [Webhooks](docs/webhook.md): authentication, request IDs, parameters, responses
-- [Configuration reference](docs/config-keys.md): every key of the config file, its default, and when a change takes effect
-- [Examples](examples/README.md): complete config files for common tasks, such as deploys from GitHub, rebuilds, backups and certificate renewal
-- [What a command receives](docs/payload.md): environment variables and the payload JSON
-- [Running commands](docs/commands.md): the environment of a command under each kind of service, the working directory and `PATH`, Python and Node.js
-- [Logging](docs/logging.md): formats, levels, keys, messages, rotation
-- [Known limitations](docs/limitations.md): what kickd does not do yet, and what has not been tested
-- [Development](docs/development.md): tests, builds, source layout
-
-### Settings
-
-- [Log settings](docs/settings/log.md): the log file, levels, formats and rotation
-- [Webhook server settings](docs/settings/webhook.md): turning the HTTP server on and off, its address and the body limit
-- [Database settings](docs/settings/database.md): the SQLite file and how long ended runs stay
-- [Event settings](docs/settings/events.md): commands, working directories, environment variables, time limits, overlap and interrupted runs
-- [Parameter settings](docs/settings/params.md): the values that a firing passes to the command
-- [Trigger settings](docs/settings/triggers.md): manual, cron, webhook, file, after, startup and wake triggers
-
-### Internals
-
-- [Architecture](docs/internals/architecture.md): the parts of the agent, the path of a firing, reloading and stopping
-- [Database internals](docs/internals/database.md): the SQLite database, locking between processes, consumption of the queue, recovery at startup
-- [Delivery guarantees and idempotency](docs/internals/idempotency.md): when a firing can be lost or repeated, and how to write commands that tolerate repeats
-- [How commands run](docs/internals/execution.md): processes, environment, output, stopping, exit status
-- [Platform differences](docs/internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows
-- [User accounts](docs/internals/users.md): which user runs the agent and its commands, who can fire events, and the files that kickd creates
+[The documentation index](docs/index.md) lists the guides, the settings of every key, and the internals of kickd.
 
 ## License
 

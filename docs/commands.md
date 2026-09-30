@@ -1,6 +1,6 @@
 # Running commands
 
-[Documentation index](../README.md#documentation)
+[Documentation index](index.md)
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd starts the command of each run as a child process.

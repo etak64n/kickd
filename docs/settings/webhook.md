@@ -1,6 +1,6 @@
 # Webhook server settings
 
-[Documentation index](../../README.md#documentation)
+[Documentation index](../index.md)
 
 In kickd, a named command in the config file is an **event**, and a **webhook trigger** fires an event when an HTTP request arrives at the path of the trigger.
 The long-running kickd process, called the **agent**, runs one HTTP server for all the webhook triggers of its config file.
