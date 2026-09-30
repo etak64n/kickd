@@ -258,10 +258,11 @@ The examples of [Running commands](../../docs/commands.md).
 
 ### The commands of kickd
 
-The output of `kickd check`, `events`, `status`, `history` and `show`, which config file kickd reads and writes, and the flags and the subcommands that earlier versions of kickd took.
+The output of `kickd check`, `events`, `status`, `history`, `show` and `help`, and which config file kickd reads and writes.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
+| `TestAnUnknownCommandSaysThatHelpListsTheCommands` | ✓ | ✓ | ✓ |
 | `TestCheckListsTheTriggersOfEachEvent` | ✓ | ✓ | ✓ |
 | `TestCheckPrintsWhereTheLogAndTheDatabaseGo` | ✓ | ✓ | ✓ |
 | `TestCheckRejectsAnEventWithoutTriggers` | ✓ | ✓ | ✓ |
@@ -272,6 +273,8 @@ The output of `kickd check`, `events`, `status`, `history` and `show`, which con
 | `TestCommandsReadTheConfigInTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestEventRefusesAnEventWithoutAManualTrigger` | ✓ | ✓ | ✓ |
 | `TestEventsListsTheEventsWithTheirTriggers` | ✓ | ✓ | ✓ |
+| `TestHelpListsTheCommands` | ✓ | ✓ | ✓ |
+| `TestHelpOfACommandListsItsFlags` | ✓ | ✓ | ✓ |
 | `TestHistoryFiltersTheRunsByStatus` | ✓ | ✓ | ✓ |
 | `TestHistoryListsTheRunsThatWait` | ✓ | ✓ | ✓ |
 | `TestInitDoesNotOverwriteAConfig` | ✓ | ✓ | ✓ |
@@ -285,10 +288,7 @@ The output of `kickd check`, `events`, `status`, `history` and `show`, which con
 | `TestShowPrintsTheOutputOfARun` | ✓ | ✓ | ✓ |
 | `TestStatusReportsAStoppedAgent` | ✓ | ✓ |  |
 | `TestStatusReportsTheRunningAgent` | ✓ | ✓ | ✓ |
-| `TestTheConfigFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
-| `TestTheQueueCommandFailsWithTheReason` | ✓ | ✓ | ✓ |
-| `TestTheRunsCommandFailsWithTheReason` | ✓ | ✓ | ✓ |
-| `TestTheUserFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
+| `TestTheHelpFlagShowsTheHelpOfTheCommand` | ✓ | ✓ | ✓ |
 | `TestVersionPrintsTheVersion` | ✓ | ✓ | ✓ |
 
 ### Services

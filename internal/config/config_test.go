@@ -150,7 +150,6 @@ func TestParseErrors(t *testing.T) {
 		{"bad name", "events:\n  - name: 'has space'" + ok, "must be 1 to 64"},
 		{"duplicate name", "events:\n  - name: a" + ok + "  - name: a" + ok, "duplicate name"},
 		{"no command", "events:\n  - name: a\n", "command is required"},
-		{"shell is gone", "events:\n  - name: a\n    shell: x\n", "line 3: shell is gone"},
 		{"command of another type", "events:\n  - name: a\n    command: 42\n", "must be a string or a list"},
 		{"empty program", "events:\n  - name: a\n    command: ['']\n", "program of command must not be empty"},
 		{"bad concurrency", "events:\n  - name: a\n    concurrency: sometimes" + ok, "concurrency"},
@@ -182,18 +181,15 @@ func TestParseErrors(t *testing.T) {
 		{"duplicate webhook path", "events:\n  - name: a" + ok + "    triggers: [{type: webhook, path: /h}]\n  - name: b" + ok + "    triggers: [{type: webhook, path: /h}]", "used by another"},
 		{"missing dir", "events:\n  - name: a" + ok + "    triggers: [{type: file, path: " + d + "/nope}]", "not a directory"},
 		{"bad change", "events:\n  - name: a" + ok + "    triggers: [{type: file, path: " + d + ", changes: [touch]}]", "unknown change"},
-		{"old file key", "events:\n  - name: a" + ok + "    triggers: [{type: file, path: " + d + ", events: [create]}]", "events"},
+		{"unknown key of a file trigger", "events:\n  - name: a" + ok + "    triggers: [{type: file, path: " + d + ", events: [create]}]", "events"},
 		{"unknown field", "events:\n  - name: a\n    comand: [x]", "comand"},
-		{"jobs are gone", "jobs:\n  - name: a" + ok, "jobs"},
+		{"unknown top-level key", "jobs:\n  - name: a" + ok, "jobs"},
 		{"numeric timeout", "events:\n  - name: a\n    timeout: 30" + ok, "time.Duration"},
 		{"field of another trigger type", "events:\n  - name: a" + ok + "    triggers: [{type: cron, schedule: '@hourly', token: x}]", "not allowed"},
 		{"bad param", "events:\n  - name: a\n    params: [{name: 1x}]" + ok, "parameter name"},
 		{"required with default", "events:\n  - name: a\n    params: [{name: p, required: true, default: d}]" + ok, "cannot be required and have a default"},
 		{"required param with cron", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: cron, schedule: '@hourly'}]", "cannot supply required parameters"},
 		{"negative retention", "database: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
-		{"old log key", "log:\n  file: kickd.log\nevents:\n  - name: a" + ok, "line 2: log.file is now log.path"},
-		{"old queue section", "queue:\n  path: kickd.db\nevents:\n  - name: a" + ok, "line 1: the queue section is now called database"},
-		{"base_dir is gone", "base_dir:\n  linux: /var/lib/kickd\nevents:\n  - name: a" + ok, "line 1: base_dir is gone"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

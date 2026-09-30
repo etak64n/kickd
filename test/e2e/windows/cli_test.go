@@ -230,39 +230,39 @@ func TestCommandsDoNotReadKickdYamlInTheCurrentDirectory(t *testing.T) {
 	}
 }
 
-func TestTheConfigFlagFailsWithTheReason(t *testing.T) {
+func TestHelpListsTheCommands(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("events", "-c", h.config())
-	if r.code != 2 || !strings.Contains(r.stderr, "kickd no longer takes -c: it reads "+h.config()) {
-		t.Errorf("kickd events -c: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("help")
+	if r.code != 0 || !strings.Contains(r.stdout, "\n  kickd history ") || !strings.Contains(r.stdout, "\n  kickd help ") {
+		t.Errorf("kickd help: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
 }
 
-func TestTheRunsCommandFailsWithTheReason(t *testing.T) {
+func TestHelpOfACommandListsItsFlags(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("runs")
-	if r.code != 2 || !strings.Contains(r.stderr, "kickd runs is now kickd history") {
-		t.Errorf("kickd runs: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("help", "history")
+	if r.code != 0 || !strings.HasPrefix(r.stdout, "Usage: kickd history ") || !strings.Contains(r.stdout, "  --limit N") {
+		t.Errorf("kickd help history: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
 }
 
-func TestTheQueueCommandFailsWithTheReason(t *testing.T) {
+func TestTheHelpFlagShowsTheHelpOfTheCommand(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("queue")
-	if r.code != 2 || !strings.Contains(r.stderr, "kickd history --status queued lists only the runs that wait") {
-		t.Errorf("kickd queue: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("event", "--help")
+	if r.code != 0 || !strings.HasPrefix(r.stdout, "Usage: kickd event NAME ") {
+		t.Errorf("kickd event --help: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
 }
 
-func TestTheUserFlagFailsWithTheReason(t *testing.T) {
+func TestAnUnknownCommandSaysThatHelpListsTheCommands(t *testing.T) {
 	t.Parallel()
-	h := newHome(t, "cli")
-	r := h.kickd("service", "install", "--user")
-	if r.code != 1 || !strings.Contains(r.stderr, "kickd no longer takes --user") {
-		t.Errorf("kickd service install --user: exit %d\n%s", r.code, r.stderr)
+	h := newHome(t, "")
+	r := h.kickd("nope")
+	if r.code != 2 || !strings.Contains(r.stderr, `unknown command "nope"; kickd help lists the commands`) {
+		t.Errorf("kickd nope: exit %d\n%s", r.code, r.stderr)
 	}
 }
 

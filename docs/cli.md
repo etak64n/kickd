@@ -39,6 +39,7 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd status` | Shows whether the agent is running, and how many runs are waiting. |
 | `kickd licenses` | Prints the licenses of kickd and of the third-party software that its executables include. |
 | `kickd version` | Prints the version. |
+| `kickd help [COMMAND]` | Lists the subcommands, or shows the help of one: its command line, what it does, and its flags. |
 
 `kickd service` works on the service that runs the agent as the same user, with the same config file:
 
@@ -53,8 +54,7 @@ The subcommands that work with runs read and write the database of the config fi
 The service is named `kickd`.
 On Windows, `kickd service` needs a PowerShell opened as administrator.
 
-kickd v0.5 and earlier named `kickd history` `kickd runs`, and had `kickd queue` for the runs that run or wait.
-Both names fail with the subcommand to run instead.
+`--help` after a subcommand shows the same help as `kickd help` with the name of that subcommand, as in `kickd event --help`.
 
 The run ID is the number in the RUN column of `kickd history`, and the `runId` in the agent's log.
 `--json` makes `event`, `events`, `history`, `show` and `status` print JSON.

@@ -503,9 +503,6 @@ func decodeEvents(data []byte) ([]Event, error) {
 	if len(errs) > 0 {
 		return nil, &ValidationError{Problems: errs}
 	}
-	if err := renamedKeys(data); err != nil {
-		return nil, err
-	}
 	var f struct {
 		Events []Event `yaml:"events"`
 	}
@@ -520,9 +517,6 @@ func decodeEvents(data []byte) ([]Event, error) {
 // parse decodes the config file at path, whose content is data, adds the
 // events of the other files, and resolves and validates the result.
 func parse(data []byte, path string, others []eventsFile) (*Config, error) {
-	if err := renamedKeys(data); err != nil {
-		return nil, err
-	}
 	var cfg Config
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -558,8 +552,7 @@ func parse(data []byte, path string, others []eventsFile) (*Config, error) {
 
 // missing explains a missing config file at Path, for the whole machine
 // when system is true and for the user otherwise. For the user, it names
-// the file of an earlier version of kickd, and the config file for the
-// whole machine, when one of them is there.
+// the config file for the whole machine when that file is there.
 func missing(err error, system bool) error {
 	root, sudo := "as root", "with sudo"
 	if runtime.GOOS == "windows" {
@@ -567,13 +560,6 @@ func missing(err error, system bool) error {
 	}
 	if system {
 		return fmt.Errorf("%w; %s, kickd reads the config file for the whole machine, and kickd init writes an example there", err, root)
-	}
-	user := userPath()
-	if dir, derr := os.UserConfigDir(); derr == nil {
-		if old := filepath.Join(dir, "kickd", "config.yaml"); fileExists(old) {
-			return fmt.Errorf("%w; kickd reads its config from %s, and no longer from %s: move that file, and the files that it names, into %s",
-				err, user, old, filepath.Dir(user))
-		}
 	}
 	if machine := systemPath(); fileExists(machine) {
 		return fmt.Errorf("%w; kickd init writes an example there, and %s, kickd reads %s instead", err, sudo, machine)
@@ -1040,44 +1026,6 @@ func (c *Config) Warnings() []Warning {
 		}
 	}
 	return out
-}
-
-// renamedKeys reports keys that earlier versions of kickd used, with the
-// names that replaced them, so that an old file fails with a fix.
-func renamedKeys(data []byte) error {
-	var root yaml.Node
-	if yaml.Unmarshal(data, &root) != nil || len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
-		return nil // the decoder reports syntax errors and empty files
-	}
-	var errs []error
-	top := root.Content[0].Content
-	for i := 0; i+1 < len(top); i += 2 {
-		key, value := top[i], top[i+1]
-		switch {
-		case key.Value == "queue":
-			errs = append(errs, fmt.Errorf("line %d: the queue section is now called database", key.Line))
-		case key.Value == "base_dir":
-			errs = append(errs, fmt.Errorf("line %d: base_dir is gone: give the full paths in log.path and database.path", key.Line))
-		case key.Value == "events" && value.Kind == yaml.SequenceNode:
-			for _, e := range value.Content {
-				for j := 0; e.Kind == yaml.MappingNode && j+1 < len(e.Content); j += 2 {
-					if k := e.Content[j]; k.Value == "shell" {
-						errs = append(errs, fmt.Errorf("line %d: shell is gone: give the string as command, which runs a string through the shell", k.Line))
-					}
-				}
-			}
-		case key.Value == "log" && value.Kind == yaml.MappingNode:
-			for j := 0; j+1 < len(value.Content); j += 2 {
-				if k := value.Content[j]; k.Value == "file" {
-					errs = append(errs, fmt.Errorf("line %d: log.file is now log.path", k.Line))
-				}
-			}
-		}
-	}
-	if len(errs) == 0 {
-		return nil
-	}
-	return &ValidationError{Problems: errs}
 }
 
 // Path returns the config file of kickd, which the user who runs kickd

@@ -47,8 +47,6 @@ func runOps(path string, args []string, stdout, stderr io.Writer) int {
 		err = c.events(args[1:])
 	case "history":
 		err = c.history(args[1:])
-	case "runs", "queue":
-		err = usageError{removedCommand(args[0])}
 	case "show":
 		err = c.show(args[1:])
 	case "cancel":
@@ -72,8 +70,23 @@ type usageError struct{ msg string }
 
 func (e usageError) Error() string { return e.msg }
 
+// helpRequest asks for the help of the subcommand whose flags are fs.
+type helpRequest struct{ fs *flag.FlagSet }
+
+func (h helpRequest) Error() string { return "kickd help " + h.fs.Name() + " shows the help" }
+
 func (c *cli) exit(err error) int {
 	if err == nil {
+		return exitOK
+	}
+	var hr helpRequest
+	if errors.As(err, &hr) {
+		text, err := commandHelp(hr.fs.Name(), hr.fs)
+		if err != nil {
+			fmt.Fprintln(c.stderr, "kickd:", err)
+			return exitUsage
+		}
+		fmt.Fprint(c.stdout, text)
 		return exitOK
 	}
 	fmt.Fprintln(c.stderr, "kickd:", err)
@@ -85,7 +98,8 @@ func (c *cli) exit(err error) int {
 }
 
 // parse parses flags that may appear before, between or after the
-// positional arguments, and returns the positional ones.
+// positional arguments, and returns the positional ones. --help anywhere
+// asks for the help of the subcommand.
 func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 	fs.SetOutput(io.Discard)
 	var flags, pos []string
@@ -99,14 +113,14 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 			pos = append(pos, a)
 			continue
 		}
+		if isHelp(a) {
+			return nil, helpRequest{fs}
+		}
 		flags = append(flags, a)
 		name, _, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
 		f := fs.Lookup(name)
 		if f == nil {
-			if msg := removedFlag(a); msg != "" {
-				return nil, usageError{msg}
-			}
-			return nil, usageError{fmt.Sprintf("unknown flag %s", a)}
+			return nil, usageError{fmt.Sprintf("unknown flag %s; kickd help %s lists the flags", a, fs.Name())}
 		}
 		if hasValue {
 			continue
@@ -124,30 +138,6 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 		return nil, usageError{err.Error()}
 	}
 	return pos, nil
-}
-
-// removedCommand explains a subcommand that kickd v0.5 and earlier had.
-func removedCommand(name string) string {
-	if name == "queue" {
-		return "kickd queue is gone: kickd history lists the runs that run or wait first, and kickd history --status queued lists only the runs that wait"
-	}
-	return "kickd " + name + " is now kickd history, with the same flags"
-}
-
-// removedFlag explains a flag that kickd v0.4 and earlier took, and
-// returns "" for any other argument.
-func removedFlag(arg string) string {
-	flag, _, _ := strings.Cut(arg, "=")
-	switch strings.TrimLeft(flag, "-") {
-	case "c", "config":
-		return fmt.Sprintf("kickd no longer takes %s: it reads %s, the config file for the user who runs kickd. "+
-			"A service that kickd v0.4 or earlier installed passes --config: install it again with kickd service uninstall and kickd service install", flag, config.Path())
-	case "user":
-		return "kickd no longer takes --user: kickd service works on the service of the user who runs it, and on the service of the whole machine as root or as an administrator"
-	case "name":
-		return "kickd no longer takes --name: the service is named kickd"
-	}
-	return ""
 }
 
 func (c *cli) load() (*config.Config, error) {
@@ -178,9 +168,9 @@ func source() string {
 // kickd consumes.
 func (c *cli) event(args []string) int {
 	fs := flag.NewFlagSet("event", flag.ContinueOnError)
-	dataJSON := fs.String("data", "", "parameters as a JSON object of strings")
-	wait := fs.Bool("wait", false, "wait for the run and exit 0 only if it succeeds")
-	timeout := fs.Duration("timeout", 0, "with --wait: give up after this long (exit 124)")
+	dataJSON := fs.String("data", "", "the parameters as a `JSON` object of strings")
+	wait := fs.Bool("wait", false, "wait for the run, and exit 0 only if it succeeds")
+	timeout := fs.Duration("timeout", 0, "with --wait, give up after this `DURATION`, with exit code 124")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -408,9 +398,9 @@ func triggerNames(e config.Event) []string {
 // come first.
 func (c *cli) history(args []string) error {
 	fs := flag.NewFlagSet("history", flag.ContinueOnError)
-	name := fs.String("event", "", "only this event")
-	status := fs.String("status", "", "only this status: queued, running, succeeded, failed, canceled, skipped, dropped, interrupted, retried, abandoned")
-	limit := fs.Int("limit", 20, "number of runs")
+	name := fs.String("event", "", "only the runs of the event `NAME`")
+	status := fs.String("status", "", "only the runs with this `STATUS`: queued, running, succeeded, failed, canceled, skipped, dropped, interrupted, retried or abandoned")
+	limit := fs.Int("limit", 20, "show `N` runs at most")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parse(fs, args); err != nil {
 		return err
