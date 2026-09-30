@@ -1,0 +1,8 @@
+log:
+  path: 'kickd.log'
+events:
+  # Prepares once when kickd starts.
+  - name: prepare
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'prepare.ps1']
+    triggers:
+      - type: startup

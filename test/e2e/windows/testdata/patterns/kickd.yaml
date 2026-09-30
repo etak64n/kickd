@@ -1,0 +1,41 @@
+log:
+  path: 'kickd.log'
+events:
+  # A Python script in its virtual environment, which the test creates as
+  # docs/commands.md says, with no activation.
+  - name: report
+    command: ['.venv\Scripts\python.exe', 'report.py']
+    workdir: 'reports'
+    triggers:
+      - type: manual
+  # A script of package.json, with npm run. npm is the batch file npm.cmd,
+  # which runs through cmd, so the command is a string.
+  - name: build-site
+    command: 'npm run build'
+    workdir: 'site'
+    triggers:
+      - type: manual
+  # A batch file in ~\bin, which the PATH of the event holds. A batch file
+  # runs through cmd, so the command is a string.
+  - name: greet
+    command: 'greet hello'
+    env:
+      PATH: '${USERPROFILE}\bin;${PATH}'
+    triggers:
+      - type: manual
+  # The payload on standard input, read by Python, Node.js and findstr.
+  - name: stdin-python
+    command: ['python', '-c', 'import json, sys; print("event=" + json.load(sys.stdin)["event"])']
+    stdin: payload
+    triggers:
+      - type: manual
+  - name: stdin-node
+    command: ['node', '-e', 'let s = ""; process.stdin.on("data", d => s += d).on("end", () => console.log("event=" + JSON.parse(s).event))']
+    stdin: payload
+    triggers:
+      - type: manual
+  - name: stdin-findstr
+    command: ['findstr', '^']
+    stdin: payload
+    triggers:
+      - type: manual

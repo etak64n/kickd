@@ -1,0 +1,10 @@
+log:
+  path: 'kickd.log'
+events:
+  # Builds when a source file changes. The key command has a typo.
+  - name: build
+    comand: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    triggers:
+      - type: file
+        path: 'src'
+      - type: manual

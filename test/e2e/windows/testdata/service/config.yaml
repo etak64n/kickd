@@ -1,0 +1,21 @@
+# The config of kickd as a Windows service, at
+# C:\ProgramData\kickd\config.yaml.
+log:
+  path: 'C:\ProgramData\kickd\kickd.log'
+database:
+  path: 'C:\ProgramData\kickd\kickd.db'
+events:
+  # Prints the user that runs the commands of kickd.
+  - name: whoami
+    command: ['whoami']
+    triggers:
+      - type: webhook
+        path: '/hooks/whoami'
+        token: 'whoami-token'
+      - type: manual
+  # Prints the environment that the commands of kickd get, as
+  # docs/commands.md shows.
+  - name: show-env
+    command: 'set'
+    triggers:
+      - type: manual

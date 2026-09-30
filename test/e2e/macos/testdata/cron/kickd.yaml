@@ -1,0 +1,36 @@
+# One moment, 25 seconds after the test starts, written in five time zones:
+# offsets of whole hours, half an hour and three quarters of an hour, and a
+# zone with daylight saving time. The test fills in the schedules.
+log:
+  path: 'kickd.log'
+events:
+  - name: in-utc
+    command: ['./report.sh']
+    triggers:
+      - type: cron
+        schedule: '{{at "UTC"}}'
+        timezone: UTC
+  - name: in-tokyo
+    command: ['./report.sh']
+    triggers:
+      - type: cron
+        schedule: '{{at "Asia/Tokyo"}}'
+        timezone: Asia/Tokyo
+  - name: in-kolkata
+    command: ['./report.sh']
+    triggers:
+      - type: cron
+        schedule: '{{at "Asia/Kolkata"}}'
+        timezone: Asia/Kolkata
+  - name: in-kathmandu
+    command: ['./report.sh']
+    triggers:
+      - type: cron
+        schedule: '{{at "Asia/Kathmandu"}}'
+        timezone: Asia/Kathmandu
+  - name: in-st-johns
+    command: ['./report.sh']
+    triggers:
+      - type: cron
+        schedule: '{{at "America/St_Johns"}}'
+        timezone: America/St_Johns

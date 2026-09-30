@@ -1,0 +1,5 @@
+events:
+  - name: notify
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
+    triggers:
+      - type: manual

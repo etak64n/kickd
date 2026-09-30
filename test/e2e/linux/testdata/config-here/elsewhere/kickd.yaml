@@ -1,0 +1,5 @@
+events:
+  - name: deploy
+    command: ['./deploy.sh']
+    triggers:
+      - type: manual

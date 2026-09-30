@@ -1,0 +1,26 @@
+log:
+  path: 'kickd.log'
+events:
+  # Starts a server that keeps running after the script, with its output in
+  # a log, and exits.
+  - name: start-server
+    command: ['./start-server.sh']
+    triggers:
+      - type: manual
+  # Starts a server that keeps running after the script, and keeps the
+  # output of the command open, and exits.
+  - name: start-server-holding-output
+    command: ['./start-server-holding-output.sh']
+    triggers:
+      - type: manual
+  # Crawls with a child process, and kickd stops it after 3 seconds.
+  - name: crawl
+    command: ['./crawl.sh']
+    timeout: 3s
+    triggers:
+      - type: manual
+  # Crawls with a child process until kickd cancel stops it.
+  - name: crawl-until-canceled
+    command: ['./crawl.sh']
+    triggers:
+      - type: manual

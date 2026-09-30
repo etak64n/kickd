@@ -52,13 +52,22 @@ jobs:
         if: runner.os == 'Linux'
         run: go list -deps ./cmd/kickd | grep -qx time/tzdata
 
-  # Runs the kickd executable the way its users do, on each OS: the README
-  # config with commands of many kinds, and kickd installed as a service.
-  usecase:
+  # Runs the kickd executable the way its users do, with the end-to-end
+  # tests of each OS in test/e2e, which test/e2e/README.md lists.
+  e2e:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            suite: linux
+            machine: 'TestService|TestClock'
+          - os: macos-latest
+            suite: macos
+            machine: 'TestService|TestClock'
+          - os: windows-latest
+            suite: windows
+            machine: 'TestService|TestClock|TestReadme'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -69,18 +78,19 @@ jobs:
           check-latest: true
 
       - name: Vet
-        run: go vet -tags usecase ./test/usecase
+        run: go vet -tags e2e ./test/e2e/${{ matrix.suite }}
 
-      - name: Use cases
-        run: go test -tags usecase -count=1 -v -run TestUseCase ./test/usecase
+      - name: End-to-end tests
+        run: go test -tags e2e -count=1 -timeout 30m -v ./test/e2e/${{ matrix.suite }}
         env:
-          KICKD_USECASE_ALL: '1'
+          KICKD_E2E_ALL: '1'
 
-      # The runner is a throwaway machine, so the tests may install services
-      # and move the clock.
-      - name: Tests that change the machine
-        run: go test -tags usecase -count=1 -v -run 'TestService|TestMachine' ./test/usecase
+      # The runner is a throwaway machine, so the tests may install services,
+      # write to the folders of the system and move the clock.
+      - name: End-to-end tests that change the machine
+        run: go test -tags e2e -count=1 -timeout 30m -v -run '${{ matrix.machine }}' ./test/e2e/${{ matrix.suite }}
         env:
+          KICKD_E2E_ALL: '1'
           KICKD_MACHINE_TEST: '1'
 
   # go.mod promises that Go 1.25 builds kickd.

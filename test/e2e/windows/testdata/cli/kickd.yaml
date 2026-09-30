@@ -1,0 +1,30 @@
+log:
+  path: 'kickd.log'
+database:
+  path: 'kickd.db'
+webhook:
+  listen: '127.0.0.1:18788'
+events:
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    concurrency: skip
+    on_interrupt: rerun
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'
+        timezone: Asia/Tokyo
+      - type: manual
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    concurrency: queue
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        token: 'cli-token'
+      - type: manual
+  # Only the schedule fires it: kickd event refuses it.
+  - name: nightly
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    triggers:
+      - type: cron
+        schedule: '0 2 * * *'

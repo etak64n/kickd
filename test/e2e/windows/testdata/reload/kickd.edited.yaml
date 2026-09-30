@@ -1,0 +1,15 @@
+log:
+  path: 'kickd.log'
+events:
+  # Builds when a source file changes.
+  - name: build
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    triggers:
+      - type: file
+        path: 'src'
+      - type: manual
+  # Added while kickd runs.
+  - name: test
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'test.ps1']
+    triggers:
+      - type: manual

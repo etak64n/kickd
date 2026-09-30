@@ -1,0 +1,14 @@
+log:
+  path: 'kickd.log'
+events:
+  # Exports a report of 2000 rows, about 100 KB.
+  - name: export
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'export.ps1']
+    triggers:
+      - type: manual
+  # Checks 200 hosts, and prints to standard output and standard error in
+  # turn.
+  - name: check-hosts
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'check-hosts.ps1']
+    triggers:
+      - type: manual

@@ -20,8 +20,8 @@ A service gets the environment of its service manager instead, which holds far f
 | Started by | `PATH` | Other variables |
 |---|---|---|
 | launchd, as a LaunchAgent on macOS | `/usr/bin:/bin:/usr/sbin:/sbin` | `HOME`, `USER`, `LOGNAME`, `SHELL` and `TMPDIR` of the user. `LANG` is not set. |
-| systemd, as a system-wide unit on Linux | `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin` | `LANG` from the locale of the system. `HOME` and `USER` are not set, because the unit has no `User=` setting. |
-| systemd, as a per-user unit on Linux | The same as a system-wide unit | `HOME`, `USER` and `XDG_RUNTIME_DIR` of the user |
+| systemd, as a system-wide unit on Linux | `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, and on Ubuntu `/snap/bin` after them | `LANG` from the locale of the system. `HOME` and `USER` are not set, because the unit has no `User=` setting. |
+| systemd, as a per-user unit on Linux | The `PATH` of the systemd of the user, which on Ubuntu is the one in `/etc/environment` | `HOME`, `USER` and `XDG_RUNTIME_DIR` of the user |
 | A Windows service | The system `PATH` | The variables of the SYSTEM account: `USERPROFILE` is `C:\Windows\system32\config\systemprofile`, and `TEMP` is `C:\Windows\TEMP`. |
 
 So a program that works in a terminal can fail as a service, because the service does not find it or misses a variable that the terminal had.

@@ -1,0 +1,13 @@
+log:
+  path: 'kickd.log'
+events:
+  # Prepares once when kickd starts.
+  - name: prepare
+    command: ['./prepare.sh']
+    triggers:
+      - type: startup
+  # Added while kickd runs.
+  - name: clean
+    command: ['./prepare.sh']
+    triggers:
+      - type: manual

@@ -1,0 +1,8 @@
+log:
+  path: 'kickd.log'
+events:
+  # Syncs when the machine wakes from sleep.
+  - name: resync
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'resync.ps1']
+    triggers:
+      - type: wake

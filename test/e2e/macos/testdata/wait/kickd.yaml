@@ -1,0 +1,18 @@
+log:
+  path: 'kickd.log'
+events:
+  # Backs up in a second.
+  - name: backup
+    command: ['./backup.sh']
+    triggers:
+      - type: manual
+  # Verifies the backup, which is broken, so it fails.
+  - name: verify
+    command: ['./verify.sh']
+    triggers:
+      - type: manual
+  # Restores the backup, which takes a minute.
+  - name: restore
+    command: ['./restore.sh']
+    triggers:
+      - type: manual

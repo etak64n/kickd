@@ -1,0 +1,26 @@
+log:
+  path: 'kickd.log'
+events:
+  # Starts a server in a window of its own, which keeps running after the
+  # script, and exits.
+  - name: start-server
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'start-server.ps1']
+    triggers:
+      - type: manual
+  # Starts a server in the console of the script, which keeps running after
+  # the script with the output of the command open, and exits.
+  - name: start-server-holding-output
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'start-server-holding-output.ps1']
+    triggers:
+      - type: manual
+  # Crawls with a child process, and kickd stops it after 10 seconds.
+  - name: crawl
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'crawl.ps1']
+    timeout: 10s
+    triggers:
+      - type: manual
+  # Crawls with a child process until kickd cancel stops it.
+  - name: crawl-until-canceled
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'crawl.ps1']
+    triggers:
+      - type: manual
