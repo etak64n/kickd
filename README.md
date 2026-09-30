@@ -333,7 +333,8 @@ To keep kickd running in the background, install it as a service by following th
 
 ## Documentation
 
-[The documentation index](docs/index.md) lists the guides, the settings of every key, and the internals of kickd.
+The [documentation site](https://etak64n.github.io/kickd/) has the guides, the settings of every key, and the internals of kickd, as of the latest release.
+The same pages are the Markdown files in `docs`, which [the documentation index](docs/index.md) lists.
 
 ## License
 
