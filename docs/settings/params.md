@@ -2,7 +2,8 @@
 
 [Documentation index](../../README.md#documentation)
 
-In kickd, a named command in the config file is an **event**, and asking kickd to run an event is **firing** it.
+kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
+In kickd, a named command in the config is an **event**, and asking kickd to run an event is **firing** it.
 A **parameter** is a named value that a firing passes to the command of the event, such as the Git ref that a deploy checks out.
 The `params` key of an event declares its parameters:
 
@@ -32,7 +33,7 @@ Once an event declares parameters, a firing can pass only those, and `kickd even
 The command receives every declared parameter, with the value of the firing, its default, or an empty value.
 An event without `params` accepts any names from `kickd event`, made of letters, digits and `_`, and webhook requests pass no parameters to it.
 
-`kickd event` reads the config file each time it runs, so it checks a firing against the parameters of the file as it is.
+`kickd event` reads the config each time it runs, so it checks a firing against the parameters as the files have them.
 Webhook requests use the parameters of the config that the long-running kickd process, the agent, has loaded, which changes when the file is saved.
 
 ## `name`
@@ -41,11 +42,11 @@ Webhook requests use the parameters of the config that the long-running kickd pr
 
 - **Type**: a string of 1 to 64 characters: letters, digits and `_`, not starting with a digit.
 - **Default**: none. `name` is required, and no two parameters of one event can have the same name.
-- **Takes effect**: at once for `kickd event`, and for webhook requests when the config file is saved.
+- **Takes effect**: at once for `kickd event`, and for webhook requests when the file that defines the event is saved.
 
 The command receives the value in the environment variable `KICKD_DATA_` followed by the name in capitals, so `ref` arrives in `KICKD_DATA_REF`.
 The same value is in the variable `KICKD_DATA`, a JSON object of every parameter, and in the `data` field of the payload JSON.
-In the command line and the query, the name is written as the config file writes it.
+In the command line and the query, the name is written as the config writes it.
 
 ```yaml
 events:
@@ -64,7 +65,7 @@ events:
 
 - **Type**: `true` or `false`, written without quotes.
 - **Default**: `false`.
-- **Takes effect**: at once for `kickd event`, and for webhook requests when the config file is saved.
+- **Takes effect**: at once for `kickd event`, and for webhook requests when the file that defines the event is saved.
 
 A firing that lacks a required parameter does not run:
 
@@ -91,7 +92,7 @@ events:
 
 - **Type**: a string. A value is the text that the file gives, so `7` and `'7'` are the same value.
 - **Default**: none, which gives an empty value to a firing that does not pass the parameter.
-- **Takes effect**: at once for `kickd event`, and for webhook requests when the config file is saved.
+- **Takes effect**: at once for `kickd event`, and for webhook requests when the file that defines the event is saved.
 
 Firings of cron, file, after, startup and wake triggers always get the default, because these triggers pass no parameters.
 For a webhook request, an empty query value, as in `?ref=`, counts as not passed, so the default applies.
@@ -115,7 +116,7 @@ events:
 
 - **Type**: a string.
 - **Default**: none.
-- **Takes effect**: at once for `kickd events`, which reads the config file each time it runs.
+- **Takes effect**: at once for `kickd events`, which reads the config each time it runs.
 
 `kickd events --json` shows it among the parameters of the event.
 The agent does not use it.

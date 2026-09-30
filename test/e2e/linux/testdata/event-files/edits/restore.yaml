@@ -1,0 +1,6 @@
+# Restores the backup, saved next to the config file while kickd runs.
+events:
+  - name: restore
+    command: ['./restore.sh']
+    triggers:
+      - type: manual

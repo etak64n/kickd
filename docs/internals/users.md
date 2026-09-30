@@ -54,7 +54,7 @@ On Windows, cmd expands `%VAR%` before it parses the line, so a value that conta
 
 | File | Owner | Permissions on macOS and Linux |
 |---|---|---|
-| Config file written by `kickd init` | The user who ran `kickd init` | 0600 |
+| Config file and events file written by `kickd init` | The user who ran `kickd init` | 0600 |
 | Database, with its `-wal` and `-shm` files | The user whose kickd process created it | 0600 |
 | Log file | The user of the agent | Allowed by the umask, usually 0644 |
 | Payload file of a run | The user of the agent | 0600 |

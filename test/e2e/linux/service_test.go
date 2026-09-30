@@ -83,16 +83,16 @@ func userUnit(t *testing.T) *service {
 		t:        t,
 		flags:    []string{"--user"},
 		env:      append(os.Environ(), "XDG_RUNTIME_DIR="+runtimeDir, "DBUS_SESSION_BUS_ADDRESS=unix:path="+runtimeDir+"/bus"),
-		config:   filepath.Join(u.HomeDir, ".config", "kickd", "config.yaml"),
+		config:   filepath.Join(u.HomeDir, ".kickd", "config.yaml"),
 		unit:     filepath.Join(u.HomeDir, ".config", "systemd", "user", "kickd.service"),
-		log:      filepath.Join(u.HomeDir, ".local", "state", "kickd", "kickd.log"),
-		database: filepath.Join(u.HomeDir, ".local", "state", "kickd", "kickd.db"),
+		log:      filepath.Join(u.HomeDir, ".kickd", "kickd.log"),
+		database: filepath.Join(u.HomeDir, ".kickd", "kickd.db"),
 	}
 	s.sudoMust("loginctl", "enable-linger", u.Username)
 	waitFor(t, "the systemd of the user answers", 60*time.Second, func() bool {
 		return s.systemctl("show-environment").code == 0
 	}, s.describe)
-	s.removeAtEnd(filepath.Dir(s.config), filepath.Dir(s.log))
+	s.removeAtEnd(filepath.Dir(s.config))
 	s.must("mkdir", "-p", filepath.Dir(s.config))
 	s.must("cp", "testdata/service-user/config.yaml", s.config)
 	s.install()
@@ -125,7 +125,7 @@ func (s *service) removeAtEnd(dirs ...string) {
 			s.systemctl("reset-failed", "kickd")
 		}
 		for _, d := range dirs {
-			if filepath.Base(d) != "kickd" {
+			if b := filepath.Base(d); b != "kickd" && b != ".kickd" {
 				s.t.Errorf("not removing %s, which is not a directory of kickd", d)
 				continue
 			}

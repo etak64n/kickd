@@ -50,14 +50,14 @@ The agent runs its parts in separate goroutines, the lightweight threads of Go:
 - **Dispatcher loop**: one goroutine consumes the queue. It also writes a heartbeat to the database every 5 seconds, and deletes old runs every hour.
 - **Triggers**: one goroutine runs every cron schedule, one runs the webhook server with one more goroutine per HTTP request, and each file trigger has a goroutine of its own.
 - **Runs**: each running command has a goroutine that waits for it.
-- **Config watcher**: one goroutine watches the directory of the config file.
+- **Config watcher**: one goroutine watches the directory of the config file, for changes to the config file and to the other YAML files there.
 
 The dispatcher keeps the number of running commands of each event in memory, and uses it to apply `concurrency`.
 With `parallel`, kickd sets no limit on the number of commands running at once.
 
 ## Reloading the config
 
-When the config file changes, the agent loads the new file and validates all of it before using any part.
+When the config file, or another YAML file of its directory, changes, the agent loads the config from all the files again and validates all of it before using any part.
 When the new config is valid, the agent stops every trigger, gives the dispatcher the new event definitions, and starts the triggers of the new config.
 Runs that are running keep the definition they started with.
 Runs that are waiting take the new definition when they start.

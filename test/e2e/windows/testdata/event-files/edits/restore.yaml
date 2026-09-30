@@ -1,0 +1,6 @@
+# Restores the backup, saved next to the config file while kickd runs.
+events:
+  - name: restore
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'restore.ps1']
+    triggers:
+      - type: manual

@@ -90,7 +90,7 @@ func TestOpsWithoutAgent(t *testing.T) {
 		t.Errorf("cancel missing: %d %q", code, errOut)
 	}
 	if code, out, _ := ops(t, "events", "-c", cfg); code != 0 ||
-		!regexp.MustCompile(`deploy\s+manual\s+skip\s+abandon\s+ref=main\s+Deploy the app`).MatchString(out) ||
+		!regexp.MustCompile(`deploy\s+manual\s+skip\s+abandon\s+ref=main\s+kickd\.yaml\s+Deploy the app`).MatchString(out) ||
 		!regexp.MustCompile(`boom\s+cron @yearly, manual`).MatchString(out) ||
 		!regexp.MustCompile(`slow\s+manual\s+skip\s+rerun \(max 3\)`).MatchString(out) {
 		t.Errorf("events: %d %q", code, out)
@@ -231,7 +231,7 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 	t.Setenv("USERPROFILE", home) // the home directory on Windows
 	// A config in the home directory is a user's; one outside it is for
 	// the whole system, as /etc/kickd/config.yaml is.
-	user := filepath.Join(home, "kickd", "config.yaml")
+	user := filepath.Join(home, ".kickd", "config.yaml")
 	system := filepath.Join(t.TempDir(), "etc", "kickd", "config.yaml")
 	for _, c := range []struct {
 		path   string
@@ -240,18 +240,37 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 		if err := cmdInit([]string{"-c", c.path}); err != nil {
 			t.Fatal(err)
 		}
-		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.Example(runtime.GOOS, c.system) {
+		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.ExampleConfig(runtime.GOOS, c.system) {
 			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
 		}
+		events := filepath.Join(filepath.Dir(c.path), config.ExampleEventsName)
+		if b, err := os.ReadFile(events); err != nil || string(b) != config.ExampleEvents(runtime.GOOS) {
+			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), events, err)
+		}
 	}
-	if !strings.Contains(config.Example("linux", true), "'/var/lib/kickd/kickd.db'") || !strings.Contains(config.Example("linux", false), "'~/.local/state/kickd/kickd.db'") {
+	if !strings.Contains(config.ExampleConfig("linux", true), "'/var/lib/kickd/kickd.db'") || !strings.Contains(config.ExampleConfig("linux", false), "'~/.kickd/kickd.db'") {
 		t.Fatal("the examples must name the database of a system and of a user")
 	}
-	path := user
-	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
-		t.Errorf("config permissions %o, want 600", st.Mode().Perm())
+	for _, path := range []string{user, filepath.Join(filepath.Dir(user), config.ExampleEventsName)} {
+		if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+			t.Errorf("%s permissions %o, want 600", path, st.Mode().Perm())
+		}
 	}
-	if err := cmdInit([]string{"-c", path}); err == nil || !strings.Contains(err.Error(), "already exists") {
+	if err := cmdInit([]string{"-c", user}); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("a second init must refuse to overwrite: %v", err)
+	}
+}
+
+func TestInitRefusesToOverwriteTheEventsFile(t *testing.T) {
+	dir := t.TempDir()
+	events := filepath.Join(dir, config.ExampleEventsName)
+	if err := os.WriteFile(events, []byte("events: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdInit([]string{"-c", filepath.Join(dir, "config.yaml")}); err == nil || !strings.Contains(err.Error(), events+" already exists") {
+		t.Errorf("init over an events file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err == nil {
+		t.Error("init wrote the config file")
 	}
 }

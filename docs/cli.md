@@ -11,7 +11,8 @@ Each firing of an event is recorded as a **run** in the **database**, a SQLite f
 A run that has not started yet waits in the **queue**.
 
 Every subcommand reads the config file.
-The file is the first of these that applies: `-c` or `--config`, the environment variable `KICKD_CONFIG`, `kickd/config.yaml` in the user's config directory, and `kickd.yaml` in the current directory.
+The file is the first of these that applies: `-c` or `--config`, the environment variable `KICKD_CONFIG`, `~/.kickd/config.yaml`, and `kickd.yaml` in the current directory.
+Every subcommand also reads the events of the other `.yaml` and `.yml` files next to the config file that have an `events` section.
 The subcommands that work with runs read and write the database of the config file directly, the same database that the agent uses.
 
 ## Subcommands
@@ -19,11 +20,11 @@ The subcommands that work with runs read and write the database of the config fi
 | Subcommand | What it does |
 |---|---|
 | `kickd run` | Runs the agent in the foreground. A service manager starts the agent with this subcommand too. |
-| `kickd check` | Validates the config file, prints every error, and lists the events and their triggers. |
-| `kickd init` | Writes an example config file for the OS that it runs on, the file that the README shows for that OS. It refuses to overwrite an existing file. |
+| `kickd check` | Validates the config, prints every error, and lists the files whose events it reads, and the events with their triggers. |
+| `kickd init` | Writes an example config file and an example events file, `event.example.yaml`, next to it, for the OS that it runs on: the files that the README shows for that OS. It refuses to overwrite an existing file. |
 | `kickd service ACTION` | Manages the service. `ACTION` is `install`, `uninstall`, `start`, `stop`, `restart` or `status`. |
 | `kickd event NAME` | Fires an event that has a manual trigger. |
-| `kickd events` | Lists the events and the triggers that fire each one. |
+| `kickd events` | Lists the events, the triggers that fire each one, and the file that defines it. |
 | `kickd queue` | Shows queued, running and interrupted runs. |
 | `kickd runs` | Shows the run history, newest first. `--event`, `--status` and `--limit` filter it. |
 | `kickd show RUN_ID` | Shows one run: its details, parameters and command output. |

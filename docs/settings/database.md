@@ -11,7 +11,7 @@ The `database` section of the config file sets where the file is, and how long e
 
 ```yaml
 database:
-  path: '~/.local/state/kickd/kickd.db'
+  path: '~/.kickd/kickd.db'
   retention: 168h
 ```
 
@@ -46,7 +46,7 @@ A config file inside the home directory is for a user's kickd, and one outside i
 
 | Config file | macOS | Linux | Windows |
 |---|---|---|---|
-| Inside the home directory | `~/Library/Application Support/kickd/kickd.db` | `~/.local/state/kickd/kickd.db` | `~\AppData\Local\kickd\kickd.db` |
+| Inside the home directory | `~/.kickd/kickd.db` | `~/.kickd/kickd.db` | `~\.kickd\kickd.db` |
 | Outside the home directory | `/Library/Application Support/kickd/kickd.db` | `/var/lib/kickd/kickd.db` | `C:\ProgramData\kickd\kickd.db` |
 
 ```yaml

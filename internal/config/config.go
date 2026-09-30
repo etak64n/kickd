@@ -2,9 +2,12 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,14 +21,21 @@ import (
 	"github.com/etak64n/kickd/internal/trigger"
 )
 
-// The examples that "kickd init" writes: one with shell commands for macOS
-// and Linux, and one with PowerShell commands for Windows.
+// The examples that "kickd init" writes: the settings, the same on every
+// OS, and the events, with shell commands for macOS and Linux and with
+// PowerShell commands for Windows.
 var (
-	//go:embed example.yaml
-	exampleUnix string
-	//go:embed example-windows.yaml
-	exampleWindows string
+	//go:embed example-config.yaml
+	exampleConfig string
+	//go:embed example-events.yaml
+	exampleEventsUnix string
+	//go:embed example-events-windows.yaml
+	exampleEventsWindows string
 )
+
+// ExampleEventsName is the name of the events file that "kickd init" writes
+// next to the config file.
+const ExampleEventsName = "event.example.yaml"
 
 // InitPaths holds the log file and the database that "kickd init" writes
 // into a new config.
@@ -35,15 +45,15 @@ type InitPaths struct{ Log, Database string }
 // OS: for a user's program, and for a service of the whole system.
 var initPaths = map[string]struct{ user, system InitPaths }{
 	"darwin": {
-		InitPaths{"~/Library/Logs/kickd/kickd.log", "~/Library/Application Support/kickd/kickd.db"},
+		InitPaths{"~/.kickd/kickd.log", "~/.kickd/kickd.db"},
 		InitPaths{"/Library/Logs/kickd/kickd.log", "/Library/Application Support/kickd/kickd.db"},
 	},
 	"linux": {
-		InitPaths{"~/.local/state/kickd/kickd.log", "~/.local/state/kickd/kickd.db"},
+		InitPaths{"~/.kickd/kickd.log", "~/.kickd/kickd.db"},
 		InitPaths{"/var/log/kickd/kickd.log", "/var/lib/kickd/kickd.db"},
 	},
 	"windows": {
-		InitPaths{`~\AppData\Local\kickd\kickd.log`, `~\AppData\Local\kickd\kickd.db`},
+		InitPaths{`~\.kickd\kickd.log`, `~\.kickd\kickd.db`},
 		InitPaths{`C:\ProgramData\kickd\kickd.log`, `C:\ProgramData\kickd\kickd.db`},
 	},
 }
@@ -62,19 +72,27 @@ func PathsFor(goos string, system bool) InitPaths {
 	return p.user
 }
 
-// Example returns the annotated configuration that "kickd init" writes on
-// the OS goos: with commands for Windows or for macOS and Linux, and with
-// the log and the database at the paths of PathsFor.
-func Example(goos string, system bool) string {
-	text := exampleUnix
-	if goos == "windows" {
-		text = exampleWindows
-	}
-	// A checkout on Windows can turn the line endings into CRLF.
-	text = strings.ReplaceAll(text, "\r\n", "\n")
+// ExampleConfig returns the annotated config file that "kickd init" writes
+// on the OS goos: the log, webhook and database sections, with the log and
+// the database at the paths of PathsFor.
+func ExampleConfig(goos string, system bool) string {
 	p := PathsFor(goos, system)
-	return strings.NewReplacer("'LOG_PATH'", "'"+p.Log+"'", "'DATABASE_PATH'", "'"+p.Database+"'").Replace(text)
+	return strings.NewReplacer("'LOG_PATH'", "'"+p.Log+"'", "'DATABASE_PATH'", "'"+p.Database+"'").Replace(lf(exampleConfig))
 }
+
+// ExampleEvents returns the annotated events file that "kickd init" writes
+// next to the config file on the OS goos: with commands for Windows or for
+// macOS and Linux.
+func ExampleEvents(goos string) string {
+	if goos == "windows" {
+		return lf(exampleEventsWindows)
+	}
+	return lf(exampleEventsUnix)
+}
+
+// lf turns CRLF line endings, which a checkout on Windows can give the
+// embedded files, into LF.
+func lf(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 // Concurrency policies.
 const (
@@ -165,6 +183,10 @@ type Config struct {
 	// Relative paths in the file are resolved against Dir.
 	Path string `yaml:"-"`
 	Dir  string `yaml:"-"`
+	// EventFiles are the other files of Dir whose events the config holds,
+	// and Skipped the YAML files of Dir without an events section.
+	EventFiles []string `yaml:"-"`
+	Skipped    []string `yaml:"-"`
 }
 
 // Log configures the agent log.
@@ -221,6 +243,10 @@ type Event struct {
 	// the arguments of a list, or the string that the shell runs.
 	Command []string `yaml:"-"`
 	Shell   string   `yaml:"-"`
+	// File is the absolute path of the file that defines the event, and
+	// Index the position of the event in the events section of that file.
+	File  string `yaml:"-"`
+	Index int    `yaml:"-"`
 }
 
 // Command is what an event runs: a string, which the shell runs, or a list
@@ -365,44 +391,191 @@ func (t Trigger) setKeys() []string {
 	return keys
 }
 
-// Load reads, resolves and validates the file at path.
+// Load reads, resolves and validates the config file at path, together with
+// the events of every other YAML file in its directory that has an events
+// section.
 func Load(path string) (*Config, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(abs)
+	if errors.Is(err, fs.ErrNotExist) && abs == DefaultPath() {
+		return nil, missingDefault(err)
+	}
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := Parse(data, filepath.Dir(abs))
+	others, skipped, err := eventFiles(abs)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	cfg.Path = abs
+	cfg, err := parse(data, abs, others)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	cfg.Skipped = skipped
 	return cfg, nil
 }
 
 // Parse decodes data, resolving relative paths against dir.
 func Parse(data []byte, dir string) (*Config, error) {
+	return parse(data, filepath.Join(dir, "config.yaml"), nil)
+}
+
+// eventsFile is a YAML file next to the config file that has an events
+// section.
+type eventsFile struct {
+	path string
+	data []byte
+}
+
+// eventFiles reads the YAML files, other than the config file, in the
+// directory of config. It returns those with an events section, in the
+// order of their names, and the paths of the others.
+func eventFiles(config string) ([]eventsFile, []string, error) {
+	dir := filepath.Dir(config)
+	self, err := os.Stat(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	var files []eventsFile
+	var skipped []string
+	for _, e := range entries {
+		name := e.Name()
+		p := filepath.Join(dir, name)
+		if ext := strings.ToLower(filepath.Ext(name)); ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		// A link to a file, such as one into a repository of dotfiles,
+		// counts as the file. SameFile also recognizes the config file
+		// when its path was given in another case, as macOS and Windows
+		// allow.
+		st, err := os.Stat(p)
+		if err != nil || !st.Mode().IsRegular() || os.SameFile(st, self) {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil, nil, err
+		}
+		has, err := hasEvents(data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", name, err)
+		}
+		if !has {
+			skipped = append(skipped, p)
+			continue
+		}
+		files = append(files, eventsFile{p, data})
+	}
+	return files, skipped, nil
+}
+
+// hasEvents reports whether the YAML document data has a top-level events
+// key.
+func hasEvents(data []byte) (bool, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return false, err
+	}
+	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return false, nil
+	}
+	top := root.Content[0].Content
+	for i := 0; i+1 < len(top); i += 2 {
+		if top[i].Value == "events" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// decodeEvents decodes the events section of a file other than the config
+// file. Such a file holds only events: the settings belong in the config
+// file, where they apply to every event.
+func decodeEvents(data []byte) ([]Event, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+	top := root.Content[0].Content
+	var errs []error
+	for i := 0; i+1 < len(top); i += 2 {
+		if k := top[i]; k.Value != "events" {
+			errs = append(errs, fmt.Errorf("line %d: %s belongs in the config file; the other files hold only events", k.Line, k.Value))
+		}
+	}
+	if len(errs) > 0 {
+		return nil, &ValidationError{Problems: errs}
+	}
+	if err := renamedKeys(data); err != nil {
+		return nil, err
+	}
+	var f struct {
+		Events []Event `yaml:"events"`
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return f.Events, nil
+}
+
+// parse decodes the config file at path, whose content is data, adds the
+// events of the other files, and resolves and validates the result.
+func parse(data []byte, path string, others []eventsFile) (*Config, error) {
 	if err := renamedKeys(data); err != nil {
 		return nil, err
 	}
 	var cfg Config
-	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		if err.Error() == "EOF" {
+		if !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		if len(others) == 0 {
 			return nil, errors.New("config file is empty")
 		}
-		return nil, err
 	}
-	cfg.Dir = dir
+	cfg.Path, cfg.Dir = path, filepath.Dir(path)
+	for i := range cfg.Events {
+		cfg.Events[i].File, cfg.Events[i].Index = path, i
+	}
+	for _, f := range others {
+		events, err := decodeEvents(f.data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filepath.Base(f.path), err)
+		}
+		for i := range events {
+			events[i].File, events[i].Index = f.path, i
+		}
+		cfg.Events = append(cfg.Events, events...)
+		cfg.EventFiles = append(cfg.EventFiles, f.path)
+	}
 	cfg.applyDefaults()
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// missingDefault explains a missing config file at the default path, and
+// names the file of an earlier version of kickd when one is there.
+func missingDefault(err error) error {
+	if dir, derr := os.UserConfigDir(); derr == nil {
+		if old := filepath.Join(dir, "kickd", "config.yaml"); fileExists(old) {
+			return fmt.Errorf("%w; kickd reads its config from %s, and no longer from %s: move that file, and the files that it names, into %s",
+				err, DefaultPath(), old, filepath.Dir(DefaultPath()))
+		}
+	}
+	return fmt.Errorf("%w; kickd init writes an example there", err)
 }
 
 func (c *Config) applyDefaults() {
@@ -537,25 +710,33 @@ func (c *Config) validate() error {
 	if len(c.Events) == 0 {
 		fail("events: at least one event is required")
 	}
-	names := map[string]bool{}
+	names := map[string]string{} // the file of each event name
 	hookPaths := map[string]bool{}
 	defined := map[string]bool{}
 	for _, e := range c.Events {
 		defined[e.Name] = true
 	}
-	for i, e := range c.Events {
-		where := fmt.Sprintf("events[%d]", i)
+	for _, e := range c.Events {
+		// An event of another file than the config file is named with its
+		// file, and so is its position, which counts within that file.
+		file := ""
+		if e.File != "" && e.File != c.Path {
+			file = filepath.Base(e.File) + ": "
+		}
+		where := fmt.Sprintf("%sevents[%d]", file, e.Index)
 		switch {
 		case e.Name == "":
 			fail("%s: name is required", where)
 		case !eventNameRe.MatchString(e.Name):
 			fail("%s: name %q must be 1 to 64 letters, digits, '.', '_', ':' or '-', starting with a letter or digit", where, e.Name)
 		default:
-			where = fmt.Sprintf("event %q", e.Name)
-			if names[e.Name] {
+			where = fmt.Sprintf("%sevent %q", file, e.Name)
+			if other, dup := names[e.Name]; dup && other == e.File {
 				fail("%s: duplicate name", where)
+			} else if dup {
+				fail("%s: duplicate name, also in %s", where, filepath.Base(other))
 			}
-			names[e.Name] = true
+			names[e.Name] = e.File
 		}
 		switch {
 		case len(e.Command) == 0 && e.Shell == "":
@@ -897,13 +1078,17 @@ func renamedKeys(data []byte) error {
 }
 
 // DefaultPath is the config file used when nothing else is specified:
-// <user config dir>/kickd/config.yaml.
+// config.yaml in the directory .kickd of the home directory, on every OS.
 func DefaultPath() string {
-	dir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		dir = "."
+		home = "."
 	}
-	return filepath.Join(dir, "kickd", "config.yaml")
+	abs, err := filepath.Abs(filepath.Join(home, ".kickd", "config.yaml"))
+	if err != nil {
+		return filepath.Join(home, ".kickd", "config.yaml")
+	}
+	return abs
 }
 
 // Resolve picks the config file: the flag value, then $KICKD_CONFIG, then

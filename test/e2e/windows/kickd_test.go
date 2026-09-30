@@ -81,14 +81,13 @@ func newHome(t *testing.T, fixture string) *home {
 	h := &home{t: t, dir: dir, at: time.Now().UTC().Truncate(time.Second).Add(25 * time.Second)}
 	for _, kv := range os.Environ() {
 		switch k, _, _ := strings.Cut(kv, "="); strings.ToUpper(k) {
-		case "HOME", "USERPROFILE", "APPDATA", "KICKD_CONFIG", "LOG_LEVEL", "LOG_FORMAT":
+		case "HOME", "USERPROFILE", "KICKD_CONFIG", "LOG_LEVEL", "LOG_FORMAT":
 			continue
 		}
 		h.env = append(h.env, kv)
 	}
-	// Windows finds the home directory of the user in USERPROFILE, and the
-	// directory of the user's configs in APPDATA.
-	h.env = append(h.env, "USERPROFILE="+dir, "APPDATA="+filepath.Join(dir, "AppData", "Roaming"))
+	// Windows finds the home directory of the user in USERPROFILE.
+	h.env = append(h.env, "USERPROFILE="+dir)
 	if fixture != "" {
 		h.copy(filepath.Join("testdata", fixture))
 	}
@@ -449,6 +448,17 @@ func (h *home) save(name string) {
 		h.t.Fatal(err)
 	}
 	h.write("kickd.yaml", string(b))
+}
+
+// place copies the file src of the home directory to dst, as saving a
+// new file does.
+func (h *home) place(src, dst string) {
+	h.t.Helper()
+	b, err := os.ReadFile(h.path(src))
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	h.write(dst, string(b))
 }
 
 // write writes text to the file name in the home directory.

@@ -1,9 +1,8 @@
-# The config of kickd as a LaunchAgent, at
-# ~/Library/Application Support/kickd/config.yaml.
+# The config of kickd as a LaunchAgent, at ~/.kickd/config.yaml.
 log:
-  path: '~/Library/Logs/kickd/kickd.log'
+  path: '~/.kickd/kickd.log'
 database:
-  path: '~/Library/Application Support/kickd/kickd.db'
+  path: '~/.kickd/kickd.db'
 events:
   # Prints the user that runs the commands of kickd.
   - name: whoami

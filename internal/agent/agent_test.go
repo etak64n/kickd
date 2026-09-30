@@ -407,3 +407,45 @@ func TestAgentDoesNotFireAnAfterTriggerForAStatusThatIsNotListed(t *testing.T) {
 		t.Errorf("alert ran after a check that succeeded: %q", b)
 	}
 }
+
+func TestAgentAddsTheEventsOfAFileSavedNextToTheConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	writeFile(t, cfgPath, "events:\n  - name: backup\n"+helperEvent("append", filepath.Join(dir, "backup.txt"), "HELPER_TEXT", "backed up")+"    triggers: [{type: manual}]\n")
+	log, reloaded := messageLogger("Config reloaded", slog.LevelInfo)
+	cancel, done := startAgentWith(t, cfgPath, log)
+	defer stopAgent(t, cancel, done)
+	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
+	deployed := filepath.Join(dir, "deploy.txt")
+	writeFile(t, filepath.Join(dir, "deploy.yaml"), "events:\n  - name: deploy\n"+helperEvent("append", deployed, "HELPER_TEXT", "deployed")+"    triggers: [{type: manual}]\n")
+	select {
+	case <-reloaded:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent did not reload the config")
+	}
+	waitStatus(t, store, kickEvent(t, store, "deploy", nil), queue.StatusSucceeded)
+	waitForFile(t, deployed, "deployed", 10*time.Second)
+}
+
+func TestAgentDropsTheEventsOfAFileRemovedFromNextToTheConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	writeFile(t, cfgPath, "events:\n  - name: backup\n"+helperEvent("append", filepath.Join(dir, "backup.txt"), "HELPER_TEXT", "backed up")+"    triggers: [{type: manual}]\n")
+	deploy := filepath.Join(dir, "deploy.yaml")
+	writeFile(t, deploy, "events:\n  - name: deploy\n"+helperEvent("append", filepath.Join(dir, "deploy.txt"), "HELPER_TEXT", "deployed")+"    triggers: [{type: manual}]\n")
+	log, reloaded := messageLogger("Config reloaded", slog.LevelInfo)
+	cancel, done := startAgentWith(t, cfgPath, log)
+	defer stopAgent(t, cancel, done)
+	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
+	if err := os.Remove(deploy); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-reloaded:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent did not reload the config")
+	}
+	// A waiting run of an event that the config no longer defines is
+	// dropped.
+	waitStatus(t, store, kickEvent(t, store, "deploy", nil), queue.StatusDropped)
+}

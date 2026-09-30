@@ -31,14 +31,14 @@ func TestExampleDecodes(t *testing.T) {
 	// so only check that every key is known and where the files go.
 	for _, goos := range []string{"darwin", "linux", "windows"} {
 		for _, system := range []bool{false, true} {
-			dec := yaml.NewDecoder(strings.NewReader(Example(goos, system)))
+			dec := yaml.NewDecoder(strings.NewReader(ExampleConfig(goos, system)))
 			dec.KnownFields(true)
 			var cfg Config
 			if err := dec.Decode(&cfg); err != nil {
-				t.Fatalf("%s example does not decode: %v", goos, err)
+				t.Fatalf("%s example config does not decode: %v", goos, err)
 			}
-			if len(cfg.Events) != 4 {
-				t.Fatalf("%s: events = %d, want 4, one for each kind of trigger and one without", goos, len(cfg.Events))
+			if len(cfg.Events) != 0 {
+				t.Errorf("%s: the example config has %d events, which belong in the events file", goos, len(cfg.Events))
 			}
 			want := PathsFor(goos, system)
 			if cfg.Log.Path != want.Log || cfg.Database.Path != want.Database {
@@ -50,9 +50,16 @@ func TestExampleDecodes(t *testing.T) {
 					t.Errorf("%s, system %v: path %q", goos, system, p)
 				}
 			}
-			if run := cfg.Events[0].Run; (len(run.Args) > 0 && run.Args[0] == "powershell") != (goos == "windows") {
-				t.Errorf("%s example starts %+v", goos, run)
-			}
+		}
+		events, err := decodeEvents([]byte(ExampleEvents(goos)))
+		if err != nil {
+			t.Fatalf("%s example events do not decode: %v", goos, err)
+		}
+		if len(events) != 4 {
+			t.Fatalf("%s: events = %d, want 4, one for each kind of trigger and one without", goos, len(events))
+		}
+		if run := events[0].Run; (len(run.Args) > 0 && run.Args[0] == "powershell") != (goos == "windows") {
+			t.Errorf("%s example starts %+v", goos, run)
 		}
 	}
 	if p := PathsFor("linux", true); p.Log != "/var/log/kickd/kickd.log" || p.Database != "/var/lib/kickd/kickd.db" {
@@ -419,7 +426,7 @@ func TestCronMissed(t *testing.T) {
 	if _, err := load("later"); err == nil || !strings.Contains(err.Error(), "missed \"later\" must be run or skip") {
 		t.Errorf("an unknown value must fail: %v", err)
 	}
-	path := filepath.Join(dir, "hook.yaml")
+	path := filepath.Join(t.TempDir(), "hook.yaml")
 	body := "events:\n  - name: a\n    command: x\n    triggers:\n      - {type: webhook, path: /h, missed: run}\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)

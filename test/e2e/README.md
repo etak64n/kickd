@@ -16,9 +16,9 @@ windows/   the tests on Windows: PowerShell scripts and batch files, and kickd a
 In each package:
 
 - `kickd_test.go` builds kickd and holds the harness: a home directory for each test, and helpers that run kickd and read its runs.
-- `testdata/` holds a directory for each config: `kickd.yaml`, and the scripts and files of its events, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` and `APPDATA` on Windows.
+- `testdata/` holds a directory for each config: `kickd.yaml`, and the scripts and files of its events, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` on Windows.
 - In the configs of `testdata/cron` and `testdata/cron-missed`, `{{at "ZONE"}}` stands for a cron schedule 25 seconds after the test starts, in the time zone ZONE.
-- `kickd.edited.yaml` and `kickd.broken.yaml` beside a `kickd.yaml` are edits of that config. A test saves one of them over `kickd.yaml` while kickd runs, as a user saves an edited config.
+- kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: `edits/kickd.edited.yaml` and `edits/kickd.broken.yaml` are edits of a `kickd.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
 
 ## Running the tests
 
@@ -159,6 +159,23 @@ A runner of the CI cannot sleep, so this test checks the machine while it is awa
 | `TestSavingTheConfigAddsAnEvent` | ✓ | ✓ | ✓ |
 | `TestSighupReloadsTheConfig` | ✓ | ✓ |  |
 
+### Events in several files
+
+The events of the YAML files next to the config file.
+
+| Test | macOS | Linux | Windows |
+|---|:-:|:-:|:-:|
+| `TestAfterFollowsAnEventOfAnotherFile` | ✓ | ✓ | ✓ |
+| `TestAnEventOfAYmlFileRuns` | ✓ | ✓ | ✓ |
+| `TestAnEventOfAnotherYAMLFileRuns` | ✓ | ✓ | ✓ |
+| `TestCheckListsTheFilesWhoseEventsItReads` | ✓ | ✓ | ✓ |
+| `TestCheckNamesAYAMLFileWithoutEvents` | ✓ | ✓ | ✓ |
+| `TestCheckRejectsASettingsSectionOutsideTheConfig` | ✓ | ✓ | ✓ |
+| `TestCheckRejectsAnEventThatTwoFilesDefine` | ✓ | ✓ | ✓ |
+| `TestEventsListsTheFileOfEachEvent` | ✓ | ✓ | ✓ |
+| `TestRemovingAFileWithEventsRemovesItsEvents` | ✓ | ✓ | ✓ |
+| `TestSavingAFileWithEventsAddsItsEvents` | ✓ | ✓ | ✓ |
+
 ### Parameters
 
 | Test | macOS | Linux | Windows |
@@ -252,12 +269,9 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, and
 | `TestEventRefusesAnEventWithoutAManualTrigger` | ✓ | ✓ | ✓ |
 | `TestEventsListsTheEventsWithTheirTriggers` | ✓ | ✓ | ✓ |
 | `TestInitDoesNotOverwriteAConfig` | ✓ | ✓ | ✓ |
-| `TestInitPutsTheLogAndTheDatabaseInTheLibraryOfTheUser` | ✓ |  |  |
-| `TestInitPutsTheLogAndTheDatabaseInTheLocalAppDataOfTheUser` |  |  | ✓ |
-| `TestInitPutsTheLogAndTheDatabaseInTheStateDirectoryOfTheUser` |  | ✓ |  |
-| `TestInitWritesTheConfigIntoTheAppDataOfTheUser` |  |  | ✓ |
-| `TestInitWritesTheConfigIntoTheApplicationSupportOfTheUser` | ✓ |  |  |
-| `TestInitWritesTheConfigIntoTheConfigDirectoryOfTheUser` |  | ✓ |  |
+| `TestInitPutsTheLogAndTheDatabaseInTheKickdDirectory` | ✓ | ✓ | ✓ |
+| `TestInitWritesAnEventsFileNextToTheConfig` | ✓ | ✓ | ✓ |
+| `TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome` | ✓ | ✓ | ✓ |
 | `TestKickdConfigNamesTheConfig` | ✓ | ✓ | ✓ |
 | `TestLicensesPrintTheLicenses` | ✓ | ✓ | ✓ |
 | `TestLogLevelInTheEnvironmentOverridesTheConfig` | ✓ | ✓ | ✓ |

@@ -1,0 +1,6 @@
+events:
+  # Backs up by hand.
+  - name: backup
+    command: ['./backup.sh']
+    triggers:
+      - type: manual

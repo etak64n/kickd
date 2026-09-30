@@ -1,0 +1,9 @@
+# Notifies after each deploy that succeeds.
+events:
+  - name: notify
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'notify.ps1']
+    triggers:
+      - type: after
+        event: deploy
+        status: [succeeded]
+      - type: manual

@@ -45,19 +45,27 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 
 ## The config file
 
-A config file is YAML with four sections: `log`, `webhook`, `database` and `events`.
-Only `events` is required, and every other key has a default.
-Commands, shells and paths differ between operating systems, so a config file is written for one OS.
-`kickd init` writes these files, the one for the OS that it runs on.
-The paths of the log and the database depend on where the config file is: these files have them for a config file in the home directory on macOS and Linux, and in `C:\ProgramData\kickd` on Windows.
-Each file defines one event for each of the manual, cron, webhook and file triggers, gives every event a manual trigger, and lets notify follow a backup that fails with an after trigger:
+kickd reads its settings from `~/.kickd/config.yaml`, on every OS, and its events from the YAML files in `~/.kickd`.
+`config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default.
+Events are listed under `events`, in `config.yaml` or in any other `.yaml` or `.yml` file of the directory: kickd reads every file there that has an `events` section, so each group of events, such as those of one app, can have a file of its own.
+
+Commands, shells and paths differ between operating systems, so the files are written for one OS.
+`kickd init` writes two files for the OS that it runs on: `config.yaml`, and `event.example.yaml` with one event for each of the manual, cron, webhook and file triggers.
+Every event there has a manual trigger, and notify follows a backup that fails with an after trigger.
+On Windows, the files are for a service of the whole system, in `C:\ProgramData\kickd`, because Windows has no service for one user:
 
 <details open>
-<summary>macOS</summary>
+<summary>macOS and Linux</summary>
+
+`~/.kickd/config.yaml`:
 
 ```yaml
+# The settings of kickd. kickd also reads the events of every other .yaml
+# and .yml file in this directory that has an events section, such as
+# event.example.yaml. An events section in this file works too.
+
 log:
-  path: '~/Library/Logs/kickd/kickd.log'   # without a path, kickd logs to standard error
+  path: '~/.kickd/kickd.log'   # without a path, kickd logs to standard error
   level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
   format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
   max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
@@ -69,87 +77,15 @@ webhook:
   max_body_bytes: 1048576    # the largest request body accepted
 
 database:
-  path: '~/Library/Application Support/kickd/kickd.db'   # the SQLite file that records every run
+  path: '~/.kickd/kickd.db'   # the SQLite file that records every run
   retention: 168h         # how long finished runs stay in the history
-
-events:
-  # Cron: every night at 3:00, Tokyo time.
-  - name: backup
-    command: 'rsync -a ~/work/ ~/backup/work/'
-    workdir: '~'
-    timeout: 1h              # the longest time the command may run
-    concurrency: skip        # a firing while the backup runs is skipped
-    on_interrupt: rerun      # run again when a stop or a crash cut the run off
-    triggers:
-      - type: cron
-        schedule: '0 3 * * *'   # minute hour day month weekday
-        timezone: Asia/Tokyo    # without it, local time
-        missed: run             # after sleep or downtime, run once for the missed times
-      - type: manual            # kickd event backup also runs it
-
-  # Webhook: POST /hooks/deploy with the header Authorization: Bearer <token>.
-  - name: deploy
-    command: ['./deploy.sh']
-    workdir: '~/app'
-    timeout: 10m
-    concurrency: queue       # deploys wait for each other and run in order
-    on_interrupt: abandon    # a deploy that a stop or a crash cut off does not run again
-    triggers:
-      - type: webhook
-        path: '/hooks/deploy'
-        methods: [POST]
-        token: 'replace-with-a-long-random-string'
-      - type: manual            # kickd event deploy also runs it
-
-  # File changes: 2 seconds after the last change in ~/app/src or below.
-  - name: build
-    command: ['make', 'build']
-    workdir: '~/app'
-    timeout: 10m
-    concurrency: queue       # changes during a build are built after it
-    on_interrupt: abandon    # the next change starts a new build
-    triggers:
-      - type: file
-        path: '~/app/src'
-        recursive: true      # also watch subdirectories
-        debounce: 2s
-      - type: manual         # kickd event build also runs it
-
-  # Manual and after: by hand with kickd event notify, and when a backup fails.
-  - name: notify
-    command: ['./notify.sh']
-    workdir: '~/app'
-    timeout: 1m
-    concurrency: parallel    # notifications do not wait for each other
-    on_interrupt: abandon
-    triggers:
-      - type: manual
-      - type: after             # a backup that failed or was given up
-        event: backup
-        status: [failed, abandoned]
 ```
 
-</details>
-
-<details>
-<summary>Linux</summary>
+`~/.kickd/event.example.yaml`:
 
 ```yaml
-log:
-  path: '~/.local/state/kickd/kickd.log'   # without a path, kickd logs to standard error
-  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
-  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
-  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
-  max_backups: 5       # how many renamed files to keep
-
-webhook:
-  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
-  max_body_bytes: 1048576    # the largest request body accepted
-
-database:
-  path: '~/.local/state/kickd/kickd.db'   # the SQLite file that records every run
-  retention: 168h         # how long finished runs stay in the history
+# Events of kickd. kickd reads the events section of every .yaml and .yml
+# file next to its config file, so the events can be split into files.
 
 events:
   # Cron: every night at 3:00, Tokyo time.
@@ -213,7 +149,13 @@ events:
 <details>
 <summary>Windows</summary>
 
+`C:\ProgramData\kickd\config.yaml`:
+
 ```yaml
+# The settings of kickd. kickd also reads the events of every other .yaml
+# and .yml file in this directory that has an events section, such as
+# event.example.yaml. An events section in this file works too.
+
 log:
   path: 'C:\ProgramData\kickd\kickd.log'   # without a path, kickd logs to standard error
   level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
@@ -229,6 +171,13 @@ webhook:
 database:
   path: 'C:\ProgramData\kickd\kickd.db'   # the SQLite file that records every run
   retention: 168h         # how long finished runs stay in the history
+```
+
+`C:\ProgramData\kickd\event.example.yaml`:
+
+```yaml
+# Events of kickd. kickd reads the events section of every .yaml and .yml
+# file next to its config file, so the events can be split into files.
 
 events:
   # Cron: every night at 3:00, Tokyo time.
@@ -293,7 +242,7 @@ A `command` given as a string runs through the shell, `/bin/sh` on macOS and Lin
 Relative paths start at the directory of the config file, and a leading `~` is the home directory.
 Strings are in single quotes, which keep backslashes and double quotes as they are.
 
-`kickd check` validates a config file, lists its events and triggers, and prints where the log, the database and each command run.
+`kickd check` validates the config, lists the files whose events it reads, and prints the events with their triggers and where the log, the database and each command run.
 The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
 
 ## Features
@@ -344,7 +293,7 @@ The installation guides for macOS, Linux and Windows cover each OS in detail, in
 
 With `kickd` installed, these steps define an event, run the agent and fire the event.
 
-1. Create a config file named `kickd.yaml` that defines one event, `hello`.
+1. In an empty directory, create a config file named `kickd.yaml` that defines one event, `hello`.
    Without `database.path`, kickd keeps its database, `kickd.db`, next to `kickd.yaml`.
 
    ```yaml
