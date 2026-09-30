@@ -394,13 +394,22 @@ To keep kickd running in the background, install it as a service by following th
 - [Runs](docs/runs.md): how firings become runs, run statuses, interrupted runs, the database
 - [Command-line reference](docs/cli.md): every subcommand, firing events with parameters, exit codes
 - [Webhooks](docs/webhook.md): authentication, request IDs, parameters, responses
-- [Configuration reference](docs/config-keys.md): every key of the config file and its default
-- [Examples](examples/README.md): complete config files for common tasks, such as OCR of scans, deploys from GitHub, backups and certificate renewal
+- [Configuration reference](docs/config-keys.md): every key of the config file, its default, and when a change takes effect
+- [Examples](examples/README.md): complete config files for common tasks, such as deploys from GitHub, rebuilds, backups and certificate renewal
 - [What a command receives](docs/payload.md): environment variables and the payload JSON
 - [Running commands](docs/commands.md): the environment of a command under each kind of service, the working directory and `PATH`, Python and Node.js
 - [Logging](docs/logging.md): formats, levels, keys, messages, rotation
 - [Known limitations](docs/limitations.md): what kickd does not do yet, and what has not been tested
 - [Development](docs/development.md): tests, builds, source layout
+
+### Settings
+
+- [Log settings](docs/settings/log.md): the log file, levels, formats and rotation
+- [Webhook server settings](docs/settings/webhook.md): turning the HTTP server on and off, its address and the body limit
+- [Database settings](docs/settings/database.md): the SQLite file and how long ended runs stay
+- [Event settings](docs/settings/events.md): commands, working directories, environment variables, time limits, overlap and interrupted runs
+- [Parameter settings](docs/settings/params.md): the values that a firing passes to the command
+- [Trigger settings](docs/settings/triggers.md): manual, cron, webhook, file, after, startup and wake triggers
 
 ### Internals
 

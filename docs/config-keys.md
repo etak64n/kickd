@@ -3,13 +3,28 @@
 [Documentation index](../README.md#documentation)
 
 The kickd config file is YAML with four top-level sections: `log`, `webhook`, `database` and `events`.
-In kickd, a named command is an **event**, and a **trigger** fires an event automatically.
-Every key below is optional unless its description says otherwise.
+In kickd, a named command is an **event**, and a **trigger** fires an event.
+Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
+
+Six pages describe the keys in detail, and each key of the tables links to its description:
+
+- [Log settings](settings/log.md): the `log` section
+- [Webhook server settings](settings/webhook.md): the `webhook` section
+- [Database settings](settings/database.md): the `database` section
+- [Event settings](settings/events.md): the keys of each event
+- [Parameter settings](settings/params.md): the keys of each parameter of an event
+- [Trigger settings](settings/triggers.md): the keys of each type of trigger
+
+Every key is optional unless its description says otherwise.
 kickd reports unknown keys as errors, and `kickd check` lists every error in the file.
 
-A relative path starts at the directory of the config file.
-In every path, a leading `~` is the home directory, and `${VAR}` is the value of the environment variable `VAR`.
-`kickd check` prints where the log and the database go.
+## Writing values
+
+- **Strings**: the text as it is. Single quotes, as in `'C:\Data'`, keep backslashes and double quotes as they are, and a single quote inside them is written twice, as in `'it''s'`. A value without quotes, such as `1`, is the same string as `'1'`.
+- **Whole numbers**, such as `max_attempts: 5`, and **`true` and `false`**: without quotes.
+- **Durations**: a number with one of the units `ms`, `s`, `m` and `h`, such as `500ms`, `90s` or `1h30m`. Days are not a unit, and a bare number such as `30` is an error.
+- **Paths**: a leading `~` is the home directory, `${VAR}` is the value of the environment variable `VAR`, and a relative path starts at the directory of the config file. `kickd check` prints the resolved paths.
+- **Lists**: `[a, b]` on one line, or one `- ` item on each line.
 
 Earlier versions of kickd called `log.path` `log.file` and the `database` section `queue`, took a string command as `shell`, and, in v0.2.0, had a `base_dir` section for the directory of the log and the database.
 A config file with the old keys fails to load, with a message that gives the new key.
@@ -18,121 +33,75 @@ A config file with the old keys fails to load, with a message that gives the new
 
 | Key | Default | Description |
 |---|---|---|
-| `log.path` | none | The log file. Without it, kickd logs to standard error. |
-| `log.level` | `info` | The log level: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. The environment variable `LOG_LEVEL` overrides it. |
-| `log.format` | `auto` | The log format: `auto`, `json` or `text`. `auto` writes text to a terminal and JSON to files and pipes. The environment variable `LOG_FORMAT` overrides it. |
-| `log.max_size_mb` | `10` | When the log file grows past this size in MB, kickd renames it with `.1` appended and starts a new file. |
-| `log.max_backups` | `5` | How many renamed log files to keep. `.1` is the newest, and files beyond this number are deleted. |
-| `webhook.enabled` | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
-| `webhook.listen` | `127.0.0.1:8787` | The address of the HTTP server that all webhook triggers share. The server runs only when a webhook trigger exists. |
-| `webhook.max_body_bytes` | `1048576` | The largest request body accepted, in bytes. |
-| `database.path` | `kickd.db` | The SQLite file that records every run: waiting, running and finished. |
-| `database.retention` | `168h` | How long finished runs stay in the database. |
-| `events` | none | The list of events. Required, with at least one event. |
+| [`log.path`](settings/log.md#logpath) | none | The log file. Without it, kickd logs to standard error. |
+| [`log.level`](settings/log.md#loglevel) | `info` | The least severe level that is logged: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. `LOG_LEVEL` overrides it. |
+| [`log.format`](settings/log.md#logformat) | `auto` | `auto`, `json` or `text`. `auto` writes text to a terminal and JSON to files and pipes. `LOG_FORMAT` overrides it. |
+| [`log.max_size_mb`](settings/log.md#logmax_size_mb) | `10` | The size in MB past which kickd renames the log file with `.1` appended and starts a new one. |
+| [`log.max_backups`](settings/log.md#logmax_backups) | `5` | How many renamed log files to keep. |
+| [`webhook.enabled`](settings/webhook.md#webhookenabled) | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
+| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:8787` | The address of the HTTP server that all webhook triggers share. |
+| [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
+| [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
+| [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |
+| [`events`](settings/events.md) | none | The list of events. Required, with at least one event. |
 
 ## Event keys
 
-| Key | Description |
-|---|---|
-| `name` | The event name, required and unique in the file: up to 64 letters, digits, `.`, `_`, `:` and `-`, starting with a letter or digit. |
-| `description` | A description, shown by `kickd events`. |
-| `command` | What the event runs. Required. A string runs through the shell: `/bin/sh -c` on macOS and Linux, `cmd /S /C` on Windows. A list is a program and its arguments, which kickd starts directly and passes as they are, so `~`, `*` and `$VAR` in them are not expanded. kickd looks a program name without a path up in the `PATH` of the command's environment. |
-| `workdir` | The working directory of the command. It must exist when the config is loaded. Without it, the command runs in the directory of the config file. |
-| `env` | Environment variables added for the command. `${VAR}` in values expands to the environment variable of kickd. An entry replaces a variable of kickd with the same name. A `PATH` here also decides where kickd finds the program of `command`. |
-| `timeout` | The longest time the command may run. When it passes, kickd sends SIGTERM to the command's process group on macOS and Linux, and SIGKILL 10 seconds later if it is still running. On Windows, kickd ends the process tree at once. Without it, there is no limit. |
-| `concurrency` | What happens when the event fires while it is running: `skip` (default), `queue` or `parallel`. |
-| `on_interrupt` | What happens, when the agent starts again, to a run that a stop or crash cut off: `abandon` (default) or `rerun`. |
-| `max_attempts` | With `rerun`, how many times one firing may run, counting the first run. Default `3`. |
-| `stdin` | `payload` also passes the payload JSON, the information about the run, on standard input. Default `none`. |
-| `log_output` | Whether kickd keeps the command's output. With the default `true`, each line of output is logged at DEBUG, the record of a failed run includes the end of standard error, and the first 64 KB are stored with the run. `false` does none of these; a webhook with `wait: true` still returns the output. |
-| `params` | The parameters that a firing can pass. |
-| `triggers` | The triggers, one or more. The event fires only through these; `- type: manual` lets `kickd event` fire it. |
-
-A kickd running as a service has the directory of its config file as its working directory on macOS and Linux, and `C:\Windows\System32` on Windows.
+| Key | Default | Description |
+|---|---|---|
+| [`name`](settings/events.md#name) | none | The event name. Required and unique: up to 64 letters, digits, `.`, `_`, `:` and `-`, starting with a letter or digit. |
+| [`description`](settings/events.md#description) | none | A description, shown by `kickd events`. |
+| [`command`](settings/events.md#command) | none | What the event runs. Required. A string runs through the shell, and a list starts a program with its arguments. |
+| [`workdir`](settings/events.md#workdir) | the directory of the config file | The working directory of the command. It must exist. |
+| [`env`](settings/events.md#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
+| [`timeout`](settings/events.md#timeout) | none | The longest time the command may run. Without it, there is no limit. |
+| [`concurrency`](settings/events.md#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue` or `parallel`. |
+| [`on_interrupt`](settings/events.md#on_interrupt) | `abandon` | What happens to a run that a stop or a crash cut off: `abandon` or `rerun`. |
+| [`max_attempts`](settings/events.md#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |
+| [`stdin`](settings/events.md#stdin) | `none` | `payload` passes the payload JSON on standard input. |
+| [`log_output`](settings/events.md#log_output) | `true` | Whether kickd logs the output of the command and stores it with the run. |
+| [`params`](settings/events.md#params) | none | The parameters that a firing can pass. |
+| [`triggers`](settings/events.md#triggers) | none | The triggers, one or more. Required. |
 
 ## Parameter keys
 
-| Key | Description |
+| Key | Default | Description |
+|---|---|---|
+| [`name`](settings/params.md#name) | none | The parameter name. Required: up to 64 letters, digits and `_`, not starting with a digit. |
+| [`required`](settings/params.md#required) | `false` | `true` refuses a firing without the parameter. |
+| [`default`](settings/params.md#default) | none | The value when a firing does not pass the parameter. Without it, the value is empty. |
+| [`description`](settings/params.md#description) | none | A description, shown by `kickd events --json`. |
+
+## Trigger keys
+
+Each trigger takes `type` and only the keys of its type.
+
+| Type | Keys | Fires the event |
+|---|---|---|
+| [`manual`](settings/triggers.md#manual-triggers) | none | When `kickd event NAME` names the event |
+| [`cron`](settings/triggers.md#cron-triggers) | `schedule` (required), `timezone`, `missed` (default `run`) | At the times of a cron expression |
+| [`webhook`](settings/triggers.md#webhook-triggers) | `path` (required), `methods`, `token`, `secret`, `wait` (default `false`) | When an HTTP request arrives at the path |
+| [`file`](settings/triggers.md#file-triggers) | `path` (required), `recursive` (default `false`), `include`, `exclude`, `changes`, `debounce` (default `1s`) | When files change in the directory |
+| [`after`](settings/triggers.md#after-triggers) | `event` (required), `status` (required) | When a run of the other event ends with one of the statuses |
+| [`startup`](settings/triggers.md#startup-triggers) | none | When the agent starts |
+| [`wake`](settings/triggers.md#wake-triggers) | none | When the machine wakes from sleep |
+
+An event lists at most one manual, one startup and one wake trigger.
+
+## When changes take effect
+
+The agent reloads its config file when the file is saved, 0.5 seconds after the save, and on SIGHUP on macOS and Linux.
+When the new file has errors, the agent logs them and keeps the previous config.
+Most keys take effect at that reload, and some wait for the next start of the agent:
+
+| Keys | Take effect |
 |---|---|
-| `name` | The parameter name, required: up to 64 letters, digits and `_`, not starting with a digit. |
-| `required` | `true` makes the parameter mandatory. A required parameter cannot have a `default`, and its event cannot have cron or file triggers. |
-| `default` | The value used when the parameter is omitted. Without a default, an omitted parameter reaches the command as an empty value. |
-| `description` | A description. |
-
-## Manual trigger keys
-
-A manual trigger lets `kickd event NAME` fire the event, with the parameters given on the command line.
-An event lists it at most once.
-
-| Key | Description |
-|---|---|
-| `type` | `manual`, required. A manual trigger has no other keys. |
-
-## Cron trigger keys
-
-| Key | Description |
-|---|---|
-| `type` | `cron`, required |
-| `schedule` | A cron expression with five fields: minute, hour, day of month, month and day of week. A six-field form with a leading seconds field, and forms such as `@hourly`, `@daily` and `@every 10m`, also work. The day fields also take `L` for the last day of the month, `15W` for the weekday nearest to the 15th, `5L` for the last Friday and `fri#3` for the third Friday, and `7` is Sunday as `0` is. The [gocron README](https://github.com/etak64n/gocron#expressions) describes every form. Required. |
-| `timezone` | A time zone name such as `Asia/Tokyo`. Without it, the local time of the machine applies. |
-| `missed` | What happens to scheduled times that passed while the machine slept or kickd was stopped: `run` (default) runs once right after the machine wakes or kickd starts, however many times passed; `skip` waits for the next scheduled time. A scheduled time counts as missed when kickd notices it more than a minute late. |
-
-## Webhook trigger keys
-
-| Key | Description |
-|---|---|
-| `type` | `webhook`, required |
-| `path` | The URL path, required. It starts with `/` and is unique among all triggers. `/healthz` is reserved for the health check. |
-| `methods` | The HTTP methods accepted. Without it, every method is accepted. |
-| `token` | A token that the caller must send as `Authorization: Bearer <token>`, in the `X-Kickd-Token` header, or as the query parameter `token`. |
-| `secret` | The key for request signatures. The caller sends the HMAC-SHA256 of the body as `sha256=<hex>` in `X-Hub-Signature-256`, the format that GitHub uses, or in `X-Kickd-Signature`. |
-| `wait` | `true` holds the response until the run finishes, and returns its exit code and output. |
-
-## File trigger keys
-
-| Key | Description |
-|---|---|
-| `type` | `file`, required |
-| `path` | The directory to watch, required. It must exist when the config is loaded. |
-| `recursive` | `true` also watches subdirectories, including ones created later. |
-| `include` | Patterns of files to include. A pattern without a slash, such as `*.md`, matches the file name. A pattern with a slash, such as `docs/*.md`, matches the path relative to the watched directory. Without it, every file is included. |
-| `exclude` | Patterns to exclude. They are matched against every component of the path, so `.git` excludes everything under a `.git` directory. |
-| `changes` | The kinds of change that fire the event: `create`, `write`, `remove`, `rename` and `chmod`. The default is every kind except `chmod`. |
-| `debounce` | The event fires once after no new change has arrived for this long. Default `1s`. All changes during the wait are combined into one firing. |
-
-Patterns use the syntax of Go's `path.Match`: `*`, `?` and `[...]`.
-`**` is not supported.
-
-## After trigger keys
-
-An after trigger fires the event when a run of another event ends with one of the given statuses.
-Only the last attempt of a firing counts: a run that a stop or a crash cut off, and that runs again under `on_interrupt: rerun`, fires nothing until its rerun ends.
-The run that ended passes its event, its run ID, its status and its exit code to the command.
-After triggers must not form a cycle, such as two events that follow each other, because each run would fire the next one forever.
-
-| Key | Description |
-|---|---|
-| `type` | `after`, required |
-| `event` | The event whose runs the trigger follows, required. It must be another event in the config. |
-| `status` | The statuses that fire the event, required: `succeeded`, `failed`, `canceled`, `skipped`, `dropped` and `abandoned`. |
-
-## Startup trigger keys
-
-A startup trigger fires the event once when the agent starts, including when a service manager starts the agent again after a crash.
-Saving the config does not fire it.
-
-| Key | Description |
-|---|---|
-| `type` | `startup`, required. A startup trigger has no other keys. |
-
-## Wake trigger keys
-
-A wake trigger fires the event when the machine wakes from a sleep of at least one second.
-kickd measures the sleep with two clocks of the OS, one that stops while the machine sleeps and one that does not, so a change of the wall clock does not fire it.
-
-| Key | Description |
-|---|---|
-| `type` | `wake`, required. A wake trigger has no other keys. |
-
-Each trigger accepts only the keys of its own type.
-For example, `schedule` on a file trigger is an error.
+| `log.*` | At the next start of the agent, which opens its log once |
+| `webhook.*` | At the reload, which restarts the HTTP server |
+| `database.*` | At the next start of the agent, which opens the database once |
+| `name`, `command`, `workdir`, `env`, `timeout`, `concurrency`, `stdin`, `log_output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
+| `description` and `params` | At once for `kickd events` and `kickd event`, which read the config file each time they run, and at the reload for webhook requests |
+| `on_interrupt` and `max_attempts` | At the next start of the agent, which handles the runs that were cut off when it starts |
+| Manual triggers | At once for `kickd event`, which reads the config file each time it runs |
+| Cron, webhook, file, after and wake triggers | At the reload, which stops these triggers and starts them again from the new file |
+| Startup triggers | At the next start of the agent |
