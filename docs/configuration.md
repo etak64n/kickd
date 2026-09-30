@@ -2,8 +2,8 @@
 
 [Documentation index](../README.md#documentation)
 
-kickd reads one YAML config file.
-The file defines **events**, which are named commands.
+kickd reads a YAML config file, and the other YAML files next to it.
+The files define **events**, which are named commands.
 An event lists **triggers**, the ways in which it fires: `kickd event NAME` on the command line, a cron schedule, a webhook, changes in a directory, the end of a run of another event, the start of the agent, or the machine waking from sleep.
 An event fires only through the triggers that it lists, and it can list several of them.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, the **agent**, starts the event's command for each run.
@@ -14,17 +14,14 @@ kickd uses the first of these that applies:
 
 1. The file given with `-c` or `--config`
 2. The file named by the environment variable `KICKD_CONFIG`
-3. `kickd/config.yaml` in the user's config directory, if it exists
+3. `~/.kickd/config.yaml`, if it exists
 4. `kickd.yaml` in the current directory, if it exists
 
-The user's config directory depends on the OS.
-Without `-c`, `kickd init` writes an example config there:
+`~/.kickd` is the directory `.kickd` in the home directory on every OS, `%USERPROFILE%\.kickd` on Windows.
+Without `-c`, `kickd init` writes two example files there: `config.yaml`, and `event.example.yaml` with example events.
 
-| OS | Location |
-|---|---|
-| macOS | `~/Library/Application Support/kickd/config.yaml` |
-| Linux | `~/.config/kickd/config.yaml`, or `$XDG_CONFIG_HOME/kickd/config.yaml` when `XDG_CONFIG_HOME` is set |
-| Windows | `%AppData%\kickd\config.yaml` |
+Earlier versions of kickd read the config from the config directory of the OS, such as `~/Library/Application Support/kickd/config.yaml` on macOS and `~/.config/kickd/config.yaml` on Linux.
+When such a file exists and `~/.kickd/config.yaml` does not, kickd names the old file and asks to move it to `~/.kickd`.
 
 A kickd installed as a service reads the config file whose absolute path was recorded when the service was installed.
 After moving the config file, uninstall the service and install it again.
@@ -36,9 +33,9 @@ kickd writes two files of its own: the log, and the **database**, a SQLite file 
 
 ```yaml
 log:
-  path: '~/Library/Logs/kickd/kickd.log'
+  path: '~/.kickd/kickd.log'
 database:
-  path: '~/Library/Application Support/kickd/kickd.db'
+  path: '~/.kickd/kickd.db'
 events:
   - name: hello
     command: 'echo hello from kickd'
@@ -49,32 +46,32 @@ events:
 Without `log.path`, kickd writes its log to standard error.
 Without `database.path`, the database is `kickd.db` in the directory of the config file.
 
-`kickd init` writes the usual places of the OS that it runs on.
-A config file inside the home directory is taken for a user's kickd, and one outside it, such as `/etc/kickd/config.yaml`, for a service of the whole system:
+`kickd init` writes these paths for a config file inside the home directory, which is for a user's kickd, on every OS.
+A config file outside the home directory, such as `/etc/kickd/config.yaml`, is for a service of the whole system, and gets the usual places of the OS for such a service:
 
 | OS | Use | Log | Database |
 |---|---|---|---|
-| macOS | A user | `~/Library/Logs/kickd/kickd.log` | `~/Library/Application Support/kickd/kickd.db` |
+| macOS and Linux | A user | `~/.kickd/kickd.log` | `~/.kickd/kickd.db` |
+| Windows | A user | `~\.kickd\kickd.log` | `~\.kickd\kickd.db` |
 | macOS | The whole system | `/Library/Logs/kickd/kickd.log` | `/Library/Application Support/kickd/kickd.db` |
-| Linux | A user | `~/.local/state/kickd/kickd.log` | `~/.local/state/kickd/kickd.db` |
 | Linux | The whole system | `/var/log/kickd/kickd.log` | `/var/lib/kickd/kickd.db` |
-| Windows | A user | `~\AppData\Local\kickd\kickd.log` | `~\AppData\Local\kickd\kickd.db` |
 | Windows | The whole system | `C:\ProgramData\kickd\kickd.log` | `C:\ProgramData\kickd\kickd.db` |
 
-On Linux, a user's program keeps what it records in `~/.local/state`, as the XDG Base Directory specification says, because only root can write to `/var/log` and `/var/lib`.
+A user's kickd keeps its config, its events, its log and its database in `~/.kickd`, so one directory holds everything that it reads and writes.
 `kickd check` prints the resolved paths of the log and the database.
 
 ## One config file for each OS
 
 The events of a config file are written for one OS.
 The shell differs, `/bin/sh` on macOS and Linux and cmd on Windows, and so do the programs that commands call and the absolute paths of folders.
-kickd does not translate commands between operating systems, so each OS gets a config file of its own.
+kickd does not translate commands between operating systems, so each OS gets a config of its own.
 `kickd init` writes an example for the OS that it runs on: with shell commands on macOS and Linux, and with PowerShell scripts on Windows.
 
-To keep the files for several machines in one place, such as a repository of dotfiles, name them after their OS and give the one for the machine with `-c` or `KICKD_CONFIG`:
+To keep the configs of several machines in one place, such as a repository of dotfiles, give each OS a directory of its own, because kickd reads every YAML file next to the config file.
+`-c` or `KICKD_CONFIG` then names the config file for the machine:
 
 ```sh
-kickd run -c ~/dotfiles/kickd/kickd.macos.yaml
+kickd run -c ~/dotfiles/kickd/macos/config.yaml
 ```
 
 A few things already work the same on every OS:
@@ -117,6 +114,33 @@ Without `log.path`, kickd writes its log to standard error: text on a terminal, 
 Each run logs a start record and a completion record at INFO.
 The output of the command is logged at DEBUG, so `LOG_LEVEL=debug kickd run` shows it.
 
+## Events in several files
+
+kickd also reads the events of the other YAML files in the directory of the config file.
+Every file there whose name ends in `.yaml` or `.yml`, and that has an `events` section, adds its events, and the config file can have an `events` section too:
+
+```text
+~/.kickd/
+  config.yaml       the log, webhook and database sections
+  backup.yaml       the events of the backups
+  deploy.yml        the events of the deploys
+```
+
+The rules of these files are:
+
+- **What they hold**: an `events` section, in the same form as that of the config file. The `log`, `webhook` and `database` sections belong in the config file, and another file that has one is an error.
+- **Which files count**: the files directly in the directory. kickd reads no subdirectories, so a directory such as `~/.kickd/disabled` keeps files out of the config.
+- **Files without events**: a YAML file without an `events` section is left out, and `kickd check` names it as not read.
+- **Order**: the events of the config file come first, then those of the other files in the order of the file names.
+- **Names**: event names are unique across all the files, and an after trigger can follow an event of another file.
+- **Paths**: a relative path in any of the files starts at the directory of the config file.
+- **Errors**: an error in any of the files is an error of the whole config, and the message names the file.
+
+`kickd check` lists each file whose events it reads, and `kickd events` shows the file of each event.
+
+Because every YAML file of the directory counts, a directory holds one config.
+Two configs, such as one for each OS, need two directories.
+
 ## Writing values
 
 - **Durations**: values such as `30s`, `5m` and `1h`. A bare number such as `30` is an error.
@@ -157,7 +181,7 @@ A Windows service sees only the system `PATH`.
 ## Applying changes
 
 The agent watches the directory of its config file.
-When the config file is saved, the agent waits 0.5 seconds and reloads it.
+When the config file, or another YAML file of the directory, is saved, added or removed, the agent waits 0.5 seconds and reloads the config from all the files.
 On macOS and Linux, SIGHUP also makes the agent reload.
 
 When the new config is valid, the agent rebuilds its triggers.

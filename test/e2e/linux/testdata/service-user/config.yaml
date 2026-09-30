@@ -1,8 +1,8 @@
-# The config of kickd as a per-user unit, at ~/.config/kickd/config.yaml.
+# The config of kickd as a per-user unit, at ~/.kickd/config.yaml.
 log:
-  path: '~/.local/state/kickd/kickd.log'
+  path: '~/.kickd/kickd.log'
 database:
-  path: '~/.local/state/kickd/kickd.db'
+  path: '~/.kickd/kickd.db'
 events:
   # Prints the user that runs the commands of kickd.
   - name: whoami

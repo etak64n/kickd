@@ -16,8 +16,8 @@ webhook:
 Each webhook trigger sets its own path, methods and authentication among the triggers of its event, and [Trigger settings](triggers.md#webhook-triggers) describes those keys.
 The server also answers requests to `/healthz` with 200 and `ok`, for health checks.
 
-The agent reloads its config file when the file is saved: it waits 0.5 seconds after the save, checks the new file, and switches to it when the file has no errors.
-At the switch, the agent stops its HTTP server and starts a new one with the new settings, so a change to the `webhook` section takes effect when the config file is saved.
+The agent reloads its config when the config file, or another YAML file next to it, is saved, added or removed: it waits 0.5 seconds after the change, checks the files, and switches to the new config when they have no errors.
+At the switch, the agent stops its HTTP server and starts a new one with the new settings, so a change to the `webhook` section of the config file takes effect when the file is saved.
 A request that arrives during the switch can fail to connect.
 
 ## `webhook.enabled`
@@ -63,7 +63,7 @@ The server starts only when at least one event has a webhook trigger.
 When the port is in use by another program, the server cannot start:
 
 - **At the start of the agent**: the agent stops with the FATAL record `Agent start failed`. A service manager starts it again, and it stops again while the port stays in use.
-- **At a reload**: the agent logs `Trigger failed` and runs no triggers until the config file is saved again. Runs that wait in the queue, and firings with `kickd event`, still run.
+- **At a reload**: the agent logs `Trigger failed` and runs no triggers until a file of the config is saved again. Runs that wait in the queue, and firings with `kickd event`, still run.
 
 The server speaks plain HTTP without TLS, so a token or a request body that crosses a network is readable on the way.
 To accept requests from other machines, keep a loopback address here and put a reverse proxy or a tunnel that handles TLS in front of kickd.

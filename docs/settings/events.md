@@ -2,11 +2,12 @@
 
 [Documentation index](../../README.md#documentation)
 
-In kickd, a named command in the config file is an **event**.
+kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
+In kickd, a named command in the config is an **event**.
 An event lists **triggers**, the ways in which it fires, such as a cron schedule or `kickd event NAME` on the command line.
 Each firing of an event is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
 
-The `events` section of the config file is a list of events, and it needs at least one.
+The `events` section is a list of events, in the config file or in another YAML file next to it, and the config needs at least one event in all.
 Each event is a mapping of keys, of which `name`, `command` and `triggers` are required:
 
 ```yaml
@@ -17,18 +18,18 @@ events:
       - type: manual
 ```
 
-The agent reloads its config file when the file is saved: it waits 0.5 seconds after the save, checks the new file, and switches to it when the file has no errors.
+The agent reloads its config when the config file, or another YAML file next to it, is saved, added or removed: it waits 0.5 seconds after the change, checks the files, and switches to the new config when they have no errors.
 Runs that start after the switch use the new settings of their event, including runs that were waiting in the queue.
 Commands that are running keep the settings with which they started.
-A few keys take effect at other moments: `description` and `params` at once for the subcommands that read the config file, and `on_interrupt` and `max_attempts` at the next start of the agent.
+A few keys take effect at other moments: `description` and `params` at once for the subcommands that read the config, and `on_interrupt` and `max_attempts` at the next start of the agent.
 
 ## `name`
 
 `name` identifies the event.
 
 - **Type**: a string of 1 to 64 characters: letters, digits, `.`, `_`, `:` and `-`, starting with a letter or a digit.
-- **Default**: none. `name` is required, and no two events of one config file can have the same name.
-- **Takes effect**: when the config file is saved.
+- **Default**: none. `name` is required, and no two events of the config can have the same name, in the same file or in two files.
+- **Takes effect**: when the file that defines the event is saved.
 
 The name appears wherever kickd refers to the event: in `kickd event NAME`, in the `event` key of the log records, in the variable `KICKD_EVENT` of the command, and in the history that `kickd runs --event NAME` shows.
 
@@ -50,7 +51,7 @@ events:
 
 - **Type**: a string.
 - **Default**: none.
-- **Takes effect**: at once for `kickd events`, which reads the config file each time it runs.
+- **Takes effect**: at once for `kickd events`, which reads the config each time it runs.
 
 `kickd events` shows the description in its DESCRIPTION column, and `kickd events --json` in its `description` field.
 The agent does not use it.
@@ -70,7 +71,7 @@ events:
 
 - **Type**: a string, or a list of strings.
 - **Default**: none. `command` is required.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
 The two forms run in different ways:
 
@@ -108,9 +109,9 @@ events:
 
 - **Type**: a path. A leading `~` is the home directory, `${VAR}` is the value of the environment variable `VAR`, and a relative path starts at the directory of the config file.
 - **Default**: the directory of the config file.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
-The directory must exist when the config file is loaded, and a missing one is an error of the config file.
+The directory must exist when the config is loaded, and a missing one is an error of the config.
 The default is the same whether kickd runs in a terminal or as a service, so the directory from which the agent was started does not matter.
 A program or file that the command gives with a relative path starts here.
 `kickd check` prints the working directory of each event on its `workdir` line.
@@ -130,7 +131,7 @@ events:
 
 - **Type**: a mapping of variable names to strings.
 - **Default**: none.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
 A command receives three layers of environment variables, each on top of the one before:
 
@@ -140,7 +141,7 @@ A command receives three layers of environment variables, each on top of the one
 
 In a value, `${NAME}` and `$NAME` are replaced by the variable `NAME` of kickd, as it is when the run starts.
 kickd has no way to escape `$`, so a value that must contain text such as `$word`, like a password with a `$` in it, belongs in a file that the command reads.
-The config file uses this form on Windows too, as in `${USERPROFILE}`; the `%USERPROFILE%` form is expanded only by cmd, inside a string command.
+The config uses this form on Windows too, as in `${USERPROFILE}`; the `%USERPROFILE%` form is expanded only by cmd, inside a string command.
 
 A `PATH` in `env` also decides where kickd finds the program of `command`, and `${PATH}` in its value is the `PATH` of kickd, so directories put in front of it are searched first.
 `kickd check` prints the `PATH` that each event sets.
@@ -166,7 +167,7 @@ events:
 
 - **Type**: a duration: a number with one of the units `ms`, `s`, `m` and `h`, such as `90s` or `1h30m`.
 - **Default**: none, which sets no limit. The value `0s` also sets no limit.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
 When the command runs longer, kickd stops it together with the processes that it started:
 
@@ -175,7 +176,7 @@ When the command runs longer, kickd stops it together with the processes that it
 
 The run is recorded as `failed`, with the reason `timeout`.
 A timeout is a failure and not an interruption, so `on_interrupt: rerun` does not run the firing again.
-A negative duration is an error of the config file.
+A negative duration is an error of the config.
 
 ```yaml
 events:
@@ -192,7 +193,7 @@ events:
 
 - **Type**: one of `skip`, `queue` and `parallel`.
 - **Default**: `skip`.
-- **Takes effect**: for the firings that the agent handles after the config file is saved.
+- **Takes effect**: for the firings that the agent handles after the file that defines the event is saved.
 
 The setting applies among the runs of one event, and runs of different events never wait for each other:
 
@@ -220,7 +221,7 @@ events:
 
 - **Type**: one of `abandon` and `rerun`.
 - **Default**: `abandon`.
-- **Takes effect**: at the next start of the agent, which handles the runs that were cut off when it starts, with the value that the config file has then.
+- **Takes effect**: at the next start of the agent, which handles the runs that were cut off when it starts, with the value that the config has then.
 
 A run is cut off, or **interrupted**, when its command is running as the agent stops or crashes, or as the machine shuts down or loses power.
 At a clean stop, the agent stops the commands as a timeout does, and records their runs as `interrupted`.
@@ -231,7 +232,7 @@ After a crash, the runs stay `running` in the database, and the next start of th
 
 `rerun` suits commands that give the same result when they run twice, such as rsync or make.
 For work that must not happen twice, such as sending an email, keep `abandon`.
-An interrupted run of an event that the config file no longer defines is recorded as `abandoned`, with the reason `event_removed`.
+An interrupted run of an event that the config no longer defines is recorded as `abandoned`, with the reason `event_removed`.
 
 ```yaml
 events:
@@ -248,11 +249,11 @@ events:
 
 - **Type**: a whole number, 1 or more, written without quotes.
 - **Default**: `3`.
-- **Takes effect**: at the next start of the agent, which handles the runs that were cut off when it starts, with the value that the config file has then.
+- **Takes effect**: at the next start of the agent, which handles the runs that were cut off when it starts, with the value that the config has then.
 
 When a run that is already the last allowed attempt is cut off, the agent records it as `abandoned`, with the reason `max_attempts_reached`, and logs an ERROR record.
 With `on_interrupt: abandon`, an interrupted run never runs again, and `max_attempts` has no effect.
-A number below 1 is an error of the config file.
+A number below 1 is an error of the config.
 
 ```yaml
 events:
@@ -270,7 +271,7 @@ events:
 
 - **Type**: one of `none` and `payload`.
 - **Default**: `none`.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
 Every run has a **payload**, a JSON object that describes the run: the event, the trigger, the parameters, and what fired it, such as the changed files or the webhook request.
 The command can always read the payload from the file named by the variable `KICKD_PAYLOAD_FILE`.
@@ -299,7 +300,7 @@ events:
 
 - **Type**: `true` or `false`, written without quotes.
 - **Default**: `true`.
-- **Takes effect**: for runs that start after the config file is saved.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
 
 With `true`, kickd keeps the output in three places:
 
@@ -326,7 +327,7 @@ events:
 
 - **Type**: a list of parameters, each with a `name` and, optionally, `required`, `default` and `description`.
 - **Default**: none.
-- **Takes effect**: at once for `kickd event`, which reads the config file each time it runs, and for webhook requests when the config file is saved.
+- **Takes effect**: at once for `kickd event`, which reads the config each time it runs, and for webhook requests when the file that defines the event is saved.
 
 The command receives each parameter in a variable named after it, `KICKD_DATA_` and the name in capitals, so `ref` arrives in `KICKD_DATA_REF`.
 `kickd event` passes parameters as `KEY=VALUE` arguments, and a webhook request as query values.
@@ -350,7 +351,7 @@ events:
 
 - **Type**: a list of triggers, each a mapping with a `type`.
 - **Default**: none. `triggers` is required, with at least one trigger.
-- **Takes effect**: when the config file is saved, because the agent then stops its triggers and starts them again from the new file.
+- **Takes effect**: when the file that defines the event is saved, because the agent then stops its triggers and starts them again from the new config.
 
 An event fires only through the triggers that it lists, and it can list several of them.
 A trigger has one of seven types, `manual`, `cron`, `webhook`, `file`, `after`, `startup` and `wake`, and takes only the keys of its type.

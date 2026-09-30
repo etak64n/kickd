@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -176,10 +177,10 @@ func (c *cli) event(args []string) int {
 	}
 	def, ok := cfg.EventByName(name)
 	if !ok {
-		return c.exit(usageError{fmt.Sprintf("event %q is not defined in %s (defined: %s)", name, cfg.Path, strings.Join(cfg.EventNames(), ", "))})
+		return c.exit(usageError{fmt.Sprintf("event %q is not defined in %s or the files next to it (defined: %s)", name, cfg.Path, strings.Join(cfg.EventNames(), ", "))})
 	}
 	if !def.Manual() {
-		return c.exit(usageError{fmt.Sprintf("event %q has no manual trigger, so kickd event cannot fire it; add \"- type: manual\" to its triggers in %s", name, cfg.Path)})
+		return c.exit(usageError{fmt.Sprintf("event %q has no manual trigger, so kickd event cannot fire it; add \"- type: manual\" to its triggers in %s", name, def.File)})
 	}
 	data := map[string]string{}
 	if *dataJSON != "" {
@@ -326,6 +327,7 @@ func (c *cli) events(args []string) error {
 		type view struct {
 			Name        string         `json:"name"`
 			Description string         `json:"description,omitempty"`
+			File        string         `json:"file"`
 			Concurrency string         `json:"concurrency"`
 			OnInterrupt string         `json:"onInterrupt"`
 			MaxAttempts int            `json:"maxAttempts"`
@@ -334,12 +336,12 @@ func (c *cli) events(args []string) error {
 		}
 		out := []view{}
 		for _, e := range cfg.Events {
-			out = append(out, view{e.Name, e.Description, e.Concurrency, e.OnInterrupt, e.MaxAttempts, triggerNames(e), e.Params})
+			out = append(out, view{e.Name, e.Description, e.File, e.Concurrency, e.OnInterrupt, e.MaxAttempts, triggerNames(e), e.Params})
 		}
 		return printJSON(c.stdout, out)
 	}
 	tw := tabwriter.NewWriter(c.stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintf(tw, "EVENT\tTRIGGERS\tCONCURRENCY\tON INTERRUPT\tPARAMS\tDESCRIPTION\n")
+	fmt.Fprintf(tw, "EVENT\tTRIGGERS\tCONCURRENCY\tON INTERRUPT\tPARAMS\tFILE\tDESCRIPTION\n")
 	for _, e := range cfg.Events {
 		var params []string
 		for _, p := range e.Params {
@@ -356,8 +358,8 @@ func (c *cli) events(args []string) error {
 		if e.OnInterrupt == config.InterruptRerun {
 			interrupt = fmt.Sprintf("rerun (max %d)", e.MaxAttempts)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", e.Name, strings.Join(triggerNames(e), ", "), e.Concurrency, interrupt,
-			orDash(strings.Join(params, ", ")), orDash(e.Description))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", e.Name, strings.Join(triggerNames(e), ", "), e.Concurrency, interrupt,
+			orDash(strings.Join(params, ", ")), filepath.Base(e.File), orDash(e.Description))
 	}
 	return tw.Flush()
 }

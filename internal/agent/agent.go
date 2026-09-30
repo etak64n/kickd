@@ -378,16 +378,19 @@ func countTriggers(cfg *config.Config) int {
 	return n
 }
 
-// watchConfig requests a reload whenever the config file changes.
+// watchConfig requests a reload whenever the config file, or another YAML
+// file in its directory, changes.
 func watchConfig(ctx context.Context, log *slog.Logger, path string, requestReload func(string)) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		log.Warn("Config watch unavailable", "file", path, logging.Err(err), "detail", "saving the config file does not reload it")
 		return
 	}
+	// The other YAML files of the directory can add events, so a change to
+	// any of them reloads the config too.
 	fw := &trigger.FileWatcher{
 		Root:     filepath.Dir(abs),
-		Include:  []string{filepath.Base(abs)},
+		Include:  []string{filepath.Base(abs), "*.yaml", "*.yml"},
 		Ops:      []string{"create", "write", "rename", "remove"},
 		Debounce: 500 * time.Millisecond,
 		Logger:   log,

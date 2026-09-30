@@ -1,0 +1,19 @@
+# The settings of kickd. kickd also reads the events of every other .yaml
+# and .yml file in this directory that has an events section, such as
+# event.example.yaml. An events section in this file works too.
+
+log:
+  path: 'LOG_PATH'   # without a path, kickd logs to standard error
+  level: info          # trace | debug | info | warn | error | fatal (LOG_LEVEL overrides it)
+  format: auto         # auto | json | text: auto writes text to a terminal and JSON elsewhere (LOG_FORMAT overrides it)
+  max_size_mb: 10      # past this size, kickd renames the file with .1 appended and starts a new one
+  max_backups: 5       # how many renamed files to keep
+
+webhook:
+  enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
+  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  max_body_bytes: 1048576    # the largest request body accepted
+
+database:
+  path: 'DATABASE_PATH'   # the SQLite file that records every run
+  retention: 168h         # how long finished runs stay in the history

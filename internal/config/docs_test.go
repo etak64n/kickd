@@ -68,6 +68,8 @@ func dedent(s string, n int) string {
 }
 
 // TestExamplesLoad checks every config file in the examples directory.
+// Each example is a whole config file of its own, so each one loads from a
+// directory without the others, which would add their events.
 func TestExamplesLoad(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("..", "..", "examples", "*.yaml"))
 	if err != nil {
@@ -77,7 +79,15 @@ func TestExamplesLoad(t *testing.T) {
 		t.Fatalf("found %d example configs, want at least 10", len(files))
 	}
 	for _, f := range files {
-		checkLoads(t, filepath.Base(f), f)
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		checkLoads(t, filepath.Base(f), path)
 	}
 }
 
@@ -100,9 +110,10 @@ func checkLoads(t *testing.T, name, path string) {
 	}
 }
 
-// TestReadmeShowsWhatInitWrites keeps the configs in the README the same as
-// the files that kickd init writes: in the home directory on macOS and
-// Linux, and in C:\ProgramData on Windows.
+// TestReadmeShowsWhatInitWrites keeps the files in the README the same as
+// the files that kickd init writes: the config file and the events file,
+// in the home directory on macOS and Linux, and in C:\ProgramData on
+// Windows.
 func TestReadmeShowsWhatInitWrites(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
 	if err != nil {
@@ -110,27 +121,36 @@ func TestReadmeShowsWhatInitWrites(t *testing.T) {
 	}
 	readme := strings.ReplaceAll(string(b), "\r\n", "\n")
 	for _, c := range []struct {
-		summary, goos string
-		system        bool
+		summary string
+		goos    []string
+		system  bool
 	}{
-		{"macOS", "darwin", false},
-		{"Linux", "linux", false},
-		{"Windows", "windows", true},
+		{"macOS and Linux", []string{"darwin", "linux"}, false},
+		{"Windows", []string{"windows"}, true},
 	} {
 		_, rest, ok := strings.Cut(readme, "<summary>"+c.summary+"</summary>")
-		if ok {
+		var blocks []string
+		for ok && len(blocks) < 2 {
 			_, rest, ok = strings.Cut(rest, "```yaml\n")
+			var block string
+			if ok {
+				block, rest, ok = strings.Cut(rest, "```\n")
+			}
+			if ok {
+				blocks = append(blocks, block)
+			}
 		}
-		var got string
-		if ok {
-			got, _, ok = strings.Cut(rest, "```\n")
-		}
-		if !ok {
-			t.Errorf("the README has no YAML block under %s", c.summary)
+		if len(blocks) < 2 {
+			t.Errorf("the README has no two YAML blocks under %s", c.summary)
 			continue
 		}
-		if want := Example(c.goos, c.system); got != want {
-			t.Errorf("the %s config in the README differs from what kickd init writes: %s", c.summary, firstDiff(got, want))
+		for _, goos := range c.goos {
+			if want := ExampleConfig(goos, c.system); blocks[0] != want {
+				t.Errorf("the %s config file in the README differs from what kickd init writes on %s: %s", c.summary, goos, firstDiff(blocks[0], want))
+			}
+			if want := ExampleEvents(goos); blocks[1] != want {
+				t.Errorf("the %s events file in the README differs from what kickd init writes on %s: %s", c.summary, goos, firstDiff(blocks[1], want))
+			}
 		}
 	}
 }

@@ -2,7 +2,8 @@
 
 [Documentation index](../README.md#documentation)
 
-The kickd config file is YAML with four top-level sections: `log`, `webhook`, `database` and `events`.
+kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
+The config file has four top-level sections, `log`, `webhook`, `database` and `events`, and the other files have only `events`.
 In kickd, a named command is an **event**, and a **trigger** fires an event.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
 
@@ -28,6 +29,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 
 Earlier versions of kickd called `log.path` `log.file` and the `database` section `queue`, took a string command as `shell`, and, in v0.2.0, had a `base_dir` section for the directory of the log and the database.
 A config file with the old keys fails to load, with a message that gives the new key.
+Earlier versions also read the config file from the config directory of the OS, such as `~/Library/Application Support/kickd` on macOS, and when a file is still there and `~/.kickd/config.yaml` does not exist, kickd names the old file and asks to move it.
 
 ## Top-level keys
 
@@ -43,7 +45,7 @@ A config file with the old keys fails to load, with a message that gives the new
 | [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
 | [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
 | [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |
-| [`events`](settings/events.md) | none | The list of events. Required, with at least one event. |
+| [`events`](settings/events.md) | none | The list of events, in the config file or in another YAML file next to it. The config needs at least one event. |
 
 ## Event keys
 
@@ -90,8 +92,8 @@ An event lists at most one manual, one startup and one wake trigger.
 
 ## When changes take effect
 
-The agent reloads its config file when the file is saved, 0.5 seconds after the save, and on SIGHUP on macOS and Linux.
-When the new file has errors, the agent logs them and keeps the previous config.
+The agent reloads its config when the config file, or another YAML file next to it, is saved, added or removed, 0.5 seconds after the change, and on SIGHUP on macOS and Linux.
+When the new config has errors, the agent logs them and keeps the previous config.
 Most keys take effect at that reload, and some wait for the next start of the agent:
 
 | Keys | Take effect |
@@ -100,8 +102,8 @@ Most keys take effect at that reload, and some wait for the next start of the ag
 | `webhook.*` | At the reload, which restarts the HTTP server |
 | `database.*` | At the next start of the agent, which opens the database once |
 | `name`, `command`, `workdir`, `env`, `timeout`, `concurrency`, `stdin`, `log_output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
-| `description` and `params` | At once for `kickd events` and `kickd event`, which read the config file each time they run, and at the reload for webhook requests |
+| `description` and `params` | At once for `kickd events` and `kickd event`, which read the config each time they run, and at the reload for webhook requests |
 | `on_interrupt` and `max_attempts` | At the next start of the agent, which handles the runs that were cut off when it starts |
-| Manual triggers | At once for `kickd event`, which reads the config file each time it runs |
-| Cron, webhook, file, after and wake triggers | At the reload, which stops these triggers and starts them again from the new file |
+| Manual triggers | At once for `kickd event`, which reads the config each time it runs |
+| Cron, webhook, file, after and wake triggers | At the reload, which stops these triggers and starts them again from the new config |
 | Startup triggers | At the next start of the agent |

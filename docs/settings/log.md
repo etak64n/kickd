@@ -7,7 +7,7 @@ The `log` section of the config file sets where the agent writes its records, wh
 
 ```yaml
 log:
-  path: '~/.local/state/kickd/kickd.log'
+  path: '~/.kickd/kickd.log'
   level: info
   format: auto
   max_size_mb: 10
@@ -43,7 +43,7 @@ A config file inside the home directory is for a user's kickd, and one outside i
 
 | Config file | macOS | Linux | Windows |
 |---|---|---|---|
-| Inside the home directory | `~/Library/Logs/kickd/kickd.log` | `~/.local/state/kickd/kickd.log` | `~\AppData\Local\kickd\kickd.log` |
+| Inside the home directory | `~/.kickd/kickd.log` | `~/.kickd/kickd.log` | `~\.kickd\kickd.log` |
 | Outside the home directory | `/Library/Logs/kickd/kickd.log` | `/var/log/kickd/kickd.log` | `C:\ProgramData\kickd\kickd.log` |
 
 ```yaml

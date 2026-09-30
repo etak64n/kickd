@@ -38,18 +38,19 @@ Move the executable to `/usr/local/bin` before installing the service.
 
 ## 2. Create the config file
 
-A kickd installed as a system-wide unit runs the commands in its config file as root.
-Keep the config file in `/etc/kickd/config.yaml`, where only root can change it.
-`kickd init` creates the file readable and writable only by its owner.
+A kickd installed as a system-wide unit runs the commands in its config as root.
+Keep the config in `/etc/kickd`, where only root can change it.
+`kickd init` writes two files there, each readable and writable only by its owner: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
 
 ```sh
 sudo kickd init -c /etc/kickd/config.yaml
-sudoedit /etc/kickd/config.yaml
+sudoedit /etc/kickd/event.example.yaml
 sudo kickd check -c /etc/kickd/config.yaml
 ```
 
-The example is the Linux config of the README, with four events, one for each kind of trigger.
+The events are those of the README.
 Delete the events that are not needed, and change the paths to match the machine.
+kickd reads the events of every `.yaml` and `.yml` file in `/etc/kickd` that has an `events` section, so events can also go in files of their own, such as `/etc/kickd/backup.yaml`.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 kickd records every run in its **database**, a SQLite file.
@@ -99,7 +100,7 @@ journalctl -u kickd -f
 When the agent process exits, systemd starts it again after 5 seconds.
 After `systemctl stop`, systemd leaves it stopped.
 
-When the config file is saved, the agent reloads it.
+When the config file, or another YAML file next to it, is saved, the agent reloads the config.
 `sudo systemctl reload kickd` also reloads it, because `reload` sends SIGHUP to the agent, and the agent reloads its config on SIGHUP.
 
 When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
@@ -117,9 +118,11 @@ A per-user unit runs with that user's permissions, and systemd sets `HOME` for i
 A user's instance of systemd normally runs only while the user is logged in.
 `loginctl enable-linger` keeps it running from boot, whether or not the user is logged in.
 
+A per-user unit reads its config from `~/.kickd`, where `kickd init` writes `config.yaml` and `event.example.yaml`, and the config puts the log and the database in `~/.kickd` as well.
+
 ```sh
 kickd init
-"${EDITOR:-vi}" ~/.config/kickd/config.yaml
+"${EDITOR:-vi}" ~/.kickd/event.example.yaml
 kickd check
 sudo loginctl enable-linger "$USER"
 kickd service install --user

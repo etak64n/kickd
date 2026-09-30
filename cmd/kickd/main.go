@@ -43,14 +43,16 @@ Usage:
   kickd cancel  RUN_ID                     Cancel a queued run, or stop a running one
   kickd status  [--json]                   Show whether the agent is running and the queue size
   kickd check   [-c CONFIG]                Validate the config and print a summary
-  kickd init    [-c CONFIG]                Write an example config
+  kickd init    [-c CONFIG]                Write an example config and an example events file
   kickd service ACTION [-c CONFIG] [--user] [--name NAME]
                 ACTION: install | uninstall | start | stop | restart | status
   kickd licenses                           Print the licenses of kickd and of the software it includes
   kickd version
 
 Every command takes -c CONFIG. The config is found in this order:
--c, $KICKD_CONFIG, <user config dir>/kickd/config.yaml, ./kickd.yaml
+-c, $KICKD_CONFIG, ~/.kickd/config.yaml, ./kickd.yaml
+kickd also reads the events of the other .yaml and .yml files next to the
+config file.
 `
 
 func main() {
@@ -199,6 +201,14 @@ func cmdCheck(args []string) error {
 		triggers += len(e.Triggers)
 	}
 	fmt.Printf("OK: %s (%d events, %d triggers)\n", cfg.Path, len(cfg.Events), triggers)
+	for _, f := range append([]string{cfg.Path}, cfg.EventFiles...) {
+		if n := eventsIn(cfg, f); n > 0 || f != cfg.Path {
+			fmt.Printf("events: %s (%s)\n", f, plural(n, "event"))
+		}
+	}
+	for _, f := range cfg.Skipped {
+		fmt.Printf("not read: %s (no events section)\n", f)
+	}
 	logPath := cfg.Log.Path
 	if logPath == "" {
 		logPath = "standard error"
@@ -229,6 +239,7 @@ func cmdCheck(args []string) error {
 			interrupt = fmt.Sprintf("rerun, up to %d attempts", e.MaxAttempts)
 		}
 		fmt.Printf("- %s [%s; on interrupt: %s]: %s\n", e.Name, e.Concurrency, interrupt, cmd)
+		fmt.Printf("    file     %s\n", filepath.Base(e.File))
 		fmt.Printf("    workdir  %s\n", e.Workdir)
 		for k, v := range e.Env {
 			if strings.EqualFold(k, "PATH") {
@@ -247,6 +258,25 @@ func cmdCheck(args []string) error {
 		fmt.Printf("warning: event %q: %s\n", w.Event, w.Detail)
 	}
 	return nil
+}
+
+// eventsIn counts the events of cfg that the file defines.
+func eventsIn(cfg *config.Config, file string) int {
+	n := 0
+	for _, e := range cfg.Events {
+		if e.File == file {
+			n++
+		}
+	}
+	return n
+}
+
+// plural returns n and the noun, with an s unless n is 1.
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func describeKick(e config.Event) string {
@@ -342,20 +372,28 @@ func cmdInit(args []string) error {
 	if path == "" {
 		path = config.DefaultPath()
 	}
-	if fileExists(path) {
-		return fmt.Errorf("%s already exists", path)
+	events := filepath.Join(filepath.Dir(path), config.ExampleEventsName)
+	for _, p := range []string{path, events} {
+		if fileExists(p) {
+			return fmt.Errorf("%s already exists", p)
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	system := initForSystem(path)
-	if err := os.WriteFile(path, []byte(config.Example(runtime.GOOS, system)), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(config.ExampleConfig(runtime.GOOS, system)), 0o600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
 		return err
 	}
 	p := config.PathsFor(runtime.GOOS, system)
 	fmt.Printf("wrote %s\n", path)
+	fmt.Printf("wrote %s\n", events)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
-	fmt.Printf("Edit it, then run: kickd check -c %s\n", path)
+	fmt.Printf("Edit them, then run: kickd check -c %s\n", path)
+	fmt.Println("kickd reads the events of every .yaml and .yml file next to the config file.")
 	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
 	return nil
 }

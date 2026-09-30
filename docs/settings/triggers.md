@@ -2,7 +2,8 @@
 
 [Documentation index](../../README.md#documentation)
 
-In kickd, a named command in the config file is an **event**, and a **trigger** fires an event.
+kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
+In kickd, a named command in the config is an **event**, and a **trigger** fires an event.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
 
 The `triggers` key of an event lists its triggers, and the event fires only through them.
@@ -18,7 +19,7 @@ Each trigger is a mapping with a `type`, one of seven:
 | `startup` | When the agent starts |
 | `wake` | When the machine wakes from sleep |
 
-A trigger takes only the keys of its type, so `schedule` on a file trigger is an error of the config file.
+A trigger takes only the keys of its type, so `schedule` on a file trigger is an error of the config.
 An event can list several triggers, of the same type or of different types, and at most one of each of `manual`, `startup` and `wake`:
 
 ```yaml
@@ -32,8 +33,8 @@ events:
       - type: manual
 ```
 
-The agent reloads its config file when the file is saved: it waits 0.5 seconds after the save, checks the new file, and switches to it when the file has no errors.
-At the switch, the agent stops its triggers and starts them again from the new file, so a change to a cron, webhook, file, after or wake trigger takes effect when the config file is saved.
+The agent reloads its config when the config file, or another YAML file next to it, is saved, added or removed: it waits 0.5 seconds after the change, checks the files, and switches to the new config when they have no errors.
+At the switch, the agent stops its triggers and starts them again from the new config, so a change to a cron, webhook, file, after or wake trigger takes effect when the file that defines its event is saved.
 
 Every run gets environment variables that describe its firing, and each type of trigger except `startup` fills its own: `KICKD_MANUAL_SOURCE` for manual triggers, and `KICKD_CRON_*`, `KICKD_WEBHOOK_*`, `KICKD_FILE_*`, `KICKD_AFTER_*` and `KICKD_WAKE_*` for the others.
 [What a command receives](../payload.md) lists all of them.
@@ -52,7 +53,7 @@ A manual trigger has no other keys.
 
 - **Type**: `manual`.
 - **Default**: none. `type` is required.
-- **Takes effect**: at once for `kickd event`, which reads the config file each time it runs.
+- **Takes effect**: at once for `kickd event`, which reads the config each time it runs.
 
 ```yaml
 events:
@@ -73,7 +74,7 @@ The agent looks at the clock at least once a second, so a firing starts within a
 
 - **Type**: a string with a cron expression.
 - **Default**: none. `schedule` is required.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 An expression has five fields, separated by spaces: minute, hour, day of month, month and day of week.
 A sixth field in front gives the second, so `30 0 3 * * *` fires at 3:00:30.
@@ -103,7 +104,7 @@ events:
 
 - **Type**: the name of a time zone of the IANA database, such as `Asia/Tokyo`, `Europe/Berlin` or `UTC`.
 - **Default**: none, which reads the times in the local time zone of the machine.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 kickd has the time zone database built in, so the names work on Windows too.
 An expression that starts with `CRON_TZ=` and a name, as in `CRON_TZ=Asia/Tokyo 0 3 * * *`, takes that zone instead of `timezone`.
@@ -127,7 +128,7 @@ events:
 
 - **Type**: one of `run` and `skip`.
 - **Default**: `run`.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 The agent looks at the clock at least once a second, so it notices a time late only after the machine slept or while it was not running itself.
 A time that the agent notices more than a minute late counts as **missed**.
@@ -155,7 +156,7 @@ events:
 ## Webhook triggers
 
 A webhook trigger fires the event when an HTTP request arrives at its path.
-The agent runs one HTTP server for all webhook triggers of the config file, and the `webhook` section of the config file sets its address and limits; [Webhook server settings](webhook.md) describes that section.
+The agent runs one HTTP server for all webhook triggers of the config, and the `webhook` section of the config file sets its address and limits; [Webhook server settings](webhook.md) describes that section.
 
 The command receives the request in the payload JSON: its method, path, headers, query and body.
 The payload leaves out the `Authorization` and `X-Kickd-Token` headers and the `token` query value, so the token does not reach the command.
@@ -168,9 +169,9 @@ Query values whose names the event declares in `params` become parameters of the
 
 - **Type**: a string that starts with `/`, such as `/hooks/deploy`.
 - **Default**: none. `path` is required.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
-No two webhook triggers of one config file can have the same path, and `/healthz` is reserved for the health check of the server.
+No two webhook triggers of the config can have the same path, and `/healthz` is reserved for the health check of the server.
 A request to a path that no trigger has gets 404.
 A path that ends with `/` also receives the requests to every path below it, so `/hooks/` receives `/hooks/deploy` too.
 
@@ -191,7 +192,7 @@ events:
 
 - **Type**: a list of method names, such as `[POST]`, in upper or lower case.
 - **Default**: none, which accepts every method.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 A request with another method gets 405, and its event does not fire.
 
@@ -213,7 +214,7 @@ events:
 
 - **Type**: a string.
 - **Default**: none, which asks requests for no token.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 A request carries the token in one of three places, which kickd checks in this order:
 
@@ -242,7 +243,7 @@ events:
 
 - **Type**: a string.
 - **Default**: none, which asks requests for no signature.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 The caller computes the HMAC-SHA256 of the request body, with the secret as the key, and sends it as `sha256=` and the hex digits in the header `X-Hub-Signature-256` or `X-Kickd-Signature`.
 `X-Hub-Signature-256` is the header that GitHub webhooks send, so the secret of a GitHub webhook works here as it is.
@@ -267,7 +268,7 @@ events:
 
 - **Type**: `true` or `false`, written without quotes.
 - **Default**: `false`.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 - **false**: the server answers 202 as soon as the run is in the queue, or 409 when the event already has 1000 waiting runs and drops the firing.
 - **true**: the server answers when the run ends: 200 when the command exited with code 0, and 500 otherwise. The body holds the exit code, the duration, and the first 64 KB of the output of the command. A firing that the event skips or drops gets 409.
@@ -300,9 +301,9 @@ The variables `KICKD_FILE_PATH` and `KICKD_FILE_OP` give the last change, `KICKD
 
 - **Type**: a path. A leading `~` is the home directory, `${VAR}` is the value of the environment variable `VAR`, and a relative path starts at the directory of the config file.
 - **Default**: none. `path` is required.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
-The path must be a directory that exists when the config file is loaded, and anything else is an error of the config file.
+The path must be a directory that exists when the config is loaded, and anything else is an error of the config.
 To watch one file, watch its directory and name the file in `include`.
 The agent logs `File watch started` when the trigger watches its directory.
 
@@ -324,7 +325,7 @@ events:
 
 - **Type**: `true` or `false`, written without quotes.
 - **Default**: `false`, which watches only the files directly in `path`.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 With `true`, the trigger watches every directory below `path`, including directories created later.
 The files in a directory that is created or moved in count as created, because no watch saw them being written.
@@ -350,7 +351,7 @@ events:
 
 - **Type**: a list of patterns, such as `['*.md', 'docs/*.txt']`.
 - **Default**: none, which lets every file fire the event.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 A pattern is matched in one of two ways:
 
@@ -379,7 +380,7 @@ events:
 
 - **Type**: a list of patterns, such as `['.git', '*.swp']`.
 - **Default**: none.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 A pattern is matched in one of two ways:
 
@@ -406,7 +407,7 @@ events:
 
 - **Type**: a list of `create`, `write`, `remove`, `rename` and `chmod`.
 - **Default**: `[create, write, remove, rename]`, every kind except `chmod`.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 The kinds are:
 
@@ -435,12 +436,12 @@ events:
 
 - **Type**: a duration: a number with one of the units `ms`, `s`, `m` and `h`, such as `500ms` or `2s`.
 - **Default**: `1s`. The value `0s` also means 1 second.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 After a change, the trigger waits until no new change has arrived for this long, and then fires once for all the changes of the wait.
 Each path appears once for each kind of change, and one firing holds up to 10,000 changes; the agent drops the changes beyond them and logs a warning.
 Saving several files, or switching a branch in Git, causes a burst of changes, and a longer `debounce` turns the burst into one firing.
-A negative duration is an error of the config file.
+A negative duration is an error of the config.
 
 ```yaml
 events:
@@ -468,9 +469,9 @@ The command receives the run that ended in `KICKD_AFTER_EVENT`, `KICKD_AFTER_RUN
 
 `event` is the event whose runs the trigger follows.
 
-- **Type**: the name of another event of the config file.
+- **Type**: the name of another event of the config.
 - **Default**: none. `event` is required.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 An event cannot follow itself, and follows another event with at most one after trigger.
 After triggers cannot form a cycle, such as two events that follow each other, because each run would fire the next one forever, and `kickd check` names the events of such a cycle.
@@ -497,7 +498,7 @@ events:
 
 - **Type**: a list of `succeeded`, `failed`, `canceled`, `skipped`, `dropped` and `abandoned`.
 - **Default**: none. `status` is required, with at least one status.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 The statuses are those of a run that has ended:
 
@@ -527,7 +528,7 @@ events:
 
 A startup trigger fires the event once when the agent starts.
 That includes a start by a service manager at boot, and a start again after a crash.
-Saving the config file, and SIGHUP on macOS and Linux, reload the config without a start, so they do not fire the event.
+Saving a file of the config, and SIGHUP on macOS and Linux, reload the config without a start, so they do not fire the event.
 The agent logs `Startup trigger fired` for each event that it fires.
 
 ### `type: startup`
@@ -559,7 +560,7 @@ A wake trigger has no other keys.
 
 - **Type**: `wake`.
 - **Default**: none. `type` is required.
-- **Takes effect**: when the config file is saved.
+- **Takes effect**: when the file that defines the event is saved.
 
 ```yaml
 events:

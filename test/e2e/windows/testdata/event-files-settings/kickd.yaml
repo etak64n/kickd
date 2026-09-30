@@ -1,0 +1,6 @@
+events:
+  # Backs up by hand.
+  - name: backup
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'backup.ps1']
+    triggers:
+      - type: manual

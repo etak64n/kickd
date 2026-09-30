@@ -1,0 +1,6 @@
+# The events of the app, next to the config file.
+events:
+  - name: deploy
+    command: ['./deploy.sh']
+    triggers:
+      - type: manual

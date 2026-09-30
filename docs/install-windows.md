@@ -54,17 +54,19 @@ Unblock-File 'C:\Program Files\kickd\kickd.exe'
 
 ## 2. Create the config file
 
-The kickd service runs the commands in its config file as SYSTEM.
-Keep the config file in `C:\ProgramData\kickd\config.yaml`, where only administrators can change it.
+The kickd service runs the commands in its config as SYSTEM.
+Keep the config in `C:\ProgramData\kickd`, where only administrators can change it.
 With the default permissions, other users cannot change files that an administrator creates under `C:\ProgramData`.
+`kickd init` writes two files there: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
 
 ```powershell
 kickd init -c C:\ProgramData\kickd\config.yaml
-notepad C:\ProgramData\kickd\config.yaml
+notepad C:\ProgramData\kickd\event.example.yaml
 kickd check -c C:\ProgramData\kickd\config.yaml
 ```
 
-The example is the Windows config of the README, with four events, one for each kind of trigger.
+The files are the Windows files of the README.
+kickd reads the events of every `.yaml` and `.yml` file in `C:\ProgramData\kickd` that has an `events` section, so events can also go in files of their own, such as `C:\ProgramData\kickd\backup.yaml`.
 Their commands start the PowerShell scripts `backup.ps1`, `deploy.ps1`, `build.ps1` and `notify.ps1` in the working folders of the events, so write those scripts or replace the commands.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
@@ -115,7 +117,7 @@ The installed service starts automatically when Windows starts.
 If the agent exits unexpectedly, the Service Control Manager starts it again after 5 seconds.
 The Services list (`services.msc`) shows the service as "kickd (event-driven command runner)".
 
-When the config file is saved, the agent reloads it.
+When the config file, or another YAML file next to it, is saved, the agent reloads the config.
 
 When the service stops, kickd ends the commands that are running, together with their child processes.
 Windows gives kickd no reliable signal to ask a command to exit, so the commands end at once, without a chance to clean up.

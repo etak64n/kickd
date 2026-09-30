@@ -455,6 +455,17 @@ func (h *home) save(name string) {
 	h.write("kickd.yaml", string(b))
 }
 
+// place copies the file src of the home directory to dst, as saving a
+// new file does.
+func (h *home) place(src, dst string) {
+	h.t.Helper()
+	b, err := os.ReadFile(h.path(src))
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	h.write(dst, string(b))
+}
+
 // write writes text to the file name in the home directory.
 func (h *home) write(name, text string) {
 	h.t.Helper()

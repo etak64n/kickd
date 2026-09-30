@@ -232,11 +232,11 @@ func TestTheConfigOfTheUserComesBeforeKickdYaml(t *testing.T) {
 	}
 }
 
-func TestInitWritesTheConfigIntoTheAppDataOfTheUser(t *testing.T) {
+func TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
 	r := h.kickdRaw("init")
-	want := h.path("AppData", "Roaming", "kickd", "config.yaml")
+	want := h.path(".kickd", "config.yaml")
 	if r.code != 0 || !hasLine(r.stdout, "wrote "+want) {
 		t.Errorf("kickd init: exit %d\n%s%s", r.code, r.stdout, r.stderr)
 	}
@@ -245,11 +245,24 @@ func TestInitWritesTheConfigIntoTheAppDataOfTheUser(t *testing.T) {
 	}
 }
 
-func TestInitPutsTheLogAndTheDatabaseInTheLocalAppDataOfTheUser(t *testing.T) {
+func TestInitWritesAnEventsFileNextToTheConfig(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "")
+	r := h.kickdRaw("init")
+	want := h.path(".kickd", "event.example.yaml")
+	if r.code != 0 || !hasLine(r.stdout, "wrote "+want) {
+		t.Errorf("kickd init: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	if fileSize(want) == 0 {
+		t.Errorf("%s is empty or missing", want)
+	}
+}
+
+func TestInitPutsTheLogAndTheDatabaseInTheKickdDirectory(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "")
 	out := h.must("init")
-	for _, want := range []string{`log:      ~\AppData\Local\kickd\kickd.log`, `database: ~\AppData\Local\kickd\kickd.db`} {
+	for _, want := range []string{`log:      ~\.kickd\kickd.log`, `database: ~\.kickd\kickd.db`} {
 		if !hasLine(out, want) {
 			t.Errorf("kickd init has no line %q:\n%s", want, out)
 		}

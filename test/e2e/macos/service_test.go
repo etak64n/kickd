@@ -75,11 +75,11 @@ func launchAgent(t *testing.T) *service {
 	s := &service{
 		t:        t,
 		flags:    []string{"--user"},
-		config:   filepath.Join(home, "Library", "Application Support", "kickd", "config.yaml"),
-		log:      filepath.Join(home, "Library", "Logs", "kickd", "kickd.log"),
-		database: filepath.Join(home, "Library", "Application Support", "kickd", "kickd.db"),
+		config:   filepath.Join(home, ".kickd", "config.yaml"),
+		log:      filepath.Join(home, ".kickd", "kickd.log"),
+		database: filepath.Join(home, ".kickd", "kickd.db"),
 	}
-	s.removeAtEnd(filepath.Dir(s.config), filepath.Dir(s.log))
+	s.removeAtEnd(filepath.Dir(s.config))
 	s.must("mkdir", "-p", filepath.Dir(s.config))
 	s.must("cp", "testdata/service-agent/config.yaml", s.config)
 	s.install()
@@ -106,7 +106,7 @@ func (s *service) removeAtEnd(dirs ...string) {
 		s.kickd(s.action("stop")...)
 		s.kickd(s.action("uninstall")...)
 		for _, d := range dirs {
-			if filepath.Base(d) != "kickd" {
+			if b := filepath.Base(d); b != "kickd" && b != ".kickd" {
 				s.t.Errorf("not removing %s, which is not a directory of kickd", d)
 				continue
 			}

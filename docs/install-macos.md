@@ -50,20 +50,21 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 
 ## 2. Create the config file
 
-`kickd init` writes an example config to `~/Library/Application Support/kickd/config.yaml`.
-It puts the log of kickd in `~/Library/Logs/kickd/kickd.log`, and the database in `~/Library/Application Support/kickd/kickd.db`.
-The example is the macOS config of the README, with four events, one for each kind of trigger.
+`kickd init` writes two example files to `~/.kickd`: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+The config puts the log of kickd in `~/.kickd/kickd.log`, and the database in `~/.kickd/kickd.db`.
+The files are the macOS and Linux files of the README.
 Delete the events that are not needed, and change the paths to match the Mac.
+kickd reads the events of every `.yaml` and `.yml` file in `~/.kickd` that has an `events` section, so events can also go in files of their own, such as `~/.kickd/backup.yaml`.
 Watched directories and working directories must exist, so `kickd check` reports paths that do not exist as errors.
 
 ```sh
 kickd init
-"${EDITOR:-vi}" ~/Library/Application\ Support/kickd/config.yaml
+"${EDITOR:-vi}" ~/.kickd/event.example.yaml
 kickd check
 ```
 
-`kickd check` prints every error in the config file.
-When there are none, it prints where the log and the database go, and each event and its triggers.
+`kickd check` prints every error in the files.
+When there are none, it prints the files whose events it reads, where the log and the database go, and each event and its triggers.
 
 ## 3. Try it in the foreground
 
@@ -75,7 +76,7 @@ kickd run
 ```
 
 In the foreground, log records appear in the terminal as text, colored by level.
-With the example config, the same records are also written as JSON to `~/Library/Logs/kickd/kickd.log`.
+With the example config, the same records are also written as JSON to `~/.kickd/kickd.log`.
 
 ## 4. Run kickd as a LaunchAgent
 
@@ -144,7 +145,7 @@ Before relying on a watch there, put a file in the folder and check that the eve
 
 ## Logs of the service
 
-The service writes its log as JSON to the file set by `log.path`, which is `~/Library/Logs/kickd/kickd.log` with the example config.
+The service writes its log as JSON to the file set by `log.path`, which is `~/.kickd/kickd.log` with the example config.
 When the file grows past `log.max_size_mb`, kickd renames it to `kickd.log.1` and keeps up to `log.max_backups` old files.
 If kickd fails before it opens the log file, launchd writes that output to `~/kickd.err.log`.
 launchd also creates `~/kickd.out.log`.
@@ -179,6 +180,7 @@ A LaunchDaemon runs as root from the time the Mac starts, and its definition fil
 A LaunchDaemon runs as root, so `~` in the config file does not refer to the user's home folder.
 Write absolute paths in the config file, and give the config file with `-c` when installing.
 A config file outside the home folder gets absolute paths from `kickd init`: the log goes to `/Library/Logs/kickd/kickd.log`, and the database to `/Library/Application Support/kickd/kickd.db`.
+`kickd init` writes the example events to `event.example.yaml` in the same folder, and kickd reads the events of every YAML file of that folder.
 
 ```sh
 sudo kickd init -c "/Library/Application Support/kickd/config.yaml"
