@@ -131,7 +131,7 @@ func TestRunIDRefusesNoIDAndTwoIDs(t *testing.T) {
 	}
 }
 
-// The columns of kickd runs, kickd queue and kickd show.
+// The columns of kickd history and kickd show.
 
 func TestStatusTextSaysThatARunningRunWasAskedToStop(t *testing.T) {
 	if got := statusText(queue.Run{Status: queue.StatusRunning, CancelRequested: true}); got != "running (cancel requested)" {

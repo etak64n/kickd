@@ -76,6 +76,23 @@ func TestNoArgsExplainsThatTheUserAndNameFlagsAreGone(t *testing.T) {
 	}
 }
 
+// The subcommands that kickd v0.5 and earlier had fail with what to run
+// instead.
+
+func TestRunsFailsWithTheNameOfHistory(t *testing.T) {
+	_, cfg := writeConfig(t, eventConfig())
+	if code, _, errOut := ops(t, cfg, "runs", "--event", "deploy"); code != exitUsage || !strings.Contains(errOut, "kickd runs is now kickd history") {
+		t.Errorf("runs: %d %q", code, errOut)
+	}
+}
+
+func TestQueueFailsWithTheHistoryOfTheRunsThatWait(t *testing.T) {
+	_, cfg := writeConfig(t, eventConfig())
+	if code, _, errOut := ops(t, cfg, "queue"); code != exitUsage || !strings.Contains(errOut, "kickd history --status queued") {
+		t.Errorf("queue: %d %q", code, errOut)
+	}
+}
+
 func TestNoArgsRefusesArguments(t *testing.T) {
 	if err := noArgs("check", []string{"extra"}); err == nil || err.Error() != "kickd check takes no arguments: extra" {
 		t.Errorf("noArgs: %v", err)
@@ -88,8 +105,8 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code != 0 || !regexp.MustCompile(`^queued run 1 \(event deploy, request [0-9a-f]{16}\)\n$`).MatchString(out) || !strings.Contains(errOut, "the agent is not running") {
 		t.Fatalf("code=%d out=%q err=%q", code, out, errOut)
 	}
-	if code, out, _ := ops(t, cfg, "queue"); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+1\s+queued`).MatchString(out) {
-		t.Errorf("queue: %d %q", code, out)
+	if code, out, _ := ops(t, cfg, "history", "--status", "queued"); code != 0 || !regexp.MustCompile(`1\s+deploy\s+manual\s+queued`).MatchString(out) {
+		t.Errorf("history: %d %q", code, out)
 	}
 	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: has not started") || !strings.Contains(out, "1 queued") {
 		t.Errorf("status: %d %q", code, out)
@@ -169,8 +186,8 @@ func TestOpsWithAgent(t *testing.T) {
 	if code, out, _ := ops(t, cfg, "event", "boom", "--wait", "--json"); code != exitFailed || !strings.Contains(out, `"status": "failed"`) || !strings.Contains(out, `"exitCode": 7`) {
 		t.Errorf("failing wait: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, cfg, "runs", "--event", "boom"); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
-		t.Errorf("runs --event: %d %q", code, out)
+	if code, out, _ := ops(t, cfg, "history", "--event", "boom"); code != 0 || !strings.Contains(out, "boom") || strings.Contains(out, "deploy") {
+		t.Errorf("history --event: %d %q", code, out)
 	}
 	if code, out, _ := ops(t, cfg, "status"); code != 0 || !strings.Contains(out, "agent: running") {
 		t.Errorf("status: %d %q", code, out)

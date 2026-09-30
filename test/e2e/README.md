@@ -258,7 +258,7 @@ The examples of [Running commands](../../docs/commands.md).
 
 ### The commands of kickd
 
-The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, which config file kickd reads and writes, and the flags that kickd v0.4 and earlier took.
+The output of `kickd check`, `events`, `status`, `history` and `show`, which config file kickd reads and writes, and the flags and the subcommands that earlier versions of kickd took.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -272,6 +272,8 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, whi
 | `TestCommandsReadTheConfigInTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestEventRefusesAnEventWithoutAManualTrigger` | ✓ | ✓ | ✓ |
 | `TestEventsListsTheEventsWithTheirTriggers` | ✓ | ✓ | ✓ |
+| `TestHistoryFiltersTheRunsByStatus` | ✓ | ✓ | ✓ |
+| `TestHistoryListsTheRunsThatWait` | ✓ | ✓ | ✓ |
 | `TestInitDoesNotOverwriteAConfig` | ✓ | ✓ | ✓ |
 | `TestInitOfAnAdministratorPutsTheLogAndTheDatabaseInProgramData` |  |  | ✓ |
 | `TestInitOfAnAdministratorWritesTheConfigIntoProgramData` |  |  | ✓ |
@@ -280,12 +282,12 @@ The output of `kickd check`, `events`, `status`, `queue`, `runs` and `show`, whi
 | `TestInitWritesTheConfigIntoTheKickdDirectoryOfTheHome` | ✓ | ✓ |  |
 | `TestLicensesPrintTheLicenses` | ✓ | ✓ | ✓ |
 | `TestLogLevelInTheEnvironmentOverridesTheConfig` | ✓ | ✓ | ✓ |
-| `TestQueueShowsTheRunsThatWait` | ✓ | ✓ | ✓ |
-| `TestRunsFiltersTheHistoryByStatus` | ✓ | ✓ | ✓ |
 | `TestShowPrintsTheOutputOfARun` | ✓ | ✓ | ✓ |
 | `TestStatusReportsAStoppedAgent` | ✓ | ✓ |  |
 | `TestStatusReportsTheRunningAgent` | ✓ | ✓ | ✓ |
 | `TestTheConfigFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
+| `TestTheQueueCommandFailsWithTheReason` | ✓ | ✓ | ✓ |
+| `TestTheRunsCommandFailsWithTheReason` | ✓ | ✓ | ✓ |
 | `TestTheUserFlagFailsWithTheReason` | ✓ | ✓ | ✓ |
 | `TestVersionPrintsTheVersion` | ✓ | ✓ | ✓ |
 

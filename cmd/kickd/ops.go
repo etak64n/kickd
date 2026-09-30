@@ -34,9 +34,9 @@ const (
 	exitTimeout = 124 // --timeout expired, as timeout(1) reports
 )
 
-// runOps runs one of the operation subcommands: event, events, queue,
-// runs, show, cancel and status, on the config file at path. It returns
-// the exit code.
+// runOps runs one of the operation subcommands: event, events, history,
+// show, cancel and status, on the config file at path. It returns the exit
+// code.
 func runOps(path string, args []string, stdout, stderr io.Writer) int {
 	c := &cli{path: path, stdout: stdout, stderr: stderr}
 	var err error
@@ -45,10 +45,10 @@ func runOps(path string, args []string, stdout, stderr io.Writer) int {
 		return c.event(args[1:])
 	case "events":
 		err = c.events(args[1:])
-	case "queue":
-		err = c.queue(args[1:])
-	case "runs":
-		err = c.runs(args[1:])
+	case "history":
+		err = c.history(args[1:])
+	case "runs", "queue":
+		err = usageError{removedCommand(args[0])}
 	case "show":
 		err = c.show(args[1:])
 	case "cancel":
@@ -61,9 +61,6 @@ func runOps(path string, args []string, stdout, stderr io.Writer) int {
 	}
 	return c.exit(err)
 }
-
-// opsCommands are the subcommands that runOps handles.
-var opsCommands = map[string]bool{"event": true, "events": true, "queue": true, "runs": true, "show": true, "cancel": true, "status": true}
 
 type cli struct {
 	path           string // the config file
@@ -127,6 +124,14 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 		return nil, usageError{err.Error()}
 	}
 	return pos, nil
+}
+
+// removedCommand explains a subcommand that kickd v0.5 and earlier had.
+func removedCommand(name string) string {
+	if name == "queue" {
+		return "kickd queue is gone: kickd history lists the runs that run or wait first, and kickd history --status queued lists only the runs that wait"
+	}
+	return "kickd " + name + " is now kickd history, with the same flags"
 }
 
 // removedFlag explains a flag that kickd v0.4 and earlier took, and
@@ -399,17 +404,10 @@ func triggerNames(e config.Event) []string {
 	return out
 }
 
-func (c *cli) queue(args []string) error {
-	fs := flag.NewFlagSet("queue", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "print JSON")
-	if _, err := parse(fs, args); err != nil {
-		return err
-	}
-	return c.listRuns(queue.Filter{Statuses: []string{queue.StatusQueued, queue.StatusRunning, queue.StatusInterrupted}}, *asJSON, true)
-}
-
-func (c *cli) runs(args []string) error {
-	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
+// history lists the runs, newest first, so the runs that run or wait
+// come first.
+func (c *cli) history(args []string) error {
+	fs := flag.NewFlagSet("history", flag.ContinueOnError)
 	name := fs.String("event", "", "only this event")
 	status := fs.String("status", "", "only this status: queued, running, succeeded, failed, canceled, skipped, dropped, interrupted, retried, abandoned")
 	limit := fs.Int("limit", 20, "number of runs")
@@ -421,10 +419,6 @@ func (c *cli) runs(args []string) error {
 	if *status != "" {
 		f.Statuses = []string{*status}
 	}
-	return c.listRuns(f, *asJSON, false)
-}
-
-func (c *cli) listRuns(f queue.Filter, asJSON, openOnly bool) error {
 	cfg, err := c.load()
 	if err != nil {
 		return err
@@ -438,33 +432,18 @@ func (c *cli) listRuns(f queue.Filter, asJSON, openOnly bool) error {
 	if err != nil {
 		return err
 	}
-	if openOnly {
-		// Oldest first reads as the order in which the queue runs.
-		sort.Slice(runs, func(i, j int) bool { return runs[i].ID < runs[j].ID })
-	}
-	if asJSON {
+	if *asJSON {
 		return printJSON(c.stdout, runViews(runs))
 	}
 	if len(runs) == 0 {
-		if openOnly {
-			fmt.Fprintln(c.stdout, "the queue is empty")
-		} else {
-			fmt.Fprintln(c.stdout, "no runs")
-		}
+		fmt.Fprintln(c.stdout, "no runs")
 		return nil
 	}
 	tw := tabwriter.NewWriter(c.stdout, 0, 2, 2, ' ', 0)
-	if openOnly {
-		fmt.Fprintf(tw, "RUN\tEVENT\tTRIGGER\tATTEMPT\tSTATUS\tQUEUED\tREQUEST\n")
-		for _, r := range runs {
-			fmt.Fprintf(tw, "%d\t%s\t%s\t%d\t%s\t%s\t%s\n", r.ID, r.Event, r.TriggerID, r.Attempt, statusText(r), ago(r.CreatedAt), r.RequestID)
-		}
-	} else {
-		fmt.Fprintf(tw, "RUN\tEVENT\tTRIGGER\tSTATUS\tEXIT\tDURATION\tFINISHED\tDETAIL\n")
-		for _, r := range runs {
-			fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Event, r.TriggerID, statusText(r), exitText(r), durationText(r),
-				timeText(r.FinishedAt), orDash(reasonText(r)))
-		}
+	fmt.Fprintf(tw, "RUN\tEVENT\tTRIGGER\tSTATUS\tEXIT\tDURATION\tFINISHED\tDETAIL\n")
+	for _, r := range runs {
+		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Event, r.TriggerID, statusText(r), exitText(r), durationText(r),
+			timeText(r.FinishedAt), orDash(reasonText(r)))
 	}
 	return tw.Flush()
 }

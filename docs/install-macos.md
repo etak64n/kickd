@@ -117,7 +117,7 @@ sudo kickd service install
 sudo kickd service start
 ```
 
-With `sudo`, every kickd command reads the config for the whole machine, so the other commands for the LaunchDaemon run with `sudo` too, such as `sudo kickd event notify` and `sudo kickd runs`.
+With `sudo`, every kickd command reads the config for the whole machine, so the other commands for the LaunchDaemon run with `sudo` too, such as `sudo kickd event notify` and `sudo kickd history`.
 
 If kickd fails to start, the output is written to `/var/log/kickd.err.log`.
 

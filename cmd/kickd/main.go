@@ -36,9 +36,8 @@ Usage:
   kickd event   NAME [KEY=VALUE ...] [--data JSON] [--wait] [--timeout DURATION] [--json]
                                            Fire an event; --wait waits for the run and exits 0 only if it succeeds
   kickd events  [--json]                   List the events and what fires them
-  kickd queue   [--json]                   Show queued, running and interrupted runs
-  kickd runs    [--event NAME] [--status STATUS] [--limit N] [--json]
-                                           Show recent runs, newest first
+  kickd history [--event NAME] [--status STATUS] [--limit N] [--json]
+                                           Show recent runs, newest first, including those that run or wait
   kickd show    RUN_ID [--json]            Show one run, including its output
   kickd cancel  RUN_ID                     Cancel a queued run, or stop a running one
   kickd status  [--json]                   Show whether the agent is running and the queue size
@@ -76,7 +75,7 @@ func main() {
 		err = cmdInit(config.Path(), config.System(), os.Args[2:])
 	case "service":
 		err = cmdService(os.Args[2:])
-	case "event", "events", "queue", "runs", "show", "cancel", "status":
+	case "event", "events", "history", "show", "cancel", "status", "runs", "queue":
 		os.Exit(runOps(config.Path(), os.Args[1:], os.Stdout, os.Stderr))
 	case "licenses":
 		fmt.Print(licenses.Text)

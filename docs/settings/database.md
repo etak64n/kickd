@@ -5,7 +5,7 @@
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd records every run in its **database**, a SQLite file: runs that wait, runs that are running, and runs that have ended.
 The long-running kickd process, called the **agent**, starts the commands of the waiting runs.
-The other subcommands, such as `kickd event`, `kickd runs` and `kickd cancel`, read and write the same file, which is why `kickd event` works while the agent is stopped.
+The other subcommands, such as `kickd event`, `kickd history` and `kickd cancel`, read and write the same file, which is why `kickd event` works while the agent is stopped.
 
 The `database` section of the config file sets where the file is, and how long ended runs stay in it:
 
@@ -65,7 +65,7 @@ database:
 
 The agent deletes the runs that ended longer ago than this duration: when it starts, and then once an hour.
 Runs that wait, run, or were interrupted and wait for the next start of the agent stay, however old they are.
-A deleted run no longer appears in `kickd runs`, and `kickd show` reports it as not found.
+A deleted run no longer appears in `kickd history`, and `kickd show` reports it as not found.
 A negative duration is an error of the config file.
 
 ```yaml

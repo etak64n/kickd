@@ -41,7 +41,7 @@ A run is always in one of these statuses:
 
 Finished runs stay in the database for `database.retention`, 7 days by default.
 The history holds the status and exit code of each run, and the first 64 KB of its output when the event's `log_output` is `true`, the default.
-`kickd runs` lists the history, and `kickd show` displays one run.
+`kickd history` lists the runs, newest first, and `kickd show` displays one run.
 
 `database.path` gives the full path of the database, and without it, the database is `kickd.db` in the directory of the config file.
 `database.path` names another file, and `kickd check` prints where the database is.

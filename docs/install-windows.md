@@ -65,7 +65,7 @@ Watched directories and working directories must exist, so `kickd check` reports
 kickd records every run in its **database**, a SQLite file.
 For the config for the whole machine, `kickd init` puts the database at `C:\ProgramData\kickd\kickd.db`, and the log at `C:\ProgramData\kickd\kickd.log`, next to the config file.
 A database created by the service belongs to administrators and SYSTEM.
-In PowerShell opened as administrator, every kickd command reads the config for the whole machine and this database, so run `kickd event` and the other commands there, such as `kickd event notify` and `kickd runs`.
+In PowerShell opened as administrator, every kickd command reads the config for the whole machine and this database, so run `kickd event` and the other commands there, such as `kickd event notify` and `kickd history`.
 
 Write Windows paths in single quotes, as the examples do: in single quotes, a backslash (`\`) is an ordinary character.
 In double quotes, a backslash starts an escape sequence, so a double-quoted `C:\Data\Import` fails to load with `found unknown escape character`.

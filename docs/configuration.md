@@ -32,7 +32,7 @@ A service runs `kickd run` as the user of the service, so it reads the config fi
 - A LaunchAgent on macOS and a per-user unit of systemd on Linux run as the user who installed them, and read `~/.kickd/config.yaml` of that user.
 - A LaunchDaemon, a system-wide unit and the Windows service read the config for the whole machine.
 
-The commands that fire events and show runs, such as `kickd event` and `kickd runs`, find the database through the config file, so they reach the agent of the same user.
+The commands that fire events and show runs, such as `kickd event` and `kickd history`, find the database through the config file, so they reach the agent of the same user.
 `kickd event deploy` fires `deploy` of the kickd of the user, and `sudo kickd event deploy` fires `deploy` of the kickd for the whole machine.
 
 `kickd init` writes two example files next to the config file: `config.yaml`, and `event.example.yaml` with example events.
