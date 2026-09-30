@@ -127,6 +127,7 @@ With `kickd` installed, these steps define an event, run the agent and fire the 
    kickd show 1
    ```
 
+`kickd help` lists every subcommand, and `kickd help history` shows the flags of `kickd history`, which lists the runs.
 To keep kickd running in the background, install it as a service by following the installation guide for the OS.
 
 ## The config file
