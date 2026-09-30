@@ -59,6 +59,7 @@ nav:
       - Configuration: configuration.md
       - Runs: runs.md
       - Running commands: commands.md
+      - User accounts: users.md
       - Webhooks: webhook.md
       - Examples: https://github.com/etak64n/kickd/tree/main/examples
   - Settings:
@@ -79,7 +80,6 @@ nav:
       - Delivery guarantees and idempotency: internals/idempotency.md
       - How commands run: internals/execution.md
       - Platform differences: internals/platforms.md
-      - User accounts: internals/users.md
   - Project:
       - Known limitations: limitations.md
       - Building kickd: build.md

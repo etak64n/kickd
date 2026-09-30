@@ -20,6 +20,7 @@ The source, the releases and the examples are on [GitHub](https://github.com/eta
 - [Configuration](configuration.md): where the config lives, defining events, events in several files, applying changes, examples
 - [Runs](runs.md): how firings become runs, run statuses, interrupted runs, the database
 - [Running commands](commands.md): the environment of a command under each kind of service, the working directory and `PATH`, Python and Node.js
+- [User accounts](users.md): which user runs the agent and its commands, who can fire events, and the files that kickd creates
 - [Webhooks](webhook.md): authentication, request IDs, parameters, responses
 - [Examples](https://github.com/etak64n/kickd/tree/main/examples): complete config files for common tasks, such as deploys from GitHub, rebuilds, backups and certificate renewal
 
@@ -46,7 +47,6 @@ The source, the releases and the examples are on [GitHub](https://github.com/eta
 - [Delivery guarantees and idempotency](internals/idempotency.md): when a firing can be lost or repeated, and how to write commands that tolerate repeats
 - [How commands run](internals/execution.md): processes, environment, output, stopping, exit status
 - [Platform differences](internals/platforms.md): processes, signals, file watching, services and permissions on macOS, Linux and Windows
-- [User accounts](internals/users.md): which user runs the agent and its commands, who can fire events, and the files that kickd creates
 
 ## Project
 
