@@ -26,10 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # MkDocs 2.0 drops the plugins and the themes that Material for MkDocs
+      # needs, so the site stays on MkDocs 1.
       - name: Install MkDocs
         run: |
           python3 -m venv "$RUNNER_TEMP/mkdocs"
-          "$RUNNER_TEMP/mkdocs/bin/pip" install --quiet 'mkdocs-material~=9.5'
+          "$RUNNER_TEMP/mkdocs/bin/pip" install --quiet 'mkdocs-material~=9.5' 'mkdocs<2'
 
       # mkdocs.yml sets strict, so a broken link or anchor fails the build.
       - name: Build
