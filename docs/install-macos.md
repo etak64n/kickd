@@ -49,6 +49,7 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 ## 2. Create the config file
 
 `kickd init` writes two example files to `~/.kickd`: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+`kickd init --no-examples` writes the config file alone, for events that come in a file of their own.
 The config puts the log of kickd in `~/.kickd/kickd.log`, and the database in `~/.kickd/kickd.db`.
 The files are the macOS and Linux files of the README.
 Delete the events that are not needed, and change the paths to match the Mac.
@@ -96,6 +97,7 @@ When background activity for kickd is turned off in System Settings > General > 
 
 When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
+An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
@@ -171,6 +173,24 @@ events:
 
 `env` adds environment variables for the command, and `${PATH}` in its values expands to the `PATH` of kickd itself.
 `kickd check` prints the `PATH` that each event sets.
+The [`env` of the config file](settings/events.md#for-every-event) sets a `PATH` for every event at once.
+
+## Locale under launchd
+
+launchd starts kickd without `LANG` and the other locale variables, so the commands of a service run in the C locale, while the same commands run in the locale of the shell under `kickd run` in a terminal.
+Programs then treat text differently: for example, the `/bin/sh` of macOS, bash 3.2, reads `$VERSION（` as a variable whose name ends with the first byte of `（` when `LANG` is UTF-8, but not in the C locale.
+Set the locale that the commands expect in the `env` of the config file, so that they run the same way under the service and in a terminal:
+
+```yaml
+env:
+  LANG: 'en_US.UTF-8'
+events:
+  - name: report
+    command: ['./report.sh']
+    workdir: '~/reports'
+    triggers:
+      - type: manual
+```
 
 ## Access to protected folders
 

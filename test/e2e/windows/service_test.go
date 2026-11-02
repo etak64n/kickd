@@ -6,7 +6,7 @@ package windows
 // Windows service, as docs/install-windows.md does, create folders at the
 // root of C:, and move the clock. They run only with KICKD_MACHINE_TEST=1,
 // which the CI sets on its throwaway machines. They run one at a time,
-// because every service listens on port 8787.
+// because every service listens on port 9787.
 
 import (
 	"bytes"
@@ -230,7 +230,7 @@ func TestServiceRunsCommandsAsSystem(t *testing.T) {
 
 func TestServiceAcceptsAWebhookRequest(t *testing.T) {
 	s := windowsService(t)
-	res := request(t, "POST", 8787, "/hooks/whoami", "", "Authorization", "Bearer whoami-token")
+	res := request(t, "POST", 9787, "/hooks/whoami", "", "Authorization", "Bearer whoami-token")
 	var accepted struct{ RequestID string }
 	if res.status != 202 || json.Unmarshal([]byte(res.body), &accepted) != nil {
 		t.Fatalf("POST /hooks/whoami: %d %s", res.status, res.body)

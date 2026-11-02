@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -26,12 +28,20 @@ const (
 	PolicySkip     = "skip"
 	PolicyQueue    = "queue"
 	PolicyParallel = "parallel"
+	PolicyReplace  = "replace"
 )
 
 // Stdin modes.
 const (
 	StdinNone    = "none"
 	StdinPayload = "payload"
+)
+
+// Restart policies, as config.Event.Restart spells them.
+const (
+	RestartNever     = "never"
+	RestartOnFailure = "on-failure"
+	RestartAlways    = "always"
 )
 
 // Interruption handling, as config.Event.OnInterrupt spells it.
@@ -54,21 +64,46 @@ var killGrace = 10 * time.Second
 
 // Spec is what the runner needs to know about a named event.
 type Spec struct {
-	Name        string
-	Command     []string
-	Shell       string
-	Workdir     string
-	Env         map[string]string
-	Timeout     time.Duration
+	Name    string
+	Command []string
+	Shell   string
+	Workdir string
+	Env     map[string]string
+	// BaseEnv is the env of the config file, which every event gets under
+	// its own Env.
+	BaseEnv map[string]string
+	Timeout time.Duration
+	// StopCommand or StopShell asks a running command to stop before kickd
+	// sends it SIGTERM. StopTimeout is how long each of the two steps may
+	// take; without it, killGrace applies.
+	StopCommand []string
+	StopShell   string
+	StopTimeout time.Duration
 	Concurrency string
-	OnInterrupt string
-	MaxAttempts int
-	Stdin       string
-	LogOutput   bool
+	// Restart, as config.Event.Restart spells it, decides whether kickd
+	// starts the event again after a run ends; RestartDelay is the first
+	// delay, which doubles up to RestartMaxDelay.
+	Restart         string
+	RestartDelay    time.Duration
+	RestartMaxDelay time.Duration
+	OnInterrupt     string
+	MaxAttempts     int
+	Stdin           string
+	LogOutput       bool
+	// Output, when not nil, is a file to which the output is appended.
+	Output *Output
 	// Defaults fills in parameters that a firing does not set.
 	Defaults map[string]string
 	// After lists the events whose runs fire this event when they end.
 	After []AfterTrigger
+}
+
+// Output is a file that receives the output of an event's runs, with the
+// rotation of the log file.
+type Output struct {
+	Path       string
+	MaxBytes   int64
+	MaxBackups int
 }
 
 // AfterTrigger fires an event when a run of Event ends with one of
@@ -97,13 +132,18 @@ type Runner struct {
 	log      *slog.Logger
 	inflight *inflight
 
+	// outputs are the open output files, shared by the runs that write to
+	// the same file at once.
+	outMu   sync.Mutex
+	outputs map[string]*sharedOutput
+
 	processed, succeeded, failed, canceled, interrupted, skipped, dropped atomic.Int64
 }
 
 // New creates a runner. base is a logger without requestId; procID is the
 // request ID used for lines that do not belong to one run.
 func New(ctx context.Context, base *slog.Logger, procID string) *Runner {
-	return &Runner{ctx: ctx, base: base, log: base.With("requestId", procID), inflight: newInflight()}
+	return &Runner{ctx: ctx, base: base, log: base.With("requestId", procID), inflight: newInflight(), outputs: map[string]*sharedOutput{}}
 }
 
 // Wait blocks until every in-flight run has finished.
@@ -247,11 +287,23 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	tail := &tailBuffer{maxLines: tailLines, maxBytes: tailBytes}
 	stdout := &lineWriter{log: log, stream: "stdout", capture: capture, emit: spec.LogOutput}
 	stderr := &lineWriter{log: log, stream: "stderr", capture: capture, tail: tail, emit: spec.LogOutput}
+	if spec.Output != nil {
+		if f, release, err := r.openOutput(log, *spec.Output); err != nil {
+			log.Warn("Output file unavailable", "file", spec.Output.Path, logging.Err(err))
+		} else {
+			defer release()
+			stdout.file, stderr.file = f, f
+		}
+	}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	setSysProcAttr(cmd)
-	cmd.Cancel = func() error { return terminate(cmd) }
-	cmd.WaitDelay = killGrace
+	grace := spec.StopTimeout
+	if grace <= 0 {
+		grace = killGrace
+	}
+	cmd.Cancel = func() error { return r.stop(ctx, log, spec, cmd, env, grace) }
+	cmd.WaitDelay = grace
 
 	log.Info("Run started", append([]any{"triggerId", ev.TriggerID}, eventAttrs(ev)...)...)
 	if log.Enabled(context.Background(), slog.LevelDebug) {
@@ -287,10 +339,14 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	case ctx.Err() != nil:
 		res.Error, reason = "canceled", "shutdown"
 		msg, level = "Run interrupted", slog.LevelWarn
-		if errors.Is(context.Cause(ctx), event.ErrCanceledByUser) {
+		switch cause := context.Cause(ctx); {
+		case errors.Is(cause, event.ErrCanceledByUser):
 			reason, msg = "canceled_by_user", "Run canceled"
 			r.canceled.Add(1)
-		} else {
+		case errors.Is(cause, event.ErrReplaced):
+			reason, msg, level = "replaced", "Run replaced", slog.LevelInfo
+			r.canceled.Add(1)
+		default:
 			r.interrupted.Add(1)
 		}
 	case waitErr != nil && res.ExitCode == 0:
@@ -335,16 +391,149 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	return res
 }
 
+// sharedOutput is an output file that runs write to at once.
+type sharedOutput struct {
+	w    io.WriteCloser
+	refs int
+}
+
+// openOutput opens the output file of a run, or shares the one that
+// another run of the same file has open. release closes it after the last
+// run that writes to it.
+func (r *Runner) openOutput(log *slog.Logger, o Output) (io.Writer, func(), error) {
+	r.outMu.Lock()
+	defer r.outMu.Unlock()
+	s := r.outputs[o.Path]
+	if s == nil {
+		w, err := logging.OpenRotating(o.Path, o.MaxBytes, o.MaxBackups, rotationReport{log: log, file: o.Path})
+		if err != nil {
+			return nil, nil, err
+		}
+		s = &sharedOutput{w: w}
+		r.outputs[o.Path] = s
+	}
+	s.refs++
+	return s.w, func() {
+		r.outMu.Lock()
+		defer r.outMu.Unlock()
+		if s.refs--; s.refs == 0 {
+			delete(r.outputs, o.Path)
+			if err := s.w.Close(); err != nil {
+				log.Warn("Output file close failed", "file", o.Path, logging.Err(err))
+			}
+		}
+	}, nil
+}
+
+// rotationReport logs the failures that the rotation of an output file
+// reports.
+type rotationReport struct {
+	log  *slog.Logger
+	file string
+}
+
+func (w rotationReport) Write(p []byte) (int, error) {
+	w.log.Warn("Output rotation failed", "file", w.file, "detail", strings.TrimSpace(string(p)))
+	return len(p), nil
+}
+
+// stop asks a running command to stop. It runs the stop command of the
+// event first, when the event has one, and waits for it up to grace; then
+// it sends SIGTERM to the process group of the command. os/exec kills the
+// command when it is still running grace after stop returns.
+func (r *Runner) stop(ctx context.Context, log *slog.Logger, spec Spec, cmd *exec.Cmd, env []string, grace time.Duration) error {
+	if spec.StopShell != "" || len(spec.StopCommand) > 0 {
+		r.runStopCommand(log, spec, append(env, "KICKD_STOP_REASON="+stopReason(ctx)), grace)
+	}
+	return terminate(cmd)
+}
+
+// stopReason names why a run is being stopped, for KICKD_STOP_REASON.
+func stopReason(ctx context.Context) string {
+	cause := context.Cause(ctx)
+	switch {
+	case errors.Is(cause, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(cause, event.ErrCanceledByUser):
+		return "canceled"
+	case errors.Is(cause, event.ErrReplaced):
+		return "replaced"
+	}
+	return "shutdown"
+}
+
+// runStopCommand runs the stop command of spec in the working directory
+// and the environment of the run, and logs how it ended. A stop command
+// that runs past grace is stopped like a command that runs past its
+// timeout.
+func (r *Runner) runStopCommand(log *slog.Logger, spec Spec, env []string, grace time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), grace)
+	defer cancel()
+	stopSpec := Spec{Command: spec.StopCommand, Shell: spec.StopShell}
+	sc := buildCommand(ctx, stopSpec, env)
+	sc.Dir = spec.Workdir
+	sc.Env = env
+	tail := &tailBuffer{maxLines: tailLines, maxBytes: tailBytes}
+	sc.Stdout = tailWriter{tail}
+	sc.Stderr = tailWriter{tail}
+	setSysProcAttr(sc)
+	sc.Cancel = func() error { return terminate(sc) }
+	sc.WaitDelay = time.Second
+	start := time.Now()
+	log.Info("Stop command started", "stopTimeoutMs", grace.Milliseconds())
+	if log.Enabled(context.Background(), slog.LevelDebug) {
+		log.Debug("Running stop command", "command", logging.Mask(displayCommand(stopSpec)), "workdir", spec.Workdir)
+	}
+	err := sc.Run()
+	if ctx.Err() != nil {
+		if kerr := killTree(sc); kerr != nil {
+			log.Warn("Process group kill failed", logging.Err(kerr))
+		}
+	}
+	attrs := []any{"durationMs", time.Since(start).Milliseconds()}
+	if sc.ProcessState != nil {
+		attrs = append(attrs, "exitCode", sc.ProcessState.ExitCode())
+	}
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		attrs = append(attrs, "reason", "timeout", "thresholdMs", grace.Milliseconds())
+	case err != nil && sc.ProcessState == nil:
+		attrs = append(attrs, "reason", "start_failed", logging.Err(err))
+	case err != nil:
+		attrs = append(attrs, "reason", "exit_code")
+	}
+	if err != nil {
+		if t := tail.String(); t != "" {
+			attrs = append(attrs, "stderrTail", logging.Mask(t))
+		}
+		log.Warn("Stop command failed", attrs...)
+		return
+	}
+	log.Info("Stop command completed", attrs...)
+}
+
+// tailWriter keeps the last lines written to it.
+type tailWriter struct{ t *tailBuffer }
+
+func (w tailWriter) Write(p []byte) (int, error) {
+	w.t.Write(p)
+	return len(p), nil
+}
+
 // canceledBeforeStart ends a run whose context was canceled before its
 // process started: a stop of kickd interrupts the run, and a cancel by the
 // user cancels it, as they would while the process runs.
 func (r *Runner) canceledBeforeStart(log *slog.Logger, ctx context.Context, start time.Time) event.Result {
 	res := event.Result{ExitCode: -1, Duration: time.Since(start), Error: "canceled", Reason: "shutdown"}
 	msg := "Run interrupted"
-	if errors.Is(context.Cause(ctx), event.ErrCanceledByUser) {
+	switch cause := context.Cause(ctx); {
+	case errors.Is(cause, event.ErrCanceledByUser):
 		res.Reason, msg = "canceled_by_user", "Run canceled"
 		r.canceled.Add(1)
-	} else {
+	case errors.Is(cause, event.ErrReplaced):
+		res.Reason, msg = "replaced", "Run replaced"
+		r.canceled.Add(1)
+	default:
 		r.interrupted.Add(1)
 	}
 	r.processed.Add(1)
@@ -391,20 +580,44 @@ func buildCommand(ctx context.Context, spec Spec, env []string) *exec.Cmd {
 	return cmd
 }
 
-// buildEnv layers the job environment and the event variables over the
-// agent environment. Values in spec.Env may reference ${VAR}.
+// buildEnv layers the env of the config file, the env of the event and the
+// event variables over the agent environment. ${VAR} in a value of a layer
+// is VAR as the layers below give it.
 func buildEnv(spec Spec, ev event.Event, eventFile string) []string {
 	env := os.Environ()
-	keys := make([]string, 0, len(spec.Env))
-	for k := range spec.Env {
-		keys = append(keys, k)
+	set := map[string]string{} // what the layers set, by envKey
+	lookup := func(k string) string {
+		if v, ok := set[envKey(k)]; ok {
+			return v
+		}
+		return os.Getenv(k)
 	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		env = append(env, k+"="+os.ExpandEnv(spec.Env[k]))
+	for _, layer := range []map[string]string{spec.BaseEnv, spec.Env} {
+		keys := make([]string, 0, len(layer))
+		for k := range layer {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		values := make([]string, len(keys))
+		for i, k := range keys {
+			values[i] = os.Expand(layer[k], lookup)
+		}
+		for i, k := range keys {
+			env = append(env, k+"="+values[i])
+			set[envKey(k)] = values[i]
+		}
 	}
 	env = append(env, ev.Env()...)
 	return append(env, "KICKD_PAYLOAD_FILE="+eventFile)
+}
+
+// envKey is the name of an environment variable as the OS compares it:
+// Windows ignores case.
+func envKey(k string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToUpper(k)
+	}
+	return k
 }
 
 func writeEventFile(payload []byte) (string, error) {
@@ -521,7 +734,10 @@ type lineWriter struct {
 	capture *capBuffer
 	tail    *tailBuffer
 	emit    bool
-	buf     []byte
+	// file, when not nil, receives the output in whole lines, as the
+	// capture does.
+	file io.Writer
+	buf  []byte
 	// pending is the end of the output that has no newline yet. The capture,
 	// which both streams share, takes whole lines, so that a line of one
 	// stream does not split a line of the other.
@@ -532,9 +748,11 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 	w.pending = append(w.pending, p...)
 	if i := bytes.LastIndexByte(w.pending, '\n'); i >= 0 {
 		w.capture.Write(w.pending[:i+1])
+		w.toFile(w.pending[:i+1])
 		w.pending = append([]byte(nil), w.pending[i+1:]...)
 	} else if len(w.pending) > maxLogLine {
 		w.capture.Write(w.pending)
+		w.toFile(w.pending)
 		w.pending = nil
 	}
 	if w.tail != nil {
@@ -562,11 +780,20 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 func (w *lineWriter) flush() {
 	if len(w.pending) > 0 {
 		w.capture.Write(w.pending)
+		w.toFile(append(w.pending, '\n'))
 		w.pending = nil
 	}
 	if len(w.buf) > 0 {
 		w.line(w.buf)
 		w.buf = nil
+	}
+}
+
+// toFile appends b to the output file. A failed write does not stop the
+// command; the file's own rotation reports what it can.
+func (w *lineWriter) toFile(b []byte) {
+	if w.file != nil {
+		_, _ = w.file.Write(b)
 	}
 }
 

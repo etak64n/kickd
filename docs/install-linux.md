@@ -36,6 +36,7 @@ Move the executable to `/usr/local/bin` before installing the service.
 A kickd installed as a system-wide unit runs as root, and runs the commands in its config as root.
 Run as root, kickd reads the config for the whole machine, `/etc/kickd/config.yaml`, in a directory that only root can change.
 With `sudo`, `kickd init` writes two files there, each readable and writable only by its owner: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+`kickd init --no-examples` writes the config file alone, for events that come in a file of their own.
 
 ```sh
 sudo kickd init
@@ -101,6 +102,7 @@ When the config file, or another YAML file next to it, is saved, the agent reloa
 
 When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
+An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 

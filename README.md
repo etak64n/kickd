@@ -46,7 +46,8 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 ## Features
 
 - **Recovery after a stop or crash**: each event chooses whether a run that was cut off starts again or is given up.
-- **Overlap control**: each event chooses whether a firing that arrives while it is running is skipped, queued, or run at the same time.
+- **Overlap control**: each event chooses whether a firing that arrives while it is running is skipped, queued, run at the same time, or replaces the run.
+- **Long-running commands**: `restart` starts a command again when it exits, with a delay that grows while it keeps failing, `stop_command` stops a program that ignores SIGTERM, and `output` keeps its output in a file that kickd rotates.
 - **Time limits**: commands that run past their limit are stopped.
 - **Live reload**: saving the config file, or a file of events next to it, applies the change without a restart.
 - **Events in several files**: each group of events can have a YAML file of its own next to the config file.
@@ -135,7 +136,7 @@ To keep kickd running in the background, install it as a service by following th
 kickd reads its settings from `~/.kickd/config.yaml`, and its events from the YAML files in `~/.kickd`.
 Run as root with `sudo`, or as an administrator on Windows, kickd reads the config for the whole machine instead: from `/etc/kickd` on Linux, `/Library/Application Support/kickd` on macOS, and `C:\ProgramData\kickd` on Windows.
 A service of the whole machine runs its commands as root, or as SYSTEM on Windows, so only root and administrators can change the files of that config.
-`config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default.
+`config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default; an `env` section can add environment variables for every event.
 Events are listed under `events`, in `config.yaml` or in any other `.yaml` or `.yml` file of the directory: kickd reads every file there that has an `events` section, so each group of events, such as those of one app, can have a file of its own.
 
 Commands, shells and paths differ between operating systems, so the files are written for one OS.
@@ -162,7 +163,7 @@ log:
 
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  listen: '127.0.0.1:9787'   # the HTTP server starts only when an event has a webhook trigger
   max_body_bytes: 1048576    # the largest request body accepted
 
 database:
@@ -254,7 +255,7 @@ log:
 
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  listen: '127.0.0.1:9787'   # the HTTP server starts only when an event has a webhook trigger
   max_body_bytes: 1048576    # the largest request body accepted
 
 database:

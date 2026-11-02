@@ -133,9 +133,10 @@ Every file there whose name ends in `.yaml` or `.yml`, and that has an `events` 
 
 The rules of these files are:
 
-- **What they hold**: an `events` section, in the same form as that of the config file. The `log`, `webhook` and `database` sections belong in the config file, and another file that has one is an error.
+- **What they hold**: an `events` section, in the same form as that of the config file. The `log`, `webhook`, `database` and `env` sections belong in the config file, and another file that has one is an error.
 - **Which files count**: the files directly in the directory. kickd reads no subdirectories, so a directory such as `~/.kickd/disabled` keeps files out of the config.
 - **Files without events**: a YAML file without an `events` section is left out, and `kickd check` names it as not read.
+- **Links**: a symbolic link to a file counts as the file, so the events of an app can stay in its repository, with a link to them in the directory.
 - **Order**: the events of the config file come first, then those of the other files in the order of the file names.
 - **Names**: event names are unique across all the files, and an after trigger can follow an event of another file.
 - **Paths**: a relative path in any of the files starts at the directory of the config file.
@@ -187,6 +188,7 @@ A Windows service sees only the system `PATH`.
 
 The agent watches the directory of its config file.
 When the config file, or another YAML file of the directory, is saved, added or removed, the agent waits 0.5 seconds and reloads the config from all the files.
+When one of those files is a symbolic link, the agent also watches the file that it points to, so that saving that file, or pulling the repository that holds it, reloads the config too.
 On macOS and Linux, SIGHUP also makes the agent reload.
 
 When the new config is valid, the agent rebuilds its triggers.
@@ -275,7 +277,7 @@ This event has two triggers: it fires on a POST to `/hooks/deploy`, and on `kick
 
 ```yaml
 webhook:
-  listen: '127.0.0.1:8787'
+  listen: '127.0.0.1:9787'
 events:
   - name: deploy
     command: ['/home/me/app/deploy.sh']
@@ -299,7 +301,7 @@ From the command line, the parameter is passed as `kickd event deploy ref=v1.2`.
 Through the webhook, it is passed in the query:
 
 ```sh
-curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:8787/hooks/deploy?ref=v1.2"
+curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:9787/hooks/deploy?ref=v1.2"
 ```
 
 A command such as `openssl rand -hex 32` generates a suitable token.

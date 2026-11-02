@@ -102,6 +102,20 @@ func helperMain() {
 		signal.Ignore(syscall.SIGTERM)
 		time.Sleep(20 * time.Second)
 		os.Exit(0)
+	case "wait-stopfile":
+		// Ignore SIGTERM and exit when the stop command writes the file
+		// KICKD_HELPER_STOPFILE, printing what it wrote.
+		signal.Ignore(syscall.SIGTERM)
+		fmt.Println("ready")
+		deadline := time.Now().Add(20 * time.Second)
+		for time.Now().Before(deadline) {
+			if b, err := os.ReadFile(os.Getenv("KICKD_HELPER_STOPFILE")); err == nil {
+				fmt.Println("STOP=" + string(b))
+				os.Exit(0)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		os.Exit(1)
 	case "trap-term":
 		// Exit with code 0 as soon as SIGTERM arrives.
 		ch := make(chan os.Signal, 1)
@@ -568,5 +582,77 @@ func TestExecuteBackgroundProcessWithClosedOutput(t *testing.T) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("run took %s", d)
+	}
+}
+
+func TestOutputFileReceivesTheOutputInLines(t *testing.T) {
+	r, _, _ := newRunner(t)
+	path := filepath.Join(t.TempDir(), "logs", "demo.log")
+	job := helperJob("exit")
+	job.Output = &Output{Path: path, MaxBackups: 2}
+	job.LogOutput = false
+	r.Execute(context.Background(), job, fileEvent())
+	r.Execute(context.Background(), job, fileEvent())
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	for _, line := range []string{"some stdout\n", "first problem\n", "failing on purpose token=abc123\n"} {
+		if strings.Count(got, line) != 2 {
+			t.Errorf("the output file has %q %d times, want 2 (one per run):\n%s", line, strings.Count(got, line), got)
+		}
+	}
+}
+
+func TestOutputFileRotates(t *testing.T) {
+	r, _, _ := newRunner(t)
+	path := filepath.Join(t.TempDir(), "demo.log")
+	job := helperJob("exit")
+	job.Output = &Output{Path: path, MaxBytes: 40, MaxBackups: 1}
+	for range 3 {
+		r.Execute(context.Background(), job, fileEvent())
+	}
+	if _, err := os.Stat(path + ".1"); err != nil {
+		t.Fatalf("no rotated file: %v", err)
+	}
+	if _, err := os.Stat(path + ".2"); err == nil {
+		t.Fatal("max_backups 1 kept a second generation")
+	}
+}
+
+func TestOutputFileThatCannotOpenDoesNotStopTheRun(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := helperJob("short")
+	job.Output = &Output{Path: filepath.Join(blocker, "out.log")}
+	if res := r.Execute(context.Background(), job, fileEvent()); res.ExitCode != 0 || res.Error != "" {
+		t.Fatalf("result = %+v", res)
+	}
+	if got := rec.find("Output file unavailable"); len(got) != 1 {
+		t.Fatalf("Output file unavailable logged %d times", len(got))
+	}
+}
+
+func TestEnvOfTheConfigFileIsUnderTheEnvOfTheEvent(t *testing.T) {
+	t.Setenv("KICKD_TEST_BASE", "agent")
+	spec := Spec{
+		BaseEnv: map[string]string{"LAYER": "base", "ONLY_BASE": "b", "CHAIN": "base:${KICKD_TEST_BASE}"},
+		Env:     map[string]string{"LAYER": "event", "FROM_BASE": "${ONLY_BASE}-event", "CHAIN": "event:${CHAIN}"},
+	}
+	env := buildEnv(spec, fileEvent(), "payload.json")
+	for k, want := range map[string]string{
+		"LAYER":     "event",
+		"ONLY_BASE": "b",
+		"FROM_BASE": "b-event",
+		"CHAIN":     "event:base:agent",
+	} {
+		if got := envValue(env, k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
 	}
 }

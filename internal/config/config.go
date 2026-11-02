@@ -89,6 +89,14 @@ const (
 	ConcurrencySkip     = "skip"
 	ConcurrencyQueue    = "queue"
 	ConcurrencyParallel = "parallel"
+	ConcurrencyReplace  = "replace"
+)
+
+// When kickd starts an event again after its run ends.
+const (
+	RestartNever     = "never"      // only its triggers start it
+	RestartOnFailure = "on-failure" // after a run that failed
+	RestartAlways    = "always"     // after a run that succeeded or failed
 )
 
 // What to do with a run that was cut off because kickd or the machine
@@ -137,7 +145,7 @@ var AfterStatuses = []string{"succeeded", "failed", "canceled", "skipped", "drop
 
 // Defaults applied when a field is left empty.
 const (
-	DefaultListen       = "127.0.0.1:8787"
+	DefaultListen       = "127.0.0.1:9787"
 	DefaultDebounce     = time.Second
 	DefaultLogLevel     = "info"
 	DefaultLogFormat    = "auto"
@@ -146,6 +154,11 @@ const (
 	DefaultDatabasePath = "kickd.db"
 	DefaultRetention    = 7 * 24 * time.Hour
 	DefaultMaxAttempts  = 3
+	DefaultStopTimeout  = 10 * time.Second
+	// The delay before the first restart of an event, which doubles for
+	// each restart that follows a short run, up to the maximum.
+	DefaultRestartDelay    = time.Second
+	DefaultRestartMaxDelay = time.Minute
 )
 
 // Environment variables that override the log settings of the file, as
@@ -167,7 +180,10 @@ type Config struct {
 	Log      Log      `yaml:"log"`
 	Webhook  Webhook  `yaml:"webhook"`
 	Database Database `yaml:"database"`
-	Events   []Event  `yaml:"events"`
+	// Env sets environment variables for the commands of every event, under
+	// the env of each event.
+	Env    map[string]string `yaml:"env"`
+	Events []Event           `yaml:"events"`
 
 	// Path is the absolute path of the loaded file and Dir its directory.
 	// Relative paths in the file are resolved against Dir.
@@ -215,24 +231,34 @@ type Database struct {
 // runs are scheduled. "kickd event NAME" fires any event; triggers fire it
 // automatically.
 type Event struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description"`
-	Run         Command           `yaml:"command"`
-	Workdir     string            `yaml:"workdir"`
-	Env         map[string]string `yaml:"env"`
-	Timeout     time.Duration     `yaml:"timeout"`
-	Concurrency string            `yaml:"concurrency"`
-	OnInterrupt string            `yaml:"on_interrupt"`
-	MaxAttempts int               `yaml:"max_attempts"`
-	Stdin       string            `yaml:"stdin"`
-	LogOutput   *bool             `yaml:"log_output"`
-	Params      []Param           `yaml:"params"`
-	Triggers    []Trigger         `yaml:"triggers"`
+	Name            string            `yaml:"name"`
+	Description     string            `yaml:"description"`
+	Run             Command           `yaml:"command"`
+	Workdir         string            `yaml:"workdir"`
+	Env             map[string]string `yaml:"env"`
+	Timeout         time.Duration     `yaml:"timeout"`
+	StopRun         Command           `yaml:"stop_command"`
+	StopTimeout     time.Duration     `yaml:"stop_timeout"`
+	Concurrency     string            `yaml:"concurrency"`
+	Restart         string            `yaml:"restart"`
+	RestartDelay    time.Duration     `yaml:"restart_delay"`
+	RestartMaxDelay time.Duration     `yaml:"restart_max_delay"`
+	OnInterrupt     string            `yaml:"on_interrupt"`
+	MaxAttempts     int               `yaml:"max_attempts"`
+	Stdin           string            `yaml:"stdin"`
+	LogOutput       *bool             `yaml:"log_output"`
+	Output          *Output           `yaml:"output"`
+	Params          []Param           `yaml:"params"`
+	Triggers        []Trigger         `yaml:"triggers"`
 
 	// Command and Shell hold Run once the file is loaded: the program and
 	// the arguments of a list, or the string that the shell runs.
 	Command []string `yaml:"-"`
 	Shell   string   `yaml:"-"`
+	// StopCommand or StopShell is the resolved stop_command: what kickd
+	// runs to ask a running command to stop, before it sends SIGTERM.
+	StopCommand []string `yaml:"-"`
+	StopShell   string   `yaml:"-"`
 	// File is the absolute path of the file that defines the event, and
 	// Index the position of the event in the events section of that file.
 	File  string `yaml:"-"`
@@ -258,6 +284,14 @@ func (c *Command) UnmarshalYAML(n *yaml.Node) error {
 		return n.Decode(&c.Args)
 	}
 	return fmt.Errorf("line %d: command must be a string or a list of strings", n.Line)
+}
+
+// Output is a file to which kickd appends the output of the command,
+// which it renames and keeps generations of as it does the log file.
+type Output struct {
+	Path       string `yaml:"path"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
 }
 
 // LogsOutput reports whether command output is written to the log.
@@ -608,6 +642,22 @@ func (c *Config) applyDefaults() {
 		if e.Run.Shell != "" || e.Run.Args != nil {
 			e.Command, e.Shell = e.Run.Args, e.Run.Shell
 		}
+		if e.StopRun.Shell != "" || e.StopRun.Args != nil {
+			e.StopCommand, e.StopShell = e.StopRun.Args, e.StopRun.Shell
+		}
+		if e.StopTimeout == 0 {
+			e.StopTimeout = DefaultStopTimeout
+		}
+		e.Restart = strings.ToLower(strings.TrimSpace(e.Restart))
+		if e.Restart == "" {
+			e.Restart = RestartNever
+		}
+		if e.RestartDelay == 0 {
+			e.RestartDelay = DefaultRestartDelay
+		}
+		if e.RestartMaxDelay == 0 {
+			e.RestartMaxDelay = max(DefaultRestartMaxDelay, e.RestartDelay)
+		}
 		if e.Concurrency == "" {
 			e.Concurrency = ConcurrencySkip
 		}
@@ -626,6 +676,15 @@ func (c *Config) applyDefaults() {
 			e.Workdir = c.Dir
 		}
 		e.Workdir = c.resolve(e.Workdir)
+		if e.Output != nil {
+			e.Output.Path = c.resolve(e.Output.Path)
+			if e.Output.MaxSizeMB == 0 {
+				e.Output.MaxSizeMB = DefaultLogSizeMB
+			}
+			if e.Output.MaxBackups == 0 {
+				e.Output.MaxBackups = DefaultLogBackups
+			}
+		}
 		for k := range e.Triggers {
 			t := &e.Triggers[k]
 			t.Type = strings.ToLower(strings.TrimSpace(t.Type))
@@ -733,8 +792,17 @@ func (c *Config) validate() error {
 		case len(e.Command) > 0 && e.Command[0] == "":
 			fail("%s: the program of command must not be empty", where)
 		}
-		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel}, e.Concurrency) {
-			fail("%s: concurrency %q must be skip, queue or parallel", where, e.Concurrency)
+		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel, ConcurrencyReplace}, e.Concurrency) {
+			fail("%s: concurrency %q must be skip, queue, parallel or replace", where, e.Concurrency)
+		}
+		if !slices.Contains([]string{RestartNever, RestartOnFailure, RestartAlways}, e.Restart) {
+			fail("%s: restart %q must be never, on-failure or always", where, e.Restart)
+		}
+		if e.RestartDelay < 0 {
+			fail("%s: restart_delay must not be negative", where)
+		}
+		if e.RestartMaxDelay < e.RestartDelay {
+			fail("%s: restart_max_delay must not be shorter than restart_delay", where)
 		}
 		if !slices.Contains([]string{InterruptAbandon, InterruptRerun}, e.OnInterrupt) {
 			fail("%s: on_interrupt %q must be abandon or rerun", where, e.OnInterrupt)
@@ -747,6 +815,22 @@ func (c *Config) validate() error {
 		}
 		if e.Timeout < 0 {
 			fail("%s: timeout must not be negative", where)
+		}
+		if o := e.Output; o != nil {
+			switch {
+			case o.Path == "":
+				fail("%s: output.path is required", where)
+			case o.MaxSizeMB < 0:
+				fail("%s: output.max_size_mb must not be negative", where)
+			case o.MaxBackups < 0:
+				fail("%s: output.max_backups must not be negative", where)
+			}
+		}
+		if e.StopTimeout < 0 {
+			fail("%s: stop_timeout must not be negative", where)
+		}
+		if e.StopRun.Args != nil && (len(e.StopCommand) == 0 || e.StopCommand[0] == "") {
+			fail("%s: the program of stop_command must not be empty", where)
 		}
 		if e.Workdir != "" {
 			if st, err := os.Stat(e.Workdir); err != nil || !st.IsDir() {

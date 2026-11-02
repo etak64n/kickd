@@ -16,7 +16,7 @@
 # Without log.path, the log goes to journald.
 webhook:
   enabled: true
-  listen: '127.0.0.1:8787'
+  listen: '127.0.0.1:9787'
 database:
   path: '/var/lib/kickd/kickd.db'
 

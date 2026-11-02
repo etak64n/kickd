@@ -25,10 +25,10 @@ var commands = []command{
 	{"events", "[--json]", "List the events and what fires them"},
 	{"history", "[--event NAME] [--status STATUS] [--limit N] [--json]", "Show the runs, newest first, so the runs that run or wait come first"},
 	{"show", "RUN_ID [--json]", "Show one run, including its output"},
-	{"cancel", "RUN_ID", "Cancel a queued run, or stop a running one"},
+	{"cancel", "RUN_ID | --event NAME", "Cancel a queued run, or stop a running one; --event does so for every run of an event"},
 	{"status", "[--json]", "Show whether the agent is running and how many runs wait"},
 	{"check", "", "Validate the config and print a summary"},
-	{"init", "", "Write an example config and an example events file"},
+	{"init", "[--no-examples]", "Write an example config and an example events file; --no-examples writes the config alone"},
 	{"service", "ACTION", "Install or control the service that runs the agent; ACTION is install, uninstall, start, stop, restart or status"},
 	{"licenses", "", "Print the licenses of kickd and of the software it includes"},
 	{"version", "", "Print the version"},
@@ -125,7 +125,11 @@ func help(args []string, stdout, stderr io.Writer) int {
 		// print the help when they see --help.
 		return runOps("", []string{args[0], "--help"}, stdout, stderr)
 	}
-	text, err := commandHelp(args[0], nil)
+	var fs *flag.FlagSet
+	if args[0] == "init" {
+		fs, _ = initFlags()
+	}
+	text, err := commandHelp(args[0], fs)
 	if err != nil {
 		fmt.Fprintln(stderr, "kickd:", err)
 		return exitUsage

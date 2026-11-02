@@ -24,6 +24,7 @@ const (
 	KindAfter   = "after"   // a run of another event ended
 	KindStartup = "startup" // the agent started
 	KindWake    = "wake"    // the machine woke from sleep
+	KindRestart = "restart" // a run of the event ended, and its restart setting starts it again
 )
 
 // NewID returns a random 16 character hex ID for requestId.
@@ -42,6 +43,10 @@ var ErrReload = errors.New("config reload")
 // ErrCanceledByUser is the cancellation cause of a run stopped with
 // "kickd cancel".
 var ErrCanceledByUser = errors.New("canceled by user")
+
+// ErrReplaced is the cancellation cause of a run stopped because a new
+// firing of its event, whose concurrency is replace, takes its place.
+var ErrReplaced = errors.New("replaced by a new run")
 
 // Event is the payload of one firing of a named event. The command
 // receives it as JSON and through environment variables.

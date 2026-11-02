@@ -5,21 +5,21 @@
 In kickd, a named command in the config file is an **event**.
 A **webhook trigger** fires an event when an HTTP request arrives at the trigger's path.
 When at least one event has a webhook trigger, kickd starts one HTTP server for all of them.
-The server listens on `webhook.listen`, which is `127.0.0.1:8787` by default.
+The server listens on `webhook.listen`, which is `127.0.0.1:9787` by default.
 
 ## Calling a webhook
 
 ```sh
 # A webhook with a token
-curl -X POST -H "Authorization: Bearer <token>" http://127.0.0.1:8787/hooks/deploy
+curl -X POST -H "Authorization: Bearer <token>" http://127.0.0.1:9787/hooks/deploy
 
 # A webhook with a secret: sign the body with HMAC-SHA256
 BODY='{"ref":"main"}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
-curl -X POST -H "X-Hub-Signature-256: sha256=$SIG" -d "$BODY" http://127.0.0.1:8787/hooks/deploy
+curl -X POST -H "X-Hub-Signature-256: sha256=$SIG" -d "$BODY" http://127.0.0.1:9787/hooks/deploy
 
 # Health check: responds 200 with "ok"
-curl http://127.0.0.1:8787/healthz
+curl http://127.0.0.1:9787/healthz
 ```
 
 ## Authentication
@@ -50,7 +50,7 @@ Query values with other names, and empty values, do not become parameters.
 A request without a required parameter gets 400.
 
 ```sh
-curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:8787/hooks/deploy?ref=v1.2"
+curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:9787/hooks/deploy?ref=v1.2"
 ```
 
 ## Responses

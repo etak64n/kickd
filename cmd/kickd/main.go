@@ -7,12 +7,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -225,28 +227,37 @@ func cmdCheck(path string, args []string) error {
 	case cfg.HasWebhook():
 		fmt.Println("webhook: disabled by webhook.enabled, so webhook triggers do not fire")
 	}
+	if len(cfg.Env) > 0 {
+		// The names only: the values can be secrets.
+		names := make([]string, 0, len(cfg.Env))
+		for k := range cfg.Env {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		fmt.Printf("env: %s (for every event)\n", strings.Join(names, ", "))
+	}
 	for _, e := range cfg.Events {
 		// A list is shown as a list, so that it does not read as a string
 		// for the shell.
-		cmd := e.Shell
-		if cmd == "" {
-			quoted := make([]string, len(e.Command))
-			for i, a := range e.Command {
-				quoted[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
-			}
-			cmd = "[" + strings.Join(quoted, ", ") + "]"
-		}
+		cmd := commandText(e.Shell, e.Command)
 		interrupt := e.OnInterrupt
 		if e.OnInterrupt == config.InterruptRerun {
 			interrupt = fmt.Sprintf("rerun, up to %d attempts", e.MaxAttempts)
 		}
-		fmt.Printf("- %s [%s; on interrupt: %s]: %s\n", e.Name, e.Concurrency, interrupt, cmd)
+		restart := ""
+		if e.Restart != config.RestartNever {
+			restart = fmt.Sprintf("; restart: %s, after %s to %s", e.Restart, e.RestartDelay, e.RestartMaxDelay)
+		}
+		fmt.Printf("- %s [%s; on interrupt: %s%s]: %s\n", e.Name, e.Concurrency, interrupt, restart, cmd)
 		fmt.Printf("    file     %s\n", filepath.Base(e.File))
 		fmt.Printf("    workdir  %s\n", e.Workdir)
-		for k, v := range e.Env {
-			if strings.EqualFold(k, "PATH") {
-				fmt.Printf("    PATH     %s\n", v)
-			}
+		if stop := commandText(e.StopShell, e.StopCommand); stop != "" {
+			fmt.Printf("    stop     %s (stop_timeout %s)\n", stop, e.StopTimeout)
+		}
+		if path, ok := envPath(e.Env); ok {
+			fmt.Printf("    PATH     %s\n", path)
+		} else if path, ok := envPath(cfg.Env); ok {
+			fmt.Printf("    PATH     %s (env of the config file)\n", path)
 		}
 		for _, t := range e.Triggers {
 			if t.Type == config.TriggerManual {
@@ -260,6 +271,29 @@ func cmdCheck(path string, args []string) error {
 		fmt.Printf("warning: event %q: %s\n", w.Event, w.Detail)
 	}
 	return nil
+}
+
+// envPath returns the PATH that env sets. Windows writes it as Path too.
+func envPath(env map[string]string) (string, bool) {
+	for k, v := range env {
+		if strings.EqualFold(k, "PATH") {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// commandText shows a command of the config: a string as it is, and a list
+// as a list, so that it does not read as a string for the shell.
+func commandText(shell string, args []string) string {
+	if shell != "" || len(args) == 0 {
+		return shell
+	}
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // eventsIn counts the events of cfg that the file defines.
@@ -366,11 +400,25 @@ func orDash(s string) string {
 // to it, with the log and the database of a service of the whole machine
 // when system is true.
 func cmdInit(path string, system bool, args []string) error {
-	if err := noArgs("init", args); err != nil {
+	fs, noExamples := initFlags()
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			text, _ := commandHelp("init", fs)
+			fmt.Print(text)
+			return flag.ErrHelp
+		}
+		return usageError{fmt.Sprintf("kickd init: %v; kickd help init shows its usage", err)}
+	}
+	if err := noArgs("init", fs.Args()); err != nil {
 		return err
 	}
 	events := filepath.Join(filepath.Dir(path), config.ExampleEventsName)
-	for _, p := range []string{path, events} {
+	files := []string{path, events}
+	if *noExamples {
+		files = files[:1]
+	}
+	for _, p := range files {
 		if fileExists(p) {
 			return fmt.Errorf("%s already exists", p)
 		}
@@ -381,17 +429,32 @@ func cmdInit(path string, system bool, args []string) error {
 	if err := os.WriteFile(path, []byte(config.ExampleConfig(runtime.GOOS, system)), 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
-		return err
+	if !*noExamples {
+		if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
+			return err
+		}
 	}
 	p := config.PathsFor(runtime.GOOS, system)
 	fmt.Printf("wrote %s\n", path)
+	if *noExamples {
+		fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
+		fmt.Printf("Add a .yaml file of events next to it, then run: %skickd check\n", sudo(system))
+		fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
+		return nil
+	}
 	fmt.Printf("wrote %s\n", events)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 	fmt.Printf("Edit them, then run: %skickd check\n", sudo(system))
 	fmt.Println("kickd reads the events of every .yaml and .yml file next to the config file.")
 	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
 	return nil
+}
+
+// initFlags are the flags of kickd init.
+func initFlags() (*flag.FlagSet, *bool) {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	noExamples := fs.Bool("no-examples", false, "write the config file alone, without the file of example events")
+	return fs, noExamples
 }
 
 // perUser reports whether kickd service works on the service of the user

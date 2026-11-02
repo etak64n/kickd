@@ -223,6 +223,16 @@ Each language has an event whose program prints the variables and the payload of
 | `TestProgramsInEachLanguageGetTheValuesOfTheirRun` | ✓ | ✓ | ✓ |
 | `TestProgramsInEachLanguageHandleJapaneseAndSpaces` | ✓ | ✓ | ✓ |
 
+### Long-running commands
+
+A server that ignores SIGTERM, with `env` in the config file, `stop_command`, `concurrency: replace`, `restart: always` and an `output` file. The tests on Windows do not cover it yet.
+
+| Test | macOS | Linux | Windows |
+|---|:-:|:-:|:-:|
+| `TestLongRunningCommandIsReplacedThroughItsStopCommand` | ✓ | ✓ | |
+| `TestLongRunningCommandRestartsWhenItExits` | ✓ | ✓ | |
+| `TestLongRunningCommandStopsWithKickdThroughItsStopCommand` | ✓ | ✓ | |
+
 ### The output of commands
 
 | Test | macOS | Linux | Windows |

@@ -256,6 +256,156 @@ func TestCancelQueuedAndRunning(t *testing.T) {
 	}
 }
 
+func TestReplacePolicyStopsTheRunningRun(t *testing.T) {
+	spec := helperJob("sleep")
+	spec.Concurrency = PolicyReplace
+	env := newDispatcher(t, spec)
+	h := env.d.Handler(spec.Name)
+	first := fired(spec.Name)
+	first.RequestID = "first"
+	h.Dispatch(first)
+	env.rec.waitFor(t, "Run started", 1, 10*time.Second)
+	second := fired(spec.Name)
+	second.RequestID = "second"
+	h.Dispatch(second)
+	if r := waitRun(t, env.store, runOf(t, env.store, "first").ID, queue.StatusCanceled); r.Reason != "replaced" {
+		t.Errorf("replaced run = %+v", r)
+	}
+	waitRun(t, env.store, runOf(t, env.store, "second").ID, queue.StatusRunning)
+	if got := env.rec.find("Run replaced"); len(got) != 1 || got[0]["level"] != slog.LevelInfo {
+		t.Errorf("Run replaced = %v", got)
+	}
+}
+
+func TestReplacePolicyStartsOnlyTheNewestWaitingFiring(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kickd.db")
+	store, err := queue.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := helperJob("short")
+	spec.Concurrency = PolicyReplace
+	var ids []int64
+	for _, id := range []string{"old", "older", "newest"} {
+		ev := fired(spec.Name)
+		ev.RequestID = id
+		payload, _ := json.Marshal(ev)
+		n, _, err := store.Enqueue(context.Background(), queue.Run{RequestID: id, Event: spec.Name, Trigger: ev.Trigger, TriggerID: ev.TriggerID, Payload: payload, Attempt: 1, CreatedAt: time.Now()}, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, n)
+	}
+	store.Close()
+	env := startDispatcher(t, path, spec)
+	for _, id := range ids[:2] {
+		if r := waitRun(t, env.store, id, queue.StatusSkipped); r.Reason != "replaced" || r.Detail != fmt.Sprintf("run %d", ids[2]) {
+			t.Errorf("waiting firing = %+v", r)
+		}
+	}
+	waitRun(t, env.store, ids[2], queue.StatusSucceeded)
+}
+
+// restarting gives spec the restart policy, with short delays.
+func restarting(spec Spec, policy string, delay, maxDelay time.Duration) Spec {
+	spec.Restart, spec.RestartDelay, spec.RestartMaxDelay = policy, delay, maxDelay
+	return spec
+}
+
+func TestRestartAlwaysStartsTheEventAgainWithBackoff(t *testing.T) {
+	spec := restarting(helperJob("exit"), RestartAlways, 50*time.Millisecond, 10*time.Second)
+	env := newDispatcher(t, spec)
+	env.d.Handler(spec.Name).Dispatch(fired(spec.Name))
+	got := env.rec.waitFor(t, "Restart scheduled", 3, 15*time.Second)
+	for i, want := range []int64{50, 100, 200} {
+		if got[i]["delayMs"] != want || got[i]["status"] != queue.StatusFailed {
+			t.Errorf("restart %d = %v, want delayMs %d", i+1, got[i], want)
+		}
+	}
+	runs, err := env.store.ListRuns(context.Background(), queue.Filter{Event: spec.Name, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarts := 0
+	for _, r := range runs {
+		if r.Trigger == event.KindRestart {
+			restarts++
+			if r.NotBefore.IsZero() {
+				t.Errorf("a restart without a delay: %+v", r)
+			}
+		}
+	}
+	if restarts < 3 {
+		t.Errorf("%d restarts in the history, want at least 3", restarts)
+	}
+}
+
+func TestRestartOnFailureIgnoresSuccess(t *testing.T) {
+	ok := restarting(helperJob("short"), RestartOnFailure, 50*time.Millisecond, time.Second)
+	ok.Name = "ok"
+	bad := restarting(helperJob("exit"), RestartOnFailure, 50*time.Millisecond, time.Second)
+	bad.Name = "bad"
+	env := newDispatcher(t, ok, bad)
+	env.d.Handler("ok").Dispatch(fired("ok"))
+	env.d.Handler("bad").Dispatch(fired("bad"))
+	env.rec.waitFor(t, "Restart scheduled", 1, 10*time.Second)
+	env.rec.waitFor(t, "Run completed", 1, 10*time.Second)
+	time.Sleep(300 * time.Millisecond)
+	for _, r := range env.rec.find("Restart scheduled") {
+		if r["event"] != "bad" {
+			t.Errorf("restart of a run that succeeded: %v", r)
+		}
+	}
+}
+
+func TestCanceledRunIsNotRestarted(t *testing.T) {
+	spec := restarting(helperJob("sleep"), RestartAlways, 50*time.Millisecond, time.Second)
+	env := newDispatcher(t, spec)
+	ev := fired(spec.Name)
+	ev.RequestID = "first"
+	env.d.Handler(spec.Name).Dispatch(ev)
+	env.rec.waitFor(t, "Run started", 1, 10*time.Second)
+	id := runOf(t, env.store, "first").ID
+	if _, err := env.store.RequestCancel(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	waitRun(t, env.store, id, queue.StatusCanceled)
+	time.Sleep(300 * time.Millisecond)
+	if got := env.rec.find("Restart scheduled"); len(got) != 0 {
+		t.Errorf("a canceled run was restarted: %v", got)
+	}
+}
+
+func TestWaitingRestartCanBeCanceledWithItsEvent(t *testing.T) {
+	spec := restarting(helperJob("exit"), RestartOnFailure, time.Hour, time.Hour)
+	env := newDispatcher(t, spec)
+	env.d.Handler(spec.Name).Dispatch(fired(spec.Name))
+	got := env.rec.waitFor(t, "Restart scheduled", 1, 10*time.Second)
+	id, _ := got[0]["runId"].(int64)
+	r, err := env.store.GetRun(context.Background(), id)
+	if err != nil || r.Status != queue.StatusQueued || time.Until(r.NotBefore) < 50*time.Minute {
+		t.Fatalf("waiting restart = %+v, %v", r, err)
+	}
+	runs, err := env.store.RequestCancelEvent(context.Background(), spec.Name)
+	if err != nil || len(runs) != 1 || runs[0].ID != id || runs[0].Status != queue.StatusCanceled {
+		t.Fatalf("RequestCancelEvent = %+v, %v", runs, err)
+	}
+}
+
+func TestRestartDisabledDropsTheWaitingRestart(t *testing.T) {
+	spec := restarting(helperJob("exit"), RestartOnFailure, 300*time.Millisecond, time.Second)
+	env := newDispatcher(t, spec)
+	env.d.Handler(spec.Name).Dispatch(fired(spec.Name))
+	got := env.rec.waitFor(t, "Restart scheduled", 1, 10*time.Second)
+	off := spec
+	off.Restart = RestartNever
+	env.d.Configure([]Spec{off})
+	id, _ := got[0]["runId"].(int64)
+	if r := waitRun(t, env.store, id, queue.StatusDropped); r.Reason != "restart_disabled" {
+		t.Errorf("dropped restart = %+v", r)
+	}
+}
+
 func TestRunsOfRemovedEventsAreDropped(t *testing.T) {
 	spec := helperJob("sleep")
 	spec.Concurrency = PolicyQueue

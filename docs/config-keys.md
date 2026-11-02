@@ -3,7 +3,7 @@
 [Documentation index](index.md)
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
-The config file has four top-level sections, `log`, `webhook`, `database` and `events`, and the other files have only `events`.
+The config file has five top-level sections, `log`, `webhook`, `database`, `env` and `events`, and the other files have only `events`.
 In kickd, a named command is an **event**, and a **trigger** fires an event.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
 
@@ -37,10 +37,11 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`log.max_size_mb`](settings/log.md#logmax_size_mb) | `10` | The size in MB past which kickd renames the log file with `.1` appended and starts a new one. |
 | [`log.max_backups`](settings/log.md#logmax_backups) | `5` | How many renamed log files to keep. |
 | [`webhook.enabled`](settings/webhook.md#webhookenabled) | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
-| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:8787` | The address of the HTTP server that all webhook triggers share. |
+| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:9787` | The address of the HTTP server that all webhook triggers share. |
 | [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
 | [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
 | [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |
+| [`env`](settings/events.md#for-every-event) | none | Environment variables for the commands of every event, under the `env` of each event. |
 | [`events`](settings/events.md) | none | The list of events, in the config file or in another YAML file next to it. The config needs at least one event. |
 
 ## Event keys
@@ -53,11 +54,17 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`workdir`](settings/events.md#workdir) | the directory of the config file | The working directory of the command. It must exist. |
 | [`env`](settings/events.md#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
 | [`timeout`](settings/events.md#timeout) | none | The longest time the command may run. Without it, there is no limit. |
-| [`concurrency`](settings/events.md#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue` or `parallel`. |
+| [`stop_command`](settings/events.md#stop_command) | none | What kickd runs to ask a running command to stop, before it sends SIGTERM. A string runs through the shell, and a list starts a program. |
+| [`stop_timeout`](settings/events.md#stop_timeout) | `10s` | How long kickd waits for the stop command, and then for the command after SIGTERM, before it kills it. |
+| [`concurrency`](settings/events.md#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue`, `parallel` or `replace`. |
+| [`restart`](settings/events.md#restart) | `never` | Whether kickd starts the event again when a run ends: `never`, `on-failure` or `always`. |
+| [`restart_delay`](settings/events.md#restart_delay) | `1s` | How long the first restart waits. Each restart after a short run waits twice as long as the one before. |
+| [`restart_max_delay`](settings/events.md#restart_max_delay) | `1m` | The longest wait before a restart, and how long a run must last for the wait to start again from `restart_delay`. |
 | [`on_interrupt`](settings/events.md#on_interrupt) | `abandon` | What happens to a run that a stop or a crash cut off: `abandon` or `rerun`. |
 | [`max_attempts`](settings/events.md#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |
 | [`stdin`](settings/events.md#stdin) | `none` | `payload` passes the payload JSON on standard input. |
 | [`log_output`](settings/events.md#log_output) | `true` | Whether kickd logs the output of the command and stores it with the run. |
+| [`output`](settings/events.md#output) | none | A file to which kickd appends the output of the command: `path`, and `max_size_mb` and `max_backups` as for the log file. |
 | [`params`](settings/events.md#params) | none | The parameters that a firing can pass. |
 | [`triggers`](settings/events.md#triggers) | none | The triggers, one or more. Required. |
 
@@ -97,7 +104,7 @@ Most keys take effect at that reload, and some wait for the next start of the ag
 | `log.*` | At the next start of the agent, which opens its log once |
 | `webhook.*` | At the reload, which restarts the HTTP server |
 | `database.*` | At the next start of the agent, which opens the database once |
-| `name`, `command`, `workdir`, `env`, `timeout`, `concurrency`, `stdin`, `log_output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
+| `name`, `command`, `workdir`, `env`, `timeout`, `stop_command`, `stop_timeout`, `concurrency`, `restart`, `restart_delay`, `restart_max_delay`, `stdin`, `log_output`, `output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
 | `description` and `params` | At once for `kickd events` and `kickd event`, which read the config each time they run, and at the reload for webhook requests |
 | `on_interrupt` and `max_attempts` | At the next start of the agent, which handles the runs that were cut off when it starts |
 | Manual triggers | At once for `kickd event`, which reads the config each time it runs |

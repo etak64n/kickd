@@ -9,7 +9,7 @@ The `webhook` section of the config file sets that server:
 ```yaml
 webhook:
   enabled: true
-  listen: '127.0.0.1:8787'
+  listen: '127.0.0.1:9787'
   max_body_bytes: 1048576
 ```
 
@@ -50,13 +50,16 @@ events:
 `webhook.listen` is the address on which the HTTP server accepts connections.
 
 - **Type**: an address in the form `host:port`.
-- **Default**: `127.0.0.1:8787`.
+- **Default**: `127.0.0.1:9787`.
 - **Takes effect**: when the config file is saved.
+
+kickd 0.6 and earlier listened on `127.0.0.1:8787` by default, the default port of `wrangler dev`, the development server of Cloudflare Workers, so the two could not run on one machine at the same time.
+To keep the old address, set `webhook.listen: 127.0.0.1:8787`.
 
 The host decides which machines can connect:
 
 - **`127.0.0.1` or `[::1]`**, the loopback addresses: only programs on the same machine.
-- **`0.0.0.0`**, or an empty host as in `:8787`: every machine that can reach this machine.
+- **`0.0.0.0`**, or an empty host as in `:9787`: every machine that can reach this machine.
 - **The address of one network interface**, such as `192.168.1.20`: the machines that reach that interface.
 
 The server starts only when at least one event has a webhook trigger.

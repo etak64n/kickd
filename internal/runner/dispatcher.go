@@ -56,6 +56,12 @@ type Dispatcher struct {
 	runInfo    map[int64][2]string // run ID -> request ID, event
 	waiters    map[int64]chan event.Result
 	wake       chan struct{}
+	// restartDelays holds the delay of the next restart of each event,
+	// which doubles while its runs end soon after they start.
+	restartDelays map[string]time.Duration
+	// nextDue is when the earliest queued run that waits becomes due; the
+	// loop scans the queue then. Only the loop goroutine uses it.
+	nextDue time.Time
 
 	limitMu    sync.Mutex
 	errLimitAt map[string]time.Time
@@ -76,6 +82,9 @@ type activeRun struct {
 	requestID string
 	start     time.Time
 	skipped   int
+	// replacing is set once a newer firing of an event whose concurrency
+	// is replace has asked this run to stop.
+	replacing bool
 }
 
 // NewDispatcher creates a dispatcher. log carries the process requestId.
@@ -90,7 +99,9 @@ func NewDispatcher(r *Runner, store *queue.Store, log *slog.Logger, retention ti
 		runInfo:    map[int64][2]string{},
 		waiters:    map[int64]chan event.Result{},
 		wake:       make(chan struct{}, 1),
-		errLimitAt: map[string]time.Time{},
+
+		restartDelays: map[string]time.Duration{},
+		errLimitAt:    map[string]time.Time{},
 	}
 }
 
@@ -308,7 +319,8 @@ func (d *Dispatcher) Loop(ctx context.Context, info queue.Agent) {
 			if err != nil {
 				d.queueError(d.log, "data_version", err)
 			}
-			if v != lastVersion || now.Sub(lastScan) >= fullScanEvery {
+			due := !d.nextDue.IsZero() && !now.Before(d.nextDue)
+			if v != lastVersion || now.Sub(lastScan) >= fullScanEvery || due {
 				lastVersion, lastScan = v, now
 				d.step(ctx)
 			}
@@ -331,6 +343,12 @@ func (d *Dispatcher) step(ctx context.Context) {
 	d.processCancels(ctx)
 	d.follow(ctx)
 	d.schedule(ctx)
+	d.nextDue = time.Time{}
+	if at, ok, err := d.store.NextNotBefore(ctx); err != nil {
+		d.queueError(d.log, "next_not_before", err)
+	} else if ok {
+		d.nextDue = at
+	}
 }
 
 // follow hands the runs that ended to the after triggers that follow their
@@ -461,7 +479,25 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			d.poke()
 		}
 	}()
+	// Under the replace policy only the newest firing of an event runs:
+	// the firings before it in the batch are replaced before they start.
+	newest := map[string]int64{}
+	d.mu.Lock()
 	for _, run := range runs {
+		if d.specs[run.Event].Concurrency == PolicyReplace {
+			newest[run.Event] = run.ID
+		}
+	}
+	d.mu.Unlock()
+	for _, run := range runs {
+		if id, ok := newest[run.Event]; ok && id != run.ID {
+			if done, ok := d.settle(ctx, run, queue.StatusSkipped, "replaced", fmt.Sprintf("run %d", id)); ok {
+				d.log.Info("Run replaced before it started", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "newerRunId", id)
+				done()
+			}
+			progressed = true
+			continue
+		}
 		if d.r.ctx.Err() != nil {
 			return
 		}
@@ -476,6 +512,16 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			}
 			progressed = true
 			continue
+		case run.Trigger == event.KindRestart && spec.Restart == RestartNever:
+			// The config stopped restarting the event while this restart
+			// waited for its delay.
+			d.mu.Unlock()
+			if done, ok := d.settle(ctx, run, queue.StatusDropped, "restart_disabled", ""); ok {
+				d.log.Info("Queued run dropped", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "reason", "restart_disabled")
+				done()
+			}
+			progressed = true
+			continue
 		case spec.Concurrency == PolicySkip && d.running[run.Event] > 0:
 			a := d.active[run.Event]
 			d.mu.Unlock()
@@ -484,6 +530,21 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			continue
 		case spec.Concurrency == PolicyQueue && d.running[run.Event] > 0:
 			d.mu.Unlock()
+			continue
+		case spec.Concurrency == PolicyReplace && d.running[run.Event] > 0:
+			// Stop the run in progress once; the firing starts when it has
+			// stopped and finish wakes the loop.
+			a := d.active[run.Event]
+			var cancel context.CancelCauseFunc
+			if a != nil && !a.replacing {
+				a.replacing = true
+				cancel = d.cancels[a.runID]
+			}
+			d.mu.Unlock()
+			if cancel != nil {
+				d.log.Info("Run replacing the previous run", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "activeRun", a.runID, "activeRequestId", a.requestID)
+				cancel(event.ErrReplaced)
+			}
 			continue
 		}
 		started, err := d.store.StartRun(ctx, run.ID, time.Now())
@@ -633,7 +694,75 @@ func (d *Dispatcher) finish(run queue.Run, spec Spec, res event.Result) {
 	if ch != nil {
 		ch <- res
 	}
+	d.restart(run, status, res.Duration)
 	d.poke()
+}
+
+// restart queues the next run of an event whose run ended, when the
+// event's restart setting asks for it. The run waits in the queue for the
+// restart delay: the first restart waits restart_delay, and each restart
+// after a run shorter than restart_max_delay waits twice as long as the one
+// before, up to restart_max_delay. A run that a user canceled, that a new
+// firing replaced, or that kickd stopping cut off, is not restarted.
+func (d *Dispatcher) restart(run queue.Run, status string, ran time.Duration) {
+	if d.r.ctx.Err() != nil {
+		return
+	}
+	d.mu.Lock()
+	spec, ok := d.specs[run.Event]
+	if !ok || !restartsAfter(spec.Restart, status) {
+		d.mu.Unlock()
+		return
+	}
+	delay, seen := d.restartDelays[run.Event]
+	switch {
+	case !seen || ran >= spec.RestartMaxDelay:
+		delay = spec.RestartDelay
+	default:
+		delay = min(2*delay, spec.RestartMaxDelay)
+	}
+	d.restartDelays[run.Event] = delay
+	d.mu.Unlock()
+
+	now := time.Now()
+	ev := event.Event{RequestID: event.NewID(), Name: run.Event, Trigger: event.KindRestart, TriggerID: "restart", Time: now,
+		Data: WithDefaults(nil, spec.Defaults)}
+	log := d.log.With("requestId", ev.RequestID, "event", run.Event, "trigger", event.KindRestart)
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		log.Error("Restart failed", logging.Err(err))
+		return
+	}
+	maxQueued := 0
+	if spec.Concurrency == PolicyQueue {
+		maxQueued = MaxQueuedPerEvent
+	}
+	id, dropped, err := d.store.Enqueue(context.Background(), queue.Run{
+		RequestID: ev.RequestID, Event: run.Event, Trigger: ev.Trigger, TriggerID: ev.TriggerID,
+		Payload: payload, Attempt: 1, CreatedAt: now, NotBefore: now.Add(delay),
+	}, maxQueued)
+	if err != nil {
+		d.queueError(log, "enqueue", err)
+		return
+	}
+	if dropped {
+		d.r.dropped.Add(1)
+		log.Warn("Run dropped, queue full", "runId", id, "thresholdCount", maxQueued)
+		return
+	}
+	log.Info("Restart scheduled", "runId", id, "afterRunId", run.ID, "status", status, "delayMs", delay.Milliseconds())
+}
+
+// restartsAfter reports whether a run that ended with status starts its
+// event again under policy.
+func restartsAfter(policy, status string) bool {
+	switch policy {
+	case RestartAlways:
+		return status == queue.StatusSucceeded || status == queue.StatusFailed
+	case RestartOnFailure:
+		return status == queue.StatusFailed
+	}
+	return false
 }
 
 func (d *Dispatcher) heartbeat(ctx context.Context, info queue.Agent) {

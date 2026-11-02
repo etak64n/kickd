@@ -190,6 +190,14 @@ func TestParseErrors(t *testing.T) {
 		{"required with default", "events:\n  - name: a\n    params: [{name: p, required: true, default: d}]" + ok, "cannot be required and have a default"},
 		{"required param with cron", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: cron, schedule: '@hourly'}]", "cannot supply required parameters"},
 		{"negative retention", "database: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
+		{"negative stop_timeout", "events:\n  - name: a\n    stop_timeout: -1s" + ok, "stop_timeout must not be negative"},
+		{"empty stop program", "events:\n  - name: a\n    stop_command: []" + ok, "program of stop_command must not be empty"},
+		{"stop_command of another type", "events:\n  - name: a\n    stop_command: 42" + ok, "must be a string or a list"},
+		{"output without path", "events:\n  - name: a\n    output: {max_size_mb: 5}" + ok, "output.path is required"},
+		{"negative output size", "events:\n  - name: a\n    output: {path: out.log, max_size_mb: -1}" + ok, "output.max_size_mb must not be negative"},
+		{"bad restart", "events:\n  - name: a\n    restart: forever" + ok, `restart "forever" must be never, on-failure or always`},
+		{"negative restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: -1s" + ok, "restart_delay must not be negative"},
+		{"restart_max_delay below restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: 10s\n    restart_max_delay: 5s" + ok, "restart_max_delay must not be shorter than restart_delay"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -235,6 +243,129 @@ events:
 		e := cfg.Events[i]
 		if e.Shell != want.shell || !slices.Equal(e.Command, want.args) {
 			t.Errorf("%s: shell %q, command %q", e.Name, e.Shell, e.Command)
+		}
+	}
+}
+
+// stop_command takes the same forms as command, and stop_timeout has a
+// default.
+func TestStopCommand(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: shell
+    command: ['server']
+    stop_command: 'server stop'
+    stop_timeout: 30s
+    triggers: [{type: manual}]
+  - name: list
+    command: ['server']
+    stop_command: ['container', 'stop', 'web']
+    triggers: [{type: manual}]
+  - name: none
+    command: ['server']
+    triggers: [{type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []struct {
+		shell   string
+		args    []string
+		timeout time.Duration
+	}{
+		{"server stop", nil, 30 * time.Second},
+		{"", []string{"container", "stop", "web"}, DefaultStopTimeout},
+		{"", nil, DefaultStopTimeout},
+	} {
+		e := cfg.Events[i]
+		if e.StopShell != want.shell || !slices.Equal(e.StopCommand, want.args) || e.StopTimeout != want.timeout {
+			t.Errorf("%s: stop shell %q, stop command %q, stop_timeout %v", e.Name, e.StopShell, e.StopCommand, e.StopTimeout)
+		}
+	}
+}
+
+// output resolves its path against the directory of the config file and
+// has the defaults of the log file.
+func TestOutputDefaults(t *testing.T) {
+	noLogEnv(t)
+	dir := t.TempDir()
+	cfg, err := Parse([]byte(`
+events:
+  - name: web
+    command: ['server']
+    output:
+      path: logs/web.log
+    triggers: [{type: startup}]
+`), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := cfg.Events[0].Output
+	if o == nil || o.Path != filepath.Join(dir, "logs", "web.log") || o.MaxSizeMB != DefaultLogSizeMB || o.MaxBackups != DefaultLogBackups {
+		t.Fatalf("output = %+v", o)
+	}
+}
+
+// The env of the config file loads for every event, and another file of
+// events cannot set it.
+func TestEnvOfTheConfigFile(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+env:
+  LANG: en_US.UTF-8
+  PATH: '/opt/homebrew/bin:${PATH}'
+events:
+  - name: a
+    command: [x]
+    triggers: [{type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["LANG"] != "en_US.UTF-8" || cfg.Env["PATH"] != "/opt/homebrew/bin:${PATH}" {
+		t.Fatalf("env = %v", cfg.Env)
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("log: {level: info}\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "more.yaml"), []byte("env: {A: b}\nevents:\n  - name: a\n    command: [x]\n    triggers: [{type: manual}]\n"), 0o600)
+	if _, err := Load(filepath.Join(dir, "config.yaml")); err == nil || !strings.Contains(err.Error(), "env belongs in the config file") {
+		t.Fatalf("env in a file of events: %v", err)
+	}
+}
+
+// restart is off by default, and its delays have defaults.
+func TestRestartDefaults(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: off
+    command: ['server']
+    triggers: [{type: manual}]
+  - name: always
+    command: ['server']
+    restart: Always
+    triggers: [{type: startup}]
+  - name: slow
+    command: ['server']
+    restart: on-failure
+    restart_delay: 2m
+    triggers: [{type: startup}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []struct {
+		policy          string
+		delay, maxDelay time.Duration
+	}{
+		{RestartNever, DefaultRestartDelay, DefaultRestartMaxDelay},
+		{RestartAlways, DefaultRestartDelay, DefaultRestartMaxDelay},
+		{RestartOnFailure, 2 * time.Minute, 2 * time.Minute},
+	} {
+		e := cfg.Events[i]
+		if e.Restart != want.policy || e.RestartDelay != want.delay || e.RestartMaxDelay != want.maxDelay {
+			t.Errorf("%s: restart %q, delay %v, max %v", e.Name, e.Restart, e.RestartDelay, e.RestartMaxDelay)
 		}
 	}
 }
