@@ -114,12 +114,16 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 			fireStartup(cfg, disp, log)
 		}
 
+		linksCtx, stopLinks := context.WithCancel(ctx)
+		watchLinks(linksCtx, log, cfg, requestReload)
 		next, err := waitForChange(ctx, log, opts.ConfigPath, reload, errCh)
 		switch {
 		case ctx.Err() != nil:
+			stopLinks()
 			stop(context.Cause(ctx))
 			return shutdown()
 		case err != nil && first:
+			stopLinks()
 			stop(errTriggerFailed)
 			stopLoop()
 			<-loopDone
@@ -129,11 +133,13 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 			log.Error("Trigger failed", logging.Err(err), "detail", "no triggers run until the config is saved again; queued runs and manual firings still run")
 			next = waitForValidConfig(ctx, log, opts.ConfigPath, reload)
 			if next == nil {
+				stopLinks()
 				return shutdown()
 			}
 		default:
 			stop(event.ErrReload)
 		}
+		stopLinks()
 		first = false
 		if next.Database.Path != cfg.Database.Path {
 			log.Warn("Database path change needs a restart", "file", cfg.Database.Path, "detail", next.Database.Path)
@@ -415,5 +421,50 @@ func watchConfig(ctx context.Context, log *slog.Logger, path string, requestRelo
 	h := event.HandlerFunc(func(event.Event) { requestReload("file_changed") })
 	if err := fw.Run(ctx, h); err != nil {
 		log.Warn("Config watch unavailable", "file", abs, logging.Err(err), "detail", "saving the config file does not reload it")
+	}
+}
+
+// watchLinks watches the files that the config file and the files of
+// events point to when they are symbolic links, such as an events file
+// linked from a repository. The watch of the config directory sees a
+// change to a link, but not to the file it points to, which a pull of the
+// repository changes. Each watch lasts until ctx is done.
+func watchLinks(ctx context.Context, log *slog.Logger, cfg *config.Config, requestReload func(string)) {
+	configDir, err := filepath.EvalSymlinks(cfg.Dir)
+	if err != nil {
+		configDir = cfg.Dir
+	}
+	targets := map[string][]string{} // directory -> names of the targets in it
+	for _, f := range append(append([]string{cfg.Path}, cfg.EventFiles...), cfg.Skipped...) {
+		st, err := os.Lstat(f)
+		if err != nil || st.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		target, err := filepath.EvalSymlinks(f)
+		if err != nil {
+			continue
+		}
+		dir, name := filepath.Split(target)
+		dir = filepath.Clean(dir)
+		if dir == configDir {
+			continue // the watch of the config directory sees it
+		}
+		targets[dir] = append(targets[dir], name)
+	}
+	h := event.HandlerFunc(func(event.Event) { requestReload("linked_file_changed") })
+	for dir, names := range targets {
+		fw := &trigger.FileWatcher{
+			Root:     dir,
+			Include:  names,
+			Ops:      []string{"create", "write", "rename", "remove"},
+			Debounce: 500 * time.Millisecond,
+			Logger:   log,
+			Internal: true,
+		}
+		go func() {
+			if err := fw.Run(ctx, h); err != nil && ctx.Err() == nil {
+				log.Warn("Config watch unavailable", "file", dir, logging.Err(err), "detail", "saving a linked file does not reload the config")
+			}
+		}()
 	}
 }

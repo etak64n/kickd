@@ -449,3 +449,32 @@ func TestAgentDropsTheEventsOfAFileRemovedFromNextToTheConfig(t *testing.T) {
 	// dropped.
 	waitStatus(t, store, kickEvent(t, store, "deploy", nil), queue.StatusDropped)
 }
+
+// An events file can be a link to a file elsewhere, such as in a
+// repository; saving that file reloads the config, as saving a file next
+// to the config does.
+func TestAgentReloadsWhenTheTargetOfALinkedEventsFileChanges(t *testing.T) {
+	dir := t.TempDir()
+	repo := t.TempDir()
+	cfgPath := filepath.Join(dir, "kickd.yaml")
+	writeFile(t, cfgPath, "events:\n  - name: backup\n"+helperEvent("append", filepath.Join(dir, "backup.txt"), "HELPER_TEXT", "backed up")+"    triggers: [{type: manual}]\n")
+	target := filepath.Join(repo, "events.yaml")
+	writeFile(t, target, "events:\n  - name: deploy\n"+helperEvent("append", filepath.Join(dir, "deploy.txt"), "HELPER_TEXT", "v1")+"    triggers: [{type: manual}]\n")
+	if err := os.Symlink(target, filepath.Join(dir, "app.yaml")); err != nil {
+		t.Skipf("cannot make a symbolic link: %v", err)
+	}
+	log, reloaded := messageLogger("Config reloaded", slog.LevelInfo)
+	cancel, done := startAgentWith(t, cfgPath, log)
+	defer stopAgent(t, cancel, done)
+	store := openWhenAlive(t, filepath.Join(dir, "kickd.db"))
+	time.Sleep(300 * time.Millisecond) // let the watch of the target start
+	released := filepath.Join(dir, "release.txt")
+	writeFile(t, target, "events:\n  - name: release\n"+helperEvent("append", released, "HELPER_TEXT", "released")+"    triggers: [{type: manual}]\n")
+	select {
+	case <-reloaded:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent did not reload the config when the linked file changed")
+	}
+	waitStatus(t, store, kickEvent(t, store, "release", nil), queue.StatusSucceeded)
+	waitForFile(t, released, "released", 10*time.Second)
+}
