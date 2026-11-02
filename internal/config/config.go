@@ -89,6 +89,7 @@ const (
 	ConcurrencySkip     = "skip"
 	ConcurrencyQueue    = "queue"
 	ConcurrencyParallel = "parallel"
+	ConcurrencyReplace  = "replace"
 )
 
 // What to do with a run that was cut off because kickd or the machine
@@ -746,8 +747,8 @@ func (c *Config) validate() error {
 		case len(e.Command) > 0 && e.Command[0] == "":
 			fail("%s: the program of command must not be empty", where)
 		}
-		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel}, e.Concurrency) {
-			fail("%s: concurrency %q must be skip, queue or parallel", where, e.Concurrency)
+		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel, ConcurrencyReplace}, e.Concurrency) {
+			fail("%s: concurrency %q must be skip, queue, parallel or replace", where, e.Concurrency)
 		}
 		if !slices.Contains([]string{InterruptAbandon, InterruptRerun}, e.OnInterrupt) {
 			fail("%s: on_interrupt %q must be abandon or rerun", where, e.OnInterrupt)

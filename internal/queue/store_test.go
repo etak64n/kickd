@@ -179,6 +179,33 @@ func TestCancelQueuedAndRunning(t *testing.T) {
 	}
 }
 
+func TestCancelEventCancelsQueuedAndStopsRunning(t *testing.T) {
+	s, _ := openTemp(t)
+	running, _ := fire(s, t, "web", "r", 0)
+	s.StartRun(ctx, running, time.Now())
+	queued, _ := fire(s, t, "web", "q", 0)
+	other, _ := fire(s, t, "other", "o", 0)
+	runs, err := s.RequestCancelEvent(ctx, "web")
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("RequestCancelEvent = %+v, %v", runs, err)
+	}
+	if runs[0].ID != running || !runs[0].CancelRequested || runs[0].Status != StatusRunning {
+		t.Errorf("running = %+v", runs[0])
+	}
+	if runs[1].ID != queued || runs[1].Status != StatusCanceled || runs[1].Reason != "canceled_by_user" {
+		t.Errorf("queued = %+v", runs[1])
+	}
+	if ids, _ := s.CancelRequests(ctx); len(ids) != 1 || ids[0] != running {
+		t.Errorf("CancelRequests = %v", ids)
+	}
+	if r, _ := s.GetRun(ctx, other); r.Status != StatusQueued {
+		t.Errorf("a run of another event = %+v", r)
+	}
+	if runs, err := s.RequestCancelEvent(ctx, "idle"); err != nil || len(runs) != 0 {
+		t.Errorf("an event without runs = %+v, %v", runs, err)
+	}
+}
+
 func TestPruneKeepsOpenAndInterruptedRuns(t *testing.T) {
 	s, _ := openTemp(t)
 	old, _ := fire(s, t, "a", "old", 0)

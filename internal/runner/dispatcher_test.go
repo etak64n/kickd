@@ -256,6 +256,56 @@ func TestCancelQueuedAndRunning(t *testing.T) {
 	}
 }
 
+func TestReplacePolicyStopsTheRunningRun(t *testing.T) {
+	spec := helperJob("sleep")
+	spec.Concurrency = PolicyReplace
+	env := newDispatcher(t, spec)
+	h := env.d.Handler(spec.Name)
+	first := fired(spec.Name)
+	first.RequestID = "first"
+	h.Dispatch(first)
+	env.rec.waitFor(t, "Run started", 1, 10*time.Second)
+	second := fired(spec.Name)
+	second.RequestID = "second"
+	h.Dispatch(second)
+	if r := waitRun(t, env.store, runOf(t, env.store, "first").ID, queue.StatusCanceled); r.Reason != "replaced" {
+		t.Errorf("replaced run = %+v", r)
+	}
+	waitRun(t, env.store, runOf(t, env.store, "second").ID, queue.StatusRunning)
+	if got := env.rec.find("Run replaced"); len(got) != 1 || got[0]["level"] != slog.LevelInfo {
+		t.Errorf("Run replaced = %v", got)
+	}
+}
+
+func TestReplacePolicyStartsOnlyTheNewestWaitingFiring(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kickd.db")
+	store, err := queue.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := helperJob("short")
+	spec.Concurrency = PolicyReplace
+	var ids []int64
+	for _, id := range []string{"old", "older", "newest"} {
+		ev := fired(spec.Name)
+		ev.RequestID = id
+		payload, _ := json.Marshal(ev)
+		n, _, err := store.Enqueue(context.Background(), queue.Run{RequestID: id, Event: spec.Name, Trigger: ev.Trigger, TriggerID: ev.TriggerID, Payload: payload, Attempt: 1, CreatedAt: time.Now()}, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, n)
+	}
+	store.Close()
+	env := startDispatcher(t, path, spec)
+	for _, id := range ids[:2] {
+		if r := waitRun(t, env.store, id, queue.StatusSkipped); r.Reason != "replaced" || r.Detail != fmt.Sprintf("run %d", ids[2]) {
+			t.Errorf("waiting firing = %+v", r)
+		}
+	}
+	waitRun(t, env.store, ids[2], queue.StatusSucceeded)
+}
+
 func TestRunsOfRemovedEventsAreDropped(t *testing.T) {
 	spec := helperJob("sleep")
 	spec.Concurrency = PolicyQueue

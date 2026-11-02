@@ -244,7 +244,7 @@ events:
 
 `concurrency` decides what happens when the event fires while a run of it is running.
 
-- **Type**: one of `skip`, `queue` and `parallel`.
+- **Type**: one of `skip`, `queue`, `parallel` and `replace`.
 - **Default**: `skip`.
 - **Takes effect**: for the firings that the agent handles after the file that defines the event is saved.
 
@@ -253,10 +253,12 @@ The setting applies among the runs of one event, and runs of different events ne
 - **skip**: the new firing is recorded as `skipped`, with the reason `already_running`, and its command does not start. The running run counts the firings skipped while it ran, and `kickd show` displays the count. Firings that waited while the agent was stopped are handled in the same way: the first one runs, and the others are skipped.
 - **queue**: the new firing waits in the queue, and waiting runs start one at a time, in the order of their firings. Up to 1000 runs of one event can wait. A firing beyond them is recorded as `dropped`: `kickd event` then exits with code 1, and a webhook request gets 409.
 - **parallel**: the new firing starts at once, alongside the running ones, with no limit on their number.
+- **replace**: kickd stops the running run, as `kickd cancel` does and with the event's [`stop_command`](#stop_command), and starts the new firing when it has stopped. The stopped run is recorded as `canceled`, with the reason `replaced`. When several firings wait for the stop, only the newest starts, and the others are recorded as `skipped`, with the reason `replaced`.
 
 `skip` suits work of which one run covers the firings that came during it, such as a sync.
 `queue` suits work that must handle every firing in order, such as builds and deploys.
 `parallel` suits firings that do not depend on each other, such as notifications.
+`replace` suits a long-running program that a new firing restarts, such as a server after a deploy.
 
 ```yaml
 events:

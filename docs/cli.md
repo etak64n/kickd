@@ -36,6 +36,7 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd history` | Shows the run history, newest first, so the runs that run or wait come first. `--event`, `--status` and `--limit` filter it, and `--status queued` shows only the runs that wait. |
 | `kickd show RUN_ID` | Shows one run: its details, parameters and command output. |
 | `kickd cancel RUN_ID` | Cancels a queued run, or stops a running one. |
+| `kickd cancel --event NAME` | Cancels every queued run of an event and stops its running ones. |
 | `kickd status` | Shows whether the agent is running, and how many runs are waiting. |
 | `kickd licenses` | Prints the licenses of kickd and of the third-party software that its executables include. |
 | `kickd version` | Prints the version. |

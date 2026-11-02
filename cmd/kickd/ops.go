@@ -532,13 +532,19 @@ func (c *cli) show(args []string) error {
 
 func (c *cli) cancel(args []string) error {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
+	name := fs.String("event", "", "cancel every queued and running run of the event `NAME` instead of one run")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	id, err := runID(pos)
-	if err != nil {
-		return err
+	var id int64
+	switch {
+	case *name != "" && len(pos) > 0:
+		return usageError{"give either a RUN_ID or --event, not both"}
+	case *name == "":
+		if id, err = runID(pos); err != nil {
+			return err
+		}
 	}
 	cfg, err := c.load()
 	if err != nil {
@@ -550,6 +556,9 @@ func (c *cli) cancel(args []string) error {
 	}
 	defer st.Close()
 	ctx := context.Background()
+	if *name != "" {
+		return c.cancelEvent(ctx, cfg, st, *name)
+	}
 	r, err := st.RequestCancel(ctx, id)
 	if errors.Is(err, queue.ErrNotFound) {
 		return fmt.Errorf("run %d not found", id)
@@ -567,6 +576,36 @@ func (c *cli) cancel(args []string) error {
 		}
 	default:
 		return fmt.Errorf("run %d is %s and cannot be canceled", r.ID, r.Status)
+	}
+	return nil
+}
+
+// cancelEvent cancels the queued runs of an event and asks the agent to
+// stop its running ones. An event that the config no longer defines can
+// still have runs to cancel.
+func (c *cli) cancelEvent(ctx context.Context, cfg *config.Config, st *queue.Store, name string) error {
+	runs, err := st.RequestCancelEvent(ctx, name)
+	if err != nil {
+		return err
+	}
+	if len(runs) == 0 {
+		if _, ok := cfg.EventByName(name); !ok {
+			return fmt.Errorf("unknown event %q", name)
+		}
+		fmt.Fprintf(c.stdout, "no run of %s is queued or running\n", name)
+		return nil
+	}
+	stopping := false
+	for _, r := range runs {
+		if r.CancelRequested {
+			stopping = true
+			fmt.Fprintf(c.stdout, "asked kickd to stop run %d (%s)\n", r.ID, r.Event)
+			continue
+		}
+		fmt.Fprintf(c.stdout, "canceled run %d (%s); it had not started\n", r.ID, r.Event)
+	}
+	if stopping && !c.agentAlive(ctx, st) {
+		fmt.Fprintln(c.stderr, "kickd: the agent is not running; it handles the runs as interrupted when it starts")
 	}
 	return nil
 }

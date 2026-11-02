@@ -94,6 +94,19 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code, out, _ := ops(t, cfg, "cancel", "1"); code != 0 || !strings.Contains(out, "had not started") {
 		t.Errorf("cancel: %d %q", code, out)
 	}
+	ops(t, cfg, "event", "deploy")
+	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "canceled run 2 (deploy); it had not started") {
+		t.Errorf("cancel --event: %d %q", code, out)
+	}
+	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "no run of deploy is queued or running") {
+		t.Errorf("cancel --event without runs: %d %q", code, out)
+	}
+	if code, _, errOut := ops(t, cfg, "cancel", "--event", "nope"); code != exitFailed || !strings.Contains(errOut, `unknown event "nope"`) {
+		t.Errorf("cancel --event of an unknown event: %d %q", code, errOut)
+	}
+	if code, _, errOut := ops(t, cfg, "cancel", "--event", "deploy", "1"); code != exitUsage || !strings.Contains(errOut, "not both") {
+		t.Errorf("cancel with both: %d %q", code, errOut)
+	}
 	if code, _, errOut := ops(t, cfg, "event", "nope"); code != exitUsage || !strings.Contains(errOut, `"nope" is not defined`) || !strings.Contains(errOut, "deploy, boom, slow") {
 		t.Errorf("unknown event: %d %q", code, errOut)
 	}

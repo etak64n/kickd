@@ -26,6 +26,7 @@ const (
 	PolicySkip     = "skip"
 	PolicyQueue    = "queue"
 	PolicyParallel = "parallel"
+	PolicyReplace  = "replace"
 )
 
 // Stdin modes.
@@ -297,10 +298,14 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	case ctx.Err() != nil:
 		res.Error, reason = "canceled", "shutdown"
 		msg, level = "Run interrupted", slog.LevelWarn
-		if errors.Is(context.Cause(ctx), event.ErrCanceledByUser) {
+		switch cause := context.Cause(ctx); {
+		case errors.Is(cause, event.ErrCanceledByUser):
 			reason, msg = "canceled_by_user", "Run canceled"
 			r.canceled.Add(1)
-		} else {
+		case errors.Is(cause, event.ErrReplaced):
+			reason, msg, level = "replaced", "Run replaced", slog.LevelInfo
+			r.canceled.Add(1)
+		default:
 			r.interrupted.Add(1)
 		}
 	case waitErr != nil && res.ExitCode == 0:
@@ -434,10 +439,14 @@ func (w tailWriter) Write(p []byte) (int, error) {
 func (r *Runner) canceledBeforeStart(log *slog.Logger, ctx context.Context, start time.Time) event.Result {
 	res := event.Result{ExitCode: -1, Duration: time.Since(start), Error: "canceled", Reason: "shutdown"}
 	msg := "Run interrupted"
-	if errors.Is(context.Cause(ctx), event.ErrCanceledByUser) {
+	switch cause := context.Cause(ctx); {
+	case errors.Is(cause, event.ErrCanceledByUser):
 		res.Reason, msg = "canceled_by_user", "Run canceled"
 		r.canceled.Add(1)
-	} else {
+	case errors.Is(cause, event.ErrReplaced):
+		res.Reason, msg = "replaced", "Run replaced"
+		r.canceled.Add(1)
+	default:
 		r.interrupted.Add(1)
 	}
 	r.processed.Add(1)

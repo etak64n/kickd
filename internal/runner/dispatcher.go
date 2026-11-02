@@ -76,6 +76,9 @@ type activeRun struct {
 	requestID string
 	start     time.Time
 	skipped   int
+	// replacing is set once a newer firing of an event whose concurrency
+	// is replace has asked this run to stop.
+	replacing bool
 }
 
 // NewDispatcher creates a dispatcher. log carries the process requestId.
@@ -461,7 +464,25 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			d.poke()
 		}
 	}()
+	// Under the replace policy only the newest firing of an event runs:
+	// the firings before it in the batch are replaced before they start.
+	newest := map[string]int64{}
+	d.mu.Lock()
 	for _, run := range runs {
+		if d.specs[run.Event].Concurrency == PolicyReplace {
+			newest[run.Event] = run.ID
+		}
+	}
+	d.mu.Unlock()
+	for _, run := range runs {
+		if id, ok := newest[run.Event]; ok && id != run.ID {
+			if done, ok := d.settle(ctx, run, queue.StatusSkipped, "replaced", fmt.Sprintf("run %d", id)); ok {
+				d.log.Info("Run replaced before it started", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "newerRunId", id)
+				done()
+			}
+			progressed = true
+			continue
+		}
 		if d.r.ctx.Err() != nil {
 			return
 		}
@@ -484,6 +505,21 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 			continue
 		case spec.Concurrency == PolicyQueue && d.running[run.Event] > 0:
 			d.mu.Unlock()
+			continue
+		case spec.Concurrency == PolicyReplace && d.running[run.Event] > 0:
+			// Stop the run in progress once; the firing starts when it has
+			// stopped and finish wakes the loop.
+			a := d.active[run.Event]
+			var cancel context.CancelCauseFunc
+			if a != nil && !a.replacing {
+				a.replacing = true
+				cancel = d.cancels[a.runID]
+			}
+			d.mu.Unlock()
+			if cancel != nil {
+				d.log.Info("Run replacing the previous run", "requestId", run.RequestID, "runId", run.ID, "event", run.Event, "activeRun", a.runID, "activeRequestId", a.requestID)
+				cancel(event.ErrReplaced)
+			}
 			continue
 		}
 		started, err := d.store.StartRun(ctx, run.ID, time.Now())

@@ -574,6 +574,39 @@ func (s *Store) RequestCancel(ctx context.Context, id int64) (Run, error) {
 	return r, tx.Commit()
 }
 
+// RequestCancelEvent cancels the queued runs of event at once and asks
+// kickd to stop its running ones, as RequestCancel does for one run. It
+// returns the runs that it canceled or asked to stop, oldest first.
+func (s *Store) RequestCancelEvent(ctx context.Context, event string) ([]Run, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	runs, err := queryRuns(ctx, tx, `SELECT `+runColumns+` FROM runs WHERE event = ? AND status IN (?, ?) ORDER BY id`, event, StatusQueued, StatusRunning)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	for i := range runs {
+		r := &runs[i]
+		switch r.Status {
+		case StatusQueued:
+			if _, err := tx.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = ? WHERE id = ?`,
+				StatusCanceled, "canceled_by_user", ms(now), r.ID); err != nil {
+				return nil, err
+			}
+			r.Status, r.Reason, r.FinishedAt = StatusCanceled, "canceled_by_user", now
+		case StatusRunning:
+			if _, err := tx.ExecContext(ctx, `UPDATE runs SET cancel_requested = 1 WHERE id = ?`, r.ID); err != nil {
+				return nil, err
+			}
+			r.CancelRequested = true
+		}
+	}
+	return runs, tx.Commit()
+}
+
 // CancelRequests returns running runs that "kickd cancel" asked to stop.
 func (s *Store) CancelRequests(ctx context.Context) ([]int64, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE status = ? AND cancel_requested = 1`, StatusRunning)

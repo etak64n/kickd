@@ -25,7 +25,7 @@ var commands = []command{
 	{"events", "[--json]", "List the events and what fires them"},
 	{"history", "[--event NAME] [--status STATUS] [--limit N] [--json]", "Show the runs, newest first, so the runs that run or wait come first"},
 	{"show", "RUN_ID [--json]", "Show one run, including its output"},
-	{"cancel", "RUN_ID", "Cancel a queued run, or stop a running one"},
+	{"cancel", "RUN_ID | --event NAME", "Cancel a queued run, or stop a running one; --event does so for every run of an event"},
 	{"status", "[--json]", "Show whether the agent is running and how many runs wait"},
 	{"check", "", "Validate the config and print a summary"},
 	{"init", "", "Write an example config and an example events file"},
