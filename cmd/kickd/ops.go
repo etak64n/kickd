@@ -498,6 +498,9 @@ func (c *cli) show(args []string) error {
 		fmt.Fprintf(tw, "signal\t%s\n", r.Signal)
 	}
 	fmt.Fprintf(tw, "queued\t%s\n", timeText(r.CreatedAt))
+	if !r.NotBefore.IsZero() {
+		fmt.Fprintf(tw, "not before\t%s\n", timeText(r.NotBefore))
+	}
 	fmt.Fprintf(tw, "started\t%s\n", timeText(r.StartedAt))
 	fmt.Fprintf(tw, "finished\t%s\n", timeText(r.FinishedAt))
 	fmt.Fprintf(tw, "duration\t%s\n", durationText(r))
@@ -689,6 +692,7 @@ type runView struct {
 	Signal     string `json:"signal,omitempty"`
 	Skipped    int    `json:"skipped,omitempty"`
 	CreatedAt  string `json:"queuedAt"`
+	NotBefore  string `json:"notBefore,omitempty"`
 	StartedAt  string `json:"startedAt,omitempty"`
 	FinishedAt string `json:"finishedAt,omitempty"`
 	DurationMs *int64 `json:"durationMs,omitempty"`
@@ -701,7 +705,7 @@ func runViews(runs []queue.Run) []runView {
 	for _, r := range runs {
 		v := runView{ID: r.ID, RequestID: r.RequestID, Event: r.Event, Trigger: r.Trigger, TriggerID: r.TriggerID, Source: r.Source,
 			Attempt: r.Attempt, RetryOf: r.RetryOf, Status: r.Status, Reason: r.Reason, Detail: r.Detail, ExitCode: r.ExitCode,
-			Signal: r.Signal, Skipped: r.Skipped, CreatedAt: rfc(r.CreatedAt), StartedAt: rfc(r.StartedAt), FinishedAt: rfc(r.FinishedAt)}
+			Signal: r.Signal, Skipped: r.Skipped, CreatedAt: rfc(r.CreatedAt), NotBefore: rfc(r.NotBefore), StartedAt: rfc(r.StartedAt), FinishedAt: rfc(r.FinishedAt)}
 		if !r.FinishedAt.IsZero() && !r.StartedAt.IsZero() {
 			d := r.Duration.Milliseconds()
 			v.DurationMs = &d
@@ -713,6 +717,9 @@ func runViews(runs []queue.Run) []runView {
 
 func reasonText(r queue.Run) string {
 	switch {
+	case r.Status == queue.StatusQueued && time.Until(r.NotBefore) > 0:
+		// A restart that waits for its delay.
+		return "starts at " + timeText(r.NotBefore)
 	case r.Reason != "" && r.Detail != "":
 		return r.Reason + ": " + r.Detail
 	case r.Reason != "":

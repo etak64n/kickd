@@ -33,7 +33,7 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd service ACTION` | Manages the service. `ACTION` is `install`, `uninstall`, `start`, `stop`, `restart` or `status`. |
 | `kickd event NAME` | Fires an event that has a manual trigger. |
 | `kickd events` | Lists the events, the triggers that fire each one, and the file that defines it. |
-| `kickd history` | Shows the run history, newest first, so the runs that run or wait come first. `--event`, `--status` and `--limit` filter it, and `--status queued` shows only the runs that wait. |
+| `kickd history` | Shows the run history, newest first, so the runs that run or wait come first. `--event`, `--status` and `--limit` filter it, and `--status queued` shows only the runs that wait. A restart that waits for its delay shows when it starts. |
 | `kickd show RUN_ID` | Shows one run: its details, parameters and command output. |
 | `kickd cancel RUN_ID` | Cancels a queued run, or stops a running one. |
 | `kickd cancel --event NAME` | Cancels every queued run of an event and stops its running ones. |

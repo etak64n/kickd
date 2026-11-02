@@ -270,6 +270,62 @@ events:
       - type: manual
 ```
 
+## `restart`
+
+`restart` decides whether kickd starts the event again when a run of it ends.
+
+- **Type**: one of `never`, `on-failure` and `always`.
+- **Default**: `never`.
+- **Takes effect**: for the runs that end after the file that defines the event is saved.
+
+The values mean:
+
+- **never**: only the triggers of the event start it.
+- **on-failure**: a run that failed, with a non-zero exit code, a timeout or a failure to start, starts the event again.
+- **always**: a run that succeeded or failed starts the event again.
+
+A restart is a firing with the trigger `restart`, and its run waits in the queue for the restart delay before it starts.
+The first restart waits [`restart_delay`](#restart_delay), and each restart after a run shorter than [`restart_max_delay`](#restart_max_delay) waits twice as long as the one before, up to `restart_max_delay`, so that a command that fails at once does not run in a tight loop.
+A run that lasts `restart_max_delay` or longer starts the waits again from `restart_delay`.
+`kickd history` shows when a waiting restart starts, and `kickd cancel` cancels it like any queued run.
+
+kickd does not restart a run that `kickd cancel` canceled, that a new firing replaced under [`concurrency: replace`](#concurrency), or that kickd stopping cut off: the [`on_interrupt`](#on_interrupt) setting handles that one, and a startup trigger starts the event when kickd starts again.
+A restart that waits when its event no longer restarts, because the config changed, is recorded as `dropped`, with the reason `restart_disabled`.
+
+`restart: always` with a startup trigger keeps a long-running program, such as a server, running while kickd runs:
+
+```yaml
+events:
+  - name: web
+    command: ['container', 'run', '--name', 'web', '--rm', 'web:latest']
+    stop_command: ['container', 'stop', 'web']
+    restart: always
+    triggers:
+      - type: startup
+```
+
+## `restart_delay`
+
+`restart_delay` is how long the first restart of an event waits before it starts.
+
+- **Type**: a duration, such as `500ms` or `5s`.
+- **Default**: `1s`. The value `0s` also gives `1s`.
+- **Takes effect**: for the runs that end after the file that defines the event is saved.
+
+Each restart that follows a run shorter than [`restart_max_delay`](#restart_max_delay) waits twice as long as the one before.
+A negative duration is an error of the config.
+
+## `restart_max_delay`
+
+`restart_max_delay` is the longest wait before a restart.
+
+- **Type**: a duration, such as `5m`.
+- **Default**: `1m`, or `restart_delay` when that is longer.
+- **Takes effect**: for the runs that end after the file that defines the event is saved.
+
+It is also how long a run must last for the next restart to wait only [`restart_delay`](#restart_delay) again.
+A value shorter than `restart_delay` is an error of the config.
+
 ## `on_interrupt`
 
 `on_interrupt` decides what happens to a run that a stop or a crash cut off.

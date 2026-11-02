@@ -92,6 +92,13 @@ const (
 	ConcurrencyReplace  = "replace"
 )
 
+// When kickd starts an event again after its run ends.
+const (
+	RestartNever     = "never"      // only its triggers start it
+	RestartOnFailure = "on-failure" // after a run that failed
+	RestartAlways    = "always"     // after a run that succeeded or failed
+)
+
 // What to do with a run that was cut off because kickd or the machine
 // stopped while it ran.
 const (
@@ -148,6 +155,10 @@ const (
 	DefaultRetention    = 7 * 24 * time.Hour
 	DefaultMaxAttempts  = 3
 	DefaultStopTimeout  = 10 * time.Second
+	// The delay before the first restart of an event, which doubles for
+	// each restart that follows a short run, up to the maximum.
+	DefaultRestartDelay    = time.Second
+	DefaultRestartMaxDelay = time.Minute
 )
 
 // Environment variables that override the log settings of the file, as
@@ -217,21 +228,24 @@ type Database struct {
 // runs are scheduled. "kickd event NAME" fires any event; triggers fire it
 // automatically.
 type Event struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description"`
-	Run         Command           `yaml:"command"`
-	Workdir     string            `yaml:"workdir"`
-	Env         map[string]string `yaml:"env"`
-	Timeout     time.Duration     `yaml:"timeout"`
-	StopRun     Command           `yaml:"stop_command"`
-	StopTimeout time.Duration     `yaml:"stop_timeout"`
-	Concurrency string            `yaml:"concurrency"`
-	OnInterrupt string            `yaml:"on_interrupt"`
-	MaxAttempts int               `yaml:"max_attempts"`
-	Stdin       string            `yaml:"stdin"`
-	LogOutput   *bool             `yaml:"log_output"`
-	Params      []Param           `yaml:"params"`
-	Triggers    []Trigger         `yaml:"triggers"`
+	Name            string            `yaml:"name"`
+	Description     string            `yaml:"description"`
+	Run             Command           `yaml:"command"`
+	Workdir         string            `yaml:"workdir"`
+	Env             map[string]string `yaml:"env"`
+	Timeout         time.Duration     `yaml:"timeout"`
+	StopRun         Command           `yaml:"stop_command"`
+	StopTimeout     time.Duration     `yaml:"stop_timeout"`
+	Concurrency     string            `yaml:"concurrency"`
+	Restart         string            `yaml:"restart"`
+	RestartDelay    time.Duration     `yaml:"restart_delay"`
+	RestartMaxDelay time.Duration     `yaml:"restart_max_delay"`
+	OnInterrupt     string            `yaml:"on_interrupt"`
+	MaxAttempts     int               `yaml:"max_attempts"`
+	Stdin           string            `yaml:"stdin"`
+	LogOutput       *bool             `yaml:"log_output"`
+	Params          []Param           `yaml:"params"`
+	Triggers        []Trigger         `yaml:"triggers"`
 
 	// Command and Shell hold Run once the file is loaded: the program and
 	// the arguments of a list, or the string that the shell runs.
@@ -622,6 +636,16 @@ func (c *Config) applyDefaults() {
 		if e.StopTimeout == 0 {
 			e.StopTimeout = DefaultStopTimeout
 		}
+		e.Restart = strings.ToLower(strings.TrimSpace(e.Restart))
+		if e.Restart == "" {
+			e.Restart = RestartNever
+		}
+		if e.RestartDelay == 0 {
+			e.RestartDelay = DefaultRestartDelay
+		}
+		if e.RestartMaxDelay == 0 {
+			e.RestartMaxDelay = max(DefaultRestartMaxDelay, e.RestartDelay)
+		}
 		if e.Concurrency == "" {
 			e.Concurrency = ConcurrencySkip
 		}
@@ -749,6 +773,15 @@ func (c *Config) validate() error {
 		}
 		if !slices.Contains([]string{ConcurrencySkip, ConcurrencyQueue, ConcurrencyParallel, ConcurrencyReplace}, e.Concurrency) {
 			fail("%s: concurrency %q must be skip, queue, parallel or replace", where, e.Concurrency)
+		}
+		if !slices.Contains([]string{RestartNever, RestartOnFailure, RestartAlways}, e.Restart) {
+			fail("%s: restart %q must be never, on-failure or always", where, e.Restart)
+		}
+		if e.RestartDelay < 0 {
+			fail("%s: restart_delay must not be negative", where)
+		}
+		if e.RestartMaxDelay < e.RestartDelay {
+			fail("%s: restart_max_delay must not be shorter than restart_delay", where)
 		}
 		if !slices.Contains([]string{InterruptAbandon, InterruptRerun}, e.OnInterrupt) {
 			fail("%s: on_interrupt %q must be abandon or rerun", where, e.OnInterrupt)

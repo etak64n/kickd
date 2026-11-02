@@ -24,6 +24,7 @@ const (
 	KindAfter   = "after"   // a run of another event ended
 	KindStartup = "startup" // the agent started
 	KindWake    = "wake"    // the machine woke from sleep
+	KindRestart = "restart" // a run of the event ended, and its restart setting starts it again
 )
 
 // NewID returns a random 16 character hex ID for requestId.

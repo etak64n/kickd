@@ -19,6 +19,10 @@ The event's `concurrency` setting decides what happens to a run when the same ev
 - **skip** (the default): the run is recorded as `skipped`, and its command does not start.
 - **queue**: the run waits until the running one finishes. Waiting runs start one at a time, in the order they were queued. Each event can have up to 1000 waiting runs.
 - **parallel**: the run starts at once, alongside the running one.
+- **replace**: kickd stops the running one, and the run starts when it has stopped.
+
+An event whose `restart` setting is `on-failure` or `always` fires again when a run of it ends: kickd queues a run with the trigger `restart`, which waits for the restart delay before it starts.
+`kickd history` shows when such a run starts, and `kickd cancel` cancels it like any queued run.
 
 ## Run statuses
 
@@ -26,13 +30,13 @@ A run is always in one of these statuses:
 
 | Status | Meaning |
 |---|---|
-| `queued` | Waiting to start |
+| `queued` | Waiting to start, or, for a restart, waiting for its delay |
 | `running` | The command is running |
 | `succeeded` | The command exited with code 0 |
 | `failed` | The command failed: a non-zero exit code, a timeout, or a failure to start |
-| `canceled` | Canceled with `kickd cancel` |
-| `skipped` | Not started, because the event was running and its `concurrency` is `skip` |
-| `dropped` | Discarded, because the event already had the maximum number of waiting runs, or the config no longer defines the event |
+| `canceled` | Canceled with `kickd cancel`, or stopped for a new firing of an event whose `concurrency` is `replace` (the reason `replaced`) |
+| `skipped` | Not started, because the event was running and its `concurrency` is `skip`, or because a newer firing took its place under `replace` |
+| `dropped` | Discarded, because the event already had the maximum number of waiting runs, the config no longer defines the event, or its `restart` was turned off while the restart waited |
 | `interrupted` | Stopped when the agent stopped; handled by `on_interrupt` when the agent starts again |
 | `retried` | Interrupted, and replaced by a new run of the same firing |
 | `abandoned` | Interrupted, and not run again |

@@ -85,6 +85,7 @@ The same two records in text format:
 | `Run replaced` | INFO | A new firing of an event whose `concurrency` is `replace` stopped the running command | `reason`, `signal`, `durationMs` |
 | `Run replacing the previous run` | INFO | A new firing asked the running run of its event, whose `concurrency` is `replace`, to stop | `runId`, `activeRun`, `activeRequestId` |
 | `Run replaced before it started` | INFO | A newer firing of an event whose `concurrency` is `replace` took the place of a waiting one | `runId`, `newerRunId` |
+| `Restart scheduled` | INFO | A run of an event whose `restart` setting asks for it ended, and kickd queued the next run, which waits for the delay | `runId`, `afterRunId`, `status`, `delayMs` |
 | `Stop command started` | INFO | kickd runs the `stop_command` of a run that it stops | `stopTimeoutMs` |
 | `Stop command completed` | INFO | The stop command exited with code 0 | `exitCode`, `durationMs` |
 | `Stop command failed` | WARN | The stop command failed, or ran past `stop_timeout`; kickd sends SIGTERM next | `reason`, `exitCode`, `durationMs`, `stderrTail` |

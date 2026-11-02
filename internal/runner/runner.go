@@ -35,6 +35,13 @@ const (
 	StdinPayload = "payload"
 )
 
+// Restart policies, as config.Event.Restart spells them.
+const (
+	RestartNever     = "never"
+	RestartOnFailure = "on-failure"
+	RestartAlways    = "always"
+)
+
 // Interruption handling, as config.Event.OnInterrupt spells it.
 const (
 	InterruptAbandon = "abandon"
@@ -68,10 +75,16 @@ type Spec struct {
 	StopShell   string
 	StopTimeout time.Duration
 	Concurrency string
-	OnInterrupt string
-	MaxAttempts int
-	Stdin       string
-	LogOutput   bool
+	// Restart, as config.Event.Restart spells it, decides whether kickd
+	// starts the event again after a run ends; RestartDelay is the first
+	// delay, which doubles up to RestartMaxDelay.
+	Restart         string
+	RestartDelay    time.Duration
+	RestartMaxDelay time.Duration
+	OnInterrupt     string
+	MaxAttempts     int
+	Stdin           string
+	LogOutput       bool
 	// Defaults fills in parameters that a firing does not set.
 	Defaults map[string]string
 	// After lists the events whose runs fire this event when they end.

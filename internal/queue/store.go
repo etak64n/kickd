@@ -47,7 +47,7 @@ func Final(status string) bool {
 // ErrNotFound is returned when a run does not exist.
 var ErrNotFound = errors.New("not found")
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 // schemaV2 creates the tables of version 2, the first released version.
 var schemaV2 = []string{
@@ -110,6 +110,13 @@ var schemaV4 = []string{
 	`ALTER TABLE runs ADD COLUMN followed INTEGER NOT NULL DEFAULT 0`,
 	`UPDATE runs SET followed = 1 WHERE status NOT IN ('queued', 'running', 'interrupted')`,
 	`CREATE INDEX runs_unfollowed ON runs (id) WHERE followed = 0`,
+}
+
+// schemaV5 lets a queued run wait until a time: a restart of an event
+// waits for its delay in the queue, where kickd history shows it and
+// kickd cancel can cancel it.
+var schemaV5 = []string{
+	`ALTER TABLE runs ADD COLUMN not_before INTEGER`,
 }
 
 // Store is an open kickd database: the record of every run.
@@ -232,7 +239,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	steps := []struct {
 		version int
 		stmts   []string
-	}{{2, schemaV2}, {3, schemaV3}, {4, schemaV4}}
+	}{{2, schemaV2}, {3, schemaV3}, {4, schemaV4}, {5, schemaV5}}
 	for _, step := range steps {
 		if v >= step.version {
 			continue
@@ -289,13 +296,16 @@ type Run struct {
 	StartedAt       time.Time
 	FinishedAt      time.Time
 	Duration        time.Duration
+	// NotBefore is the time before which a queued run does not start. It
+	// is zero for a run that starts as soon as its event allows.
+	NotBefore time.Time
 }
 
 // Open reports whether the run is still queued or running.
 func (r Run) Open() bool { return r.Status == StatusQueued || r.Status == StatusRunning }
 
 const runColumns = `id, request_id, event, trigger_kind, trigger_id, source, payload, status, reason, detail, attempt, retry_of,
-	exit_code, signal, output, output_truncated, skipped, cancel_requested, created_at, started_at, finished_at, duration_ms`
+	exit_code, signal, output, output_truncated, skipped, cancel_requested, created_at, started_at, finished_at, duration_ms, not_before`
 
 func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	var (
@@ -305,9 +315,10 @@ func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 		truncated, cancel        int
 		created                  int64
 		started, finished, durMs sql.NullInt64
+		notBefore                sql.NullInt64
 	)
 	if err := row.Scan(&r.ID, &r.RequestID, &r.Event, &r.Trigger, &r.TriggerID, &r.Source, &payload, &r.Status, &r.Reason, &r.Detail,
-		&r.Attempt, &retryOf, &exit, &r.Signal, &r.Output, &truncated, &r.Skipped, &cancel, &created, &started, &finished, &durMs); err != nil {
+		&r.Attempt, &retryOf, &exit, &r.Signal, &r.Output, &truncated, &r.Skipped, &cancel, &created, &started, &finished, &durMs, &notBefore); err != nil {
 		return Run{}, err
 	}
 	r.Payload = []byte(payload)
@@ -321,6 +332,7 @@ func scanRun(row interface{ Scan(...any) error }) (Run, error) {
 	r.CreatedAt = time.UnixMilli(created)
 	r.StartedAt = fromMs(started)
 	r.FinishedAt = fromMs(finished)
+	r.NotBefore = fromMs(notBefore)
 	if durMs.Valid {
 		r.Duration = time.Duration(durMs.Int64) * time.Millisecond
 	}
@@ -384,10 +396,14 @@ func insertRun(ctx context.Context, tx *sql.Tx, r Run, maxQueued int) (int64, bo
 			status, reason, finished = StatusDropped, "queue_full", ms(time.Now())
 		}
 	}
+	var notBefore any
+	if !r.NotBefore.IsZero() {
+		notBefore = ms(r.NotBefore)
+	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO runs (request_id, event, trigger_kind, trigger_id, source, payload, status, reason, attempt,
-		retry_of, created_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		retry_of, created_at, finished_at, not_before) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.RequestID, r.Event, r.Trigger, r.TriggerID, r.Source, string(r.Payload), status, reason, r.Attempt,
-		nullID(r.RetryOf), ms(r.CreatedAt), finished)
+		nullID(r.RetryOf), ms(r.CreatedAt), finished, notBefore)
 	if err != nil {
 		return 0, false, err
 	}
@@ -463,8 +479,8 @@ func nullID(id int64) any {
 // QueuedRuns returns queued runs, oldest first, leaving out the runs of the
 // events named in except.
 func (s *Store) QueuedRuns(ctx context.Context, limit int, except []string) ([]Run, error) {
-	q := `SELECT ` + runColumns + ` FROM runs WHERE status = ?`
-	args := []any{StatusQueued}
+	q := `SELECT ` + runColumns + ` FROM runs WHERE status = ? AND (not_before IS NULL OR not_before <= ?)`
+	args := []any{StatusQueued, ms(time.Now())}
 	if len(except) > 0 {
 		q += ` AND event NOT IN (` + strings.TrimSuffix(strings.Repeat("?, ", len(except)), ", ") + `)`
 		for _, e := range except {
@@ -473,6 +489,17 @@ func (s *Store) QueuedRuns(ctx context.Context, limit int, except []string) ([]R
 	}
 	args = append(args, limit)
 	return queryRuns(ctx, s.db, q+` ORDER BY id LIMIT ?`, args...)
+}
+
+// NextNotBefore returns the earliest time at which a queued run that
+// waits becomes due, and false when no queued run waits.
+func (s *Store) NextNotBefore(ctx context.Context) (time.Time, bool, error) {
+	var at sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT MIN(not_before) FROM runs WHERE status = ? AND not_before > ?`, StatusQueued, ms(time.Now())).Scan(&at)
+	if err != nil || !at.Valid {
+		return time.Time{}, false, err
+	}
+	return time.UnixMilli(at.Int64), true, nil
 }
 
 // CountQueued returns the number of queued runs of an event.

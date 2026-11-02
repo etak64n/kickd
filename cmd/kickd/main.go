@@ -228,21 +228,21 @@ func cmdCheck(path string, args []string) error {
 	for _, e := range cfg.Events {
 		// A list is shown as a list, so that it does not read as a string
 		// for the shell.
-		cmd := e.Shell
-		if cmd == "" {
-			quoted := make([]string, len(e.Command))
-			for i, a := range e.Command {
-				quoted[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
-			}
-			cmd = "[" + strings.Join(quoted, ", ") + "]"
-		}
+		cmd := commandText(e.Shell, e.Command)
 		interrupt := e.OnInterrupt
 		if e.OnInterrupt == config.InterruptRerun {
 			interrupt = fmt.Sprintf("rerun, up to %d attempts", e.MaxAttempts)
 		}
-		fmt.Printf("- %s [%s; on interrupt: %s]: %s\n", e.Name, e.Concurrency, interrupt, cmd)
+		restart := ""
+		if e.Restart != config.RestartNever {
+			restart = fmt.Sprintf("; restart: %s, after %s to %s", e.Restart, e.RestartDelay, e.RestartMaxDelay)
+		}
+		fmt.Printf("- %s [%s; on interrupt: %s%s]: %s\n", e.Name, e.Concurrency, interrupt, restart, cmd)
 		fmt.Printf("    file     %s\n", filepath.Base(e.File))
 		fmt.Printf("    workdir  %s\n", e.Workdir)
+		if stop := commandText(e.StopShell, e.StopCommand); stop != "" {
+			fmt.Printf("    stop     %s (stop_timeout %s)\n", stop, e.StopTimeout)
+		}
 		for k, v := range e.Env {
 			if strings.EqualFold(k, "PATH") {
 				fmt.Printf("    PATH     %s\n", v)
@@ -260,6 +260,19 @@ func cmdCheck(path string, args []string) error {
 		fmt.Printf("warning: event %q: %s\n", w.Event, w.Detail)
 	}
 	return nil
+}
+
+// commandText shows a command of the config: a string as it is, and a list
+// as a list, so that it does not read as a string for the shell.
+func commandText(shell string, args []string) string {
+	if shell != "" || len(args) == 0 {
+		return shell
+	}
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // eventsIn counts the events of cfg that the file defines.
