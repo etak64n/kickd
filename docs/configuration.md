@@ -277,7 +277,7 @@ This event has two triggers: it fires on a POST to `/hooks/deploy`, and on `kick
 
 ```yaml
 webhook:
-  listen: '127.0.0.1:8787'
+  listen: '127.0.0.1:9787'
 events:
   - name: deploy
     command: ['/home/me/app/deploy.sh']
@@ -301,7 +301,7 @@ From the command line, the parameter is passed as `kickd event deploy ref=v1.2`.
 Through the webhook, it is passed in the query:
 
 ```sh
-curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:8787/hooks/deploy?ref=v1.2"
+curl -X POST -H "Authorization: Bearer <token>" "http://127.0.0.1:9787/hooks/deploy?ref=v1.2"
 ```
 
 A command such as `openssl rand -hex 32` generates a suitable token.

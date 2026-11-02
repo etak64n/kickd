@@ -12,7 +12,7 @@ import (
 // The config of the README, as kickd init writes it for Windows. Its
 // events work in C:\scripts and C:\app, which the tests create from
 // testdata/readme, so they change the machine and run only with
-// KICKD_MACHINE_TEST=1. Its webhook listens on port 8787, so these tests
+// KICKD_MACHINE_TEST=1. Its webhook listens on port 9787, so these tests
 // run one at a time.
 
 // readme returns a home with the README config, and C:\scripts and C:\app
@@ -45,7 +45,7 @@ func TestReadmeNotifyRunsByHand(t *testing.T) {
 func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 	h := readme(t)
 	h.start()
-	res := request(t, "POST", 8787, "/hooks/deploy", "", "Authorization", "Bearer replace-with-a-long-random-string")
+	res := request(t, "POST", 9787, "/hooks/deploy", "", "Authorization", "Bearer replace-with-a-long-random-string")
 	if res.status != http.StatusAccepted {
 		t.Fatalf("POST /hooks/deploy: %d %s", res.status, res.body)
 	}
@@ -58,7 +58,7 @@ func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 func TestReadmeWebhookRefusesARequestWithoutTheToken(t *testing.T) {
 	h := readme(t)
 	h.start()
-	if res := request(t, "POST", 8787, "/hooks/deploy", ""); res.status != http.StatusUnauthorized {
+	if res := request(t, "POST", 9787, "/hooks/deploy", ""); res.status != http.StatusUnauthorized {
 		t.Fatalf("POST /hooks/deploy without the token: %d %s", res.status, res.body)
 	}
 	if rs := h.runs("deploy"); len(rs) != 0 {

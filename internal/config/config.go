@@ -145,7 +145,7 @@ var AfterStatuses = []string{"succeeded", "failed", "canceled", "skipped", "drop
 
 // Defaults applied when a field is left empty.
 const (
-	DefaultListen       = "127.0.0.1:8787"
+	DefaultListen       = "127.0.0.1:9787"
 	DefaultDebounce     = time.Second
 	DefaultLogLevel     = "info"
 	DefaultLogFormat    = "auto"

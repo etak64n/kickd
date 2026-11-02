@@ -37,7 +37,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`log.max_size_mb`](settings/log.md#logmax_size_mb) | `10` | The size in MB past which kickd renames the log file with `.1` appended and starts a new one. |
 | [`log.max_backups`](settings/log.md#logmax_backups) | `5` | How many renamed log files to keep. |
 | [`webhook.enabled`](settings/webhook.md#webhookenabled) | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
-| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:8787` | The address of the HTTP server that all webhook triggers share. |
+| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:9787` | The address of the HTTP server that all webhook triggers share. |
 | [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
 | [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
 | [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |

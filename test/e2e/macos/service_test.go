@@ -6,7 +6,7 @@ package macos
 // service, as docs/install-macos.md does, and they move the clock. They run
 // only with KICKD_MACHINE_TEST=1, which the CI sets on its throwaway
 // machines. They run one at a time, because every service listens on port
-// 8787.
+// 9787.
 
 import (
 	"bytes"
@@ -114,8 +114,8 @@ func (s *service) removeAtEnd(dirs ...string) {
 		// The next test starts a service on the same address. A connection
 		// of root stays in TIME_WAIT for up to 30 seconds after the service
 		// stops, and until then macOS lets no other user bind its address.
-		waitFor(s.t, "port 8787 is free", 60*time.Second, func() bool {
-			ln, err := net.Listen("tcp", "127.0.0.1:8787")
+		waitFor(s.t, "port 9787 is free", 60*time.Second, func() bool {
+			ln, err := net.Listen("tcp", "127.0.0.1:9787")
 			if err == nil {
 				ln.Close()
 			}
@@ -309,7 +309,7 @@ func TestServiceOfTheSystemRunsCommandsAsRoot(t *testing.T) {
 
 func TestServiceOfTheSystemAcceptsAWebhookRequest(t *testing.T) {
 	s := launchDaemon(t)
-	res := request(t, "POST", 8787, "/hooks/whoami", "", "Authorization", "Bearer whoami-token")
+	res := request(t, "POST", 9787, "/hooks/whoami", "", "Authorization", "Bearer whoami-token")
 	var accepted struct{ RequestID string }
 	if res.status != 202 || json.Unmarshal([]byte(res.body), &accepted) != nil {
 		t.Fatalf("POST /hooks/whoami: %d %s", res.status, res.body)

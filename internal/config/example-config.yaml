@@ -11,7 +11,7 @@ log:
 
 webhook:
   enabled: true              # false keeps the HTTP server off, so webhook triggers do not fire
-  listen: '127.0.0.1:8787'   # the HTTP server starts only when an event has a webhook trigger
+  listen: '127.0.0.1:9787'   # the HTTP server starts only when an event has a webhook trigger
   max_body_bytes: 1048576    # the largest request body accepted
 
 database:

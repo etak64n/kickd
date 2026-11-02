@@ -5,7 +5,7 @@
 #   Content type: application/json
 #   Secret:       the value of secret below
 #   Events:       Just the push event
-# A reverse proxy with TLS forwards the requests to kickd on 127.0.0.1:8787.
+# A reverse proxy with TLS forwards the requests to kickd on 127.0.0.1:9787.
 #
 # Needs:   git and jq on the server, /srv/app as a clone of the repository
 # Config:  /etc/kickd/config.yaml
@@ -16,7 +16,7 @@ log:
   path: '/var/log/kickd/kickd.log'
 webhook:
   enabled: true
-  listen: '127.0.0.1:8787'
+  listen: '127.0.0.1:9787'
 database:
   path: '/var/lib/kickd/kickd.db'
 
