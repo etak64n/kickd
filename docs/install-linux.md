@@ -36,6 +36,7 @@ Move the executable to `/usr/local/bin` before installing the service.
 A kickd installed as a system-wide unit runs as root, and runs the commands in its config as root.
 Run as root, kickd reads the config for the whole machine, `/etc/kickd/config.yaml`, in a directory that only root can change.
 With `sudo`, `kickd init` writes two files there, each readable and writable only by its owner: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+`kickd init --no-examples` writes the config file alone, for events that come in a file of their own.
 
 ```sh
 sudo kickd init

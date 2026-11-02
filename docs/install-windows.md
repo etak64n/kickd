@@ -50,6 +50,7 @@ The steps from here on run in PowerShell opened as administrator.
 In a PowerShell that was not opened as administrator, kickd reads the config of the user, `~\.kickd\config.yaml`, instead.
 
 `kickd init` writes two files to `C:\ProgramData\kickd`: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+`kickd init --no-examples` writes the config file alone, for events that come in a file of their own.
 
 ```powershell
 kickd init

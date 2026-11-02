@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -399,11 +400,25 @@ func orDash(s string) string {
 // to it, with the log and the database of a service of the whole machine
 // when system is true.
 func cmdInit(path string, system bool, args []string) error {
-	if err := noArgs("init", args); err != nil {
+	fs, noExamples := initFlags()
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			text, _ := commandHelp("init", fs)
+			fmt.Print(text)
+			return flag.ErrHelp
+		}
+		return usageError{fmt.Sprintf("kickd init: %v; kickd help init shows its usage", err)}
+	}
+	if err := noArgs("init", fs.Args()); err != nil {
 		return err
 	}
 	events := filepath.Join(filepath.Dir(path), config.ExampleEventsName)
-	for _, p := range []string{path, events} {
+	files := []string{path, events}
+	if *noExamples {
+		files = files[:1]
+	}
+	for _, p := range files {
 		if fileExists(p) {
 			return fmt.Errorf("%s already exists", p)
 		}
@@ -414,17 +429,32 @@ func cmdInit(path string, system bool, args []string) error {
 	if err := os.WriteFile(path, []byte(config.ExampleConfig(runtime.GOOS, system)), 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
-		return err
+	if !*noExamples {
+		if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
+			return err
+		}
 	}
 	p := config.PathsFor(runtime.GOOS, system)
 	fmt.Printf("wrote %s\n", path)
+	if *noExamples {
+		fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
+		fmt.Printf("Add a .yaml file of events next to it, then run: %skickd check\n", sudo(system))
+		fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
+		return nil
+	}
 	fmt.Printf("wrote %s\n", events)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 	fmt.Printf("Edit them, then run: %skickd check\n", sudo(system))
 	fmt.Println("kickd reads the events of every .yaml and .yml file next to the config file.")
 	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
 	return nil
+}
+
+// initFlags are the flags of kickd init.
+func initFlags() (*flag.FlagSet, *bool) {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	noExamples := fs.Bool("no-examples", false, "write the config file alone, without the file of example events")
+	return fs, noExamples
 }
 
 // perUser reports whether kickd service works on the service of the user

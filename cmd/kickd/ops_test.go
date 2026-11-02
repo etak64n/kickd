@@ -295,6 +295,29 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 	}
 }
 
+func TestInitWithoutExamplesWritesTheConfigAlone(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.yaml")
+	// A file of events that is already there stays as it is.
+	events := filepath.Join(dir, config.ExampleEventsName)
+	if err := os.WriteFile(events, []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdInit(cfg, false, []string{"--no-examples"}); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(cfg) {
+		t.Fatal("the config file was not written")
+	}
+	if b, _ := os.ReadFile(events); string(b) != "mine" {
+		t.Fatalf("the events file was overwritten: %q", b)
+	}
+	var ue usageError
+	if err := cmdInit(filepath.Join(t.TempDir(), "config.yaml"), false, []string{"--examples"}); !errors.As(err, &ue) {
+		t.Errorf("an unknown flag: %v", err)
+	}
+}
+
 func TestInitRefusesToOverwriteTheEventsFile(t *testing.T) {
 	dir := t.TempDir()
 	events := filepath.Join(dir, config.ExampleEventsName)

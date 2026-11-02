@@ -49,6 +49,7 @@ xattr -d com.apple.quarantine /usr/local/bin/kickd
 ## 2. Create the config file
 
 `kickd init` writes two example files to `~/.kickd`: the config file `config.yaml`, with the settings of kickd, and `event.example.yaml`, with four events, one for each kind of trigger.
+`kickd init --no-examples` writes the config file alone, for events that come in a file of their own.
 The config puts the log of kickd in `~/.kickd/kickd.log`, and the database in `~/.kickd/kickd.db`.
 The files are the macOS and Linux files of the README.
 Delete the events that are not needed, and change the paths to match the Mac.

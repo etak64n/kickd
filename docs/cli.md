@@ -30,6 +30,7 @@ The subcommands that work with runs read and write the database of the config fi
 | `kickd run` | Runs the agent in the foreground. A service manager starts the agent with this subcommand too. |
 | `kickd check` | Validates the config, prints every error, and lists the files whose events it reads, and the events with their triggers. |
 | `kickd init` | Writes an example config file and an example events file, `event.example.yaml`, next to it, for the OS that it runs on: the files that the README shows for that OS. It refuses to overwrite an existing file. |
+| `kickd init --no-examples` | Writes the config file alone, for a directory whose events come from files of their own. |
 | `kickd service ACTION` | Manages the service. `ACTION` is `install`, `uninstall`, `start`, `stop`, `restart` or `status`. |
 | `kickd event NAME` | Fires an event that has a manual trigger. |
 | `kickd events` | Lists the events, the triggers that fire each one, and the file that defines it. |
