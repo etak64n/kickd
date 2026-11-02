@@ -3,7 +3,7 @@
 [Documentation index](index.md)
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
-The config file has four top-level sections, `log`, `webhook`, `database` and `events`, and the other files have only `events`.
+The config file has five top-level sections, `log`, `webhook`, `database`, `env` and `events`, and the other files have only `events`.
 In kickd, a named command is an **event**, and a **trigger** fires an event.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
 
@@ -41,6 +41,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
 | [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
 | [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |
+| [`env`](settings/events.md#for-every-event) | none | Environment variables for the commands of every event, under the `env` of each event. |
 | [`events`](settings/events.md) | none | The list of events, in the config file or in another YAML file next to it. The config needs at least one event. |
 
 ## Event keys

@@ -135,7 +135,7 @@ To keep kickd running in the background, install it as a service by following th
 kickd reads its settings from `~/.kickd/config.yaml`, and its events from the YAML files in `~/.kickd`.
 Run as root with `sudo`, or as an administrator on Windows, kickd reads the config for the whole machine instead: from `/etc/kickd` on Linux, `/Library/Application Support/kickd` on macOS, and `C:\ProgramData\kickd` on Windows.
 A service of the whole machine runs its commands as root, or as SYSTEM on Windows, so only root and administrators can change the files of that config.
-`config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default.
+`config.yaml` holds the three sections of settings, `log`, `webhook` and `database`, and every key of them has a default; an `env` section can add environment variables for every event.
 Events are listed under `events`, in `config.yaml` or in any other `.yaml` or `.yml` file of the directory: kickd reads every file there that has an `events` section, so each group of events, such as those of one app, can have a file of its own.
 
 Commands, shells and paths differ between operating systems, so the files are written for one OS.

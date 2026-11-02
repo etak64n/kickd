@@ -307,6 +307,33 @@ events:
 	}
 }
 
+// The env of the config file loads for every event, and another file of
+// events cannot set it.
+func TestEnvOfTheConfigFile(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+env:
+  LANG: en_US.UTF-8
+  PATH: '/opt/homebrew/bin:${PATH}'
+events:
+  - name: a
+    command: [x]
+    triggers: [{type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["LANG"] != "en_US.UTF-8" || cfg.Env["PATH"] != "/opt/homebrew/bin:${PATH}" {
+		t.Fatalf("env = %v", cfg.Env)
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("log: {level: info}\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "more.yaml"), []byte("env: {A: b}\nevents:\n  - name: a\n    command: [x]\n    triggers: [{type: manual}]\n"), 0o600)
+	if _, err := Load(filepath.Join(dir, "config.yaml")); err == nil || !strings.Contains(err.Error(), "env belongs in the config file") {
+		t.Fatalf("env in a file of events: %v", err)
+	}
+}
+
 // restart is off by default, and its delays have defaults.
 func TestRestartDefaults(t *testing.T) {
 	noLogEnv(t)

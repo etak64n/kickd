@@ -341,6 +341,7 @@ func specs(cfg *config.Config) []runner.Spec {
 			Shell:           e.Shell,
 			Workdir:         e.Workdir,
 			Env:             e.Env,
+			BaseEnv:         cfg.Env,
 			Timeout:         e.Timeout,
 			StopCommand:     e.StopCommand,
 			StopShell:       e.StopShell,

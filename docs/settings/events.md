@@ -133,13 +133,14 @@ events:
 - **Default**: none.
 - **Takes effect**: for runs that start after the file that defines the event is saved.
 
-A command receives three layers of environment variables, each on top of the one before:
+A command receives four layers of environment variables, each on top of the one before:
 
 1. **The environment of kickd**, which depends on how kickd was started: a terminal gives kickd the variables of its shell, and a service manager gives it far fewer.
-2. **The `env` of the event**, which adds variables and replaces the variables of kickd that have the same name.
-3. **The variables of the run**, such as `KICKD_EVENT` and `KICKD_DATA_REF`, which replace the variables of the same name from the other layers.
+2. **The `env` of the config file**, which applies to every event (see [For every event](#for-every-event)).
+3. **The `env` of the event**, which adds variables and replaces the variables of the layers below that have the same name.
+4. **The variables of the run**, such as `KICKD_EVENT` and `KICKD_DATA_REF`, which replace the variables of the same name from the other layers.
 
-In a value, `${NAME}` and `$NAME` are replaced by the variable `NAME` of kickd, as it is when the run starts.
+In a value, `${NAME}` and `$NAME` are replaced by the variable `NAME` as the layers below give it, as it is when the run starts: in the `env` of an event, by the `env` of the config file or by kickd.
 kickd has no way to escape `$`, so a value that must contain text such as `$word`, like a password with a `$` in it, belongs in a file that the command reads.
 The config uses this form on Windows too, as in `${USERPROFILE}`; the `%USERPROFILE%` form is expanded only by cmd, inside a string command.
 
@@ -157,6 +158,27 @@ events:
     env:
       PATH: '${HOME}/.local/bin:${PATH}'
       PYTHONUNBUFFERED: '1'
+    triggers:
+      - type: manual
+```
+
+### For every event
+
+The `env` section of the config file, beside `log` and `database`, sets environment variables for the commands of every event.
+The `env` of an event replaces a variable of the same name, and `${NAME}` in the `env` of an event refers to the value that the config file sets.
+It suits variables that every command needs, such as a `PATH` with the directories of Homebrew, or the `LANG` that a service manager does not set.
+The section belongs in the config file, and another file of events that has one is an error.
+
+```yaml
+env:
+  PATH: '/opt/homebrew/bin:/usr/local/bin:${PATH}'
+  LANG: 'en_US.UTF-8'
+events:
+  - name: report
+    command: ['uv', 'run', 'report.py']
+    workdir: '~/reports'
+    env:
+      PATH: '${HOME}/.local/bin:${PATH}'
     triggers:
       - type: manual
 ```

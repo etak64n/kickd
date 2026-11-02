@@ -172,6 +172,24 @@ events:
 
 `env` adds environment variables for the command, and `${PATH}` in its values expands to the `PATH` of kickd itself.
 `kickd check` prints the `PATH` that each event sets.
+The [`env` of the config file](settings/events.md#for-every-event) sets a `PATH` for every event at once.
+
+## Locale under launchd
+
+launchd starts kickd without `LANG` and the other locale variables, so the commands of a service run in the C locale, while the same commands run in the locale of the shell under `kickd run` in a terminal.
+Programs then treat text differently: for example, the `/bin/sh` of macOS, bash 3.2, reads `$VERSION（` as a variable whose name ends with the first byte of `（` when `LANG` is UTF-8, but not in the C locale.
+Set the locale that the commands expect in the `env` of the config file, so that they run the same way under the service and in a terminal:
+
+```yaml
+env:
+  LANG: 'en_US.UTF-8'
+events:
+  - name: report
+    command: ['./report.sh']
+    workdir: '~/reports'
+    triggers:
+      - type: manual
+```
 
 ## Access to protected folders
 

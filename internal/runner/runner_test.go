@@ -637,3 +637,22 @@ func TestOutputFileThatCannotOpenDoesNotStopTheRun(t *testing.T) {
 		t.Fatalf("Output file unavailable logged %d times", len(got))
 	}
 }
+
+func TestEnvOfTheConfigFileIsUnderTheEnvOfTheEvent(t *testing.T) {
+	t.Setenv("KICKD_TEST_BASE", "agent")
+	spec := Spec{
+		BaseEnv: map[string]string{"LAYER": "base", "ONLY_BASE": "b", "CHAIN": "base:${KICKD_TEST_BASE}"},
+		Env:     map[string]string{"LAYER": "event", "FROM_BASE": "${ONLY_BASE}-event", "CHAIN": "event:${CHAIN}"},
+	}
+	env := buildEnv(spec, fileEvent(), "payload.json")
+	for k, want := range map[string]string{
+		"LAYER":     "event",
+		"ONLY_BASE": "b",
+		"FROM_BASE": "b-event",
+		"CHAIN":     "event:base:agent",
+	} {
+		if got := envValue(env, k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+}

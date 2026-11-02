@@ -180,7 +180,10 @@ type Config struct {
 	Log      Log      `yaml:"log"`
 	Webhook  Webhook  `yaml:"webhook"`
 	Database Database `yaml:"database"`
-	Events   []Event  `yaml:"events"`
+	// Env sets environment variables for the commands of every event, under
+	// the env of each event.
+	Env    map[string]string `yaml:"env"`
+	Events []Event           `yaml:"events"`
 
 	// Path is the absolute path of the loaded file and Dir its directory.
 	// Relative paths in the file are resolved against Dir.

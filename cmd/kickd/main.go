@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -225,6 +226,15 @@ func cmdCheck(path string, args []string) error {
 	case cfg.HasWebhook():
 		fmt.Println("webhook: disabled by webhook.enabled, so webhook triggers do not fire")
 	}
+	if len(cfg.Env) > 0 {
+		// The names only: the values can be secrets.
+		names := make([]string, 0, len(cfg.Env))
+		for k := range cfg.Env {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		fmt.Printf("env: %s (for every event)\n", strings.Join(names, ", "))
+	}
 	for _, e := range cfg.Events {
 		// A list is shown as a list, so that it does not read as a string
 		// for the shell.
@@ -243,10 +253,10 @@ func cmdCheck(path string, args []string) error {
 		if stop := commandText(e.StopShell, e.StopCommand); stop != "" {
 			fmt.Printf("    stop     %s (stop_timeout %s)\n", stop, e.StopTimeout)
 		}
-		for k, v := range e.Env {
-			if strings.EqualFold(k, "PATH") {
-				fmt.Printf("    PATH     %s\n", v)
-			}
+		if path, ok := envPath(e.Env); ok {
+			fmt.Printf("    PATH     %s\n", path)
+		} else if path, ok := envPath(cfg.Env); ok {
+			fmt.Printf("    PATH     %s (env of the config file)\n", path)
 		}
 		for _, t := range e.Triggers {
 			if t.Type == config.TriggerManual {
@@ -260,6 +270,16 @@ func cmdCheck(path string, args []string) error {
 		fmt.Printf("warning: event %q: %s\n", w.Event, w.Detail)
 	}
 	return nil
+}
+
+// envPath returns the PATH that env sets. Windows writes it as Path too.
+func envPath(env map[string]string) (string, bool) {
+	for k, v := range env {
+		if strings.EqualFold(k, "PATH") {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // commandText shows a command of the config: a string as it is, and a list

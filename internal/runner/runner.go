@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -68,6 +69,9 @@ type Spec struct {
 	Shell   string
 	Workdir string
 	Env     map[string]string
+	// BaseEnv is the env of the config file, which every event gets under
+	// its own Env.
+	BaseEnv map[string]string
 	Timeout time.Duration
 	// StopCommand or StopShell asks a running command to stop before kickd
 	// sends it SIGTERM. StopTimeout is how long each of the two steps may
@@ -576,20 +580,44 @@ func buildCommand(ctx context.Context, spec Spec, env []string) *exec.Cmd {
 	return cmd
 }
 
-// buildEnv layers the job environment and the event variables over the
-// agent environment. Values in spec.Env may reference ${VAR}.
+// buildEnv layers the env of the config file, the env of the event and the
+// event variables over the agent environment. ${VAR} in a value of a layer
+// is VAR as the layers below give it.
 func buildEnv(spec Spec, ev event.Event, eventFile string) []string {
 	env := os.Environ()
-	keys := make([]string, 0, len(spec.Env))
-	for k := range spec.Env {
-		keys = append(keys, k)
+	set := map[string]string{} // what the layers set, by envKey
+	lookup := func(k string) string {
+		if v, ok := set[envKey(k)]; ok {
+			return v
+		}
+		return os.Getenv(k)
 	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		env = append(env, k+"="+os.ExpandEnv(spec.Env[k]))
+	for _, layer := range []map[string]string{spec.BaseEnv, spec.Env} {
+		keys := make([]string, 0, len(layer))
+		for k := range layer {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		values := make([]string, len(keys))
+		for i, k := range keys {
+			values[i] = os.Expand(layer[k], lookup)
+		}
+		for i, k := range keys {
+			env = append(env, k+"="+values[i])
+			set[envKey(k)] = values[i]
+		}
 	}
 	env = append(env, ev.Env()...)
 	return append(env, "KICKD_PAYLOAD_FILE="+eventFile)
+}
+
+// envKey is the name of an environment variable as the OS compares it:
+// Windows ignores case.
+func envKey(k string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToUpper(k)
+	}
+	return k
 }
 
 func writeEventFile(payload []byte) (string, error) {
