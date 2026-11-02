@@ -1,0 +1,19 @@
+log:
+  path: 'kickd.log'
+env:
+  GREETING: 'hello'
+events:
+  # A server that ignores SIGTERM, as a program that does not pass the
+  # signal on does, and stops only when its stop command asks it to.
+  - name: server
+    command: ['./server.sh']
+    stop_command: ['./stop.sh']
+    stop_timeout: 5s
+    concurrency: replace
+    restart: always
+    restart_delay: 200ms
+    output:
+      path: 'server.log'
+    triggers:
+      - type: startup
+      - type: manual
