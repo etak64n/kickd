@@ -76,3 +76,61 @@ func TestShutdownRecordsCleanExitAsShutdown(t *testing.T) {
 		t.Fatalf("an exit with code 0 during shutdown must still count as shutdown: exit=%d reason=%q", res.exit, res.reason)
 	}
 }
+
+func TestStopCommandRunsBeforeSIGTERM(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	stopFile := filepath.Join(t.TempDir(), "stop")
+	job := helperJob("wait-stopfile", "KICKD_HELPER_STOPFILE", stopFile)
+	job.StopShell = `printf %s "$KICKD_STOP_REASON" > "$KICKD_HELPER_STOPFILE"`
+	job.StopTimeout = 5 * time.Second
+	job.Timeout = 300 * time.Millisecond
+	res := r.Execute(context.Background(), job, fileEvent())
+	if res.Reason != "timeout" {
+		t.Fatalf("result = %+v", res)
+	}
+	// The command ignores SIGTERM, so it ends only through the stop command.
+	if !strings.Contains(res.Output, "STOP=timeout") {
+		t.Fatalf("the command did not see the stop command, output %q", res.Output)
+	}
+	if res.Signal != "" {
+		t.Fatalf("the command was killed by %s instead of stopping", res.Signal)
+	}
+	if got := rec.find("Stop command completed"); len(got) != 1 {
+		t.Fatalf("Stop command completed logged %d times", len(got))
+	}
+}
+
+func TestStopCommandFailureStillSendsSIGTERM(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	job := helperJob("trap-term")
+	job.StopShell = "echo cannot stop >&2; exit 3"
+	job.StopTimeout = 5 * time.Second
+	job.Timeout = 300 * time.Millisecond
+	res := r.Execute(context.Background(), job, fileEvent())
+	if res.Reason != "timeout" || res.ExitCode != 0 {
+		t.Fatalf("SIGTERM after a failed stop command must end the command: %+v", res)
+	}
+	got := rec.find("Stop command failed")
+	if len(got) != 1 || got[0]["reason"] != "exit_code" || got[0]["exitCode"] != int64(3) {
+		t.Fatalf("Stop command failed = %v", got)
+	}
+	if tail, _ := got[0]["stderrTail"].(string); !strings.Contains(tail, "cannot stop") {
+		t.Fatalf("stderrTail = %q", tail)
+	}
+}
+
+func TestStopTimeoutBoundsTheWaitBeforeSIGKILL(t *testing.T) {
+	r, _, _ := newRunner(t)
+	job := helperJob("ignore-term")
+	job.StopTimeout = 200 * time.Millisecond
+	job.Timeout = 100 * time.Millisecond
+	start := time.Now()
+	res := r.Execute(context.Background(), job, fileEvent())
+	if res.Reason != "timeout" || res.Signal != "SIGKILL" {
+		t.Fatalf("result = %+v", res)
+	}
+	// killGrace (10 seconds) would apply without stop_timeout.
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("the run took %v; stop_timeout did not bound the wait", d)
+	}
+}

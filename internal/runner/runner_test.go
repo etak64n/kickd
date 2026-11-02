@@ -102,6 +102,20 @@ func helperMain() {
 		signal.Ignore(syscall.SIGTERM)
 		time.Sleep(20 * time.Second)
 		os.Exit(0)
+	case "wait-stopfile":
+		// Ignore SIGTERM and exit when the stop command writes the file
+		// KICKD_HELPER_STOPFILE, printing what it wrote.
+		signal.Ignore(syscall.SIGTERM)
+		fmt.Println("ready")
+		deadline := time.Now().Add(20 * time.Second)
+		for time.Now().Before(deadline) {
+			if b, err := os.ReadFile(os.Getenv("KICKD_HELPER_STOPFILE")); err == nil {
+				fmt.Println("STOP=" + string(b))
+				os.Exit(0)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		os.Exit(1)
 	case "trap-term":
 		// Exit with code 0 as soon as SIGTERM arrives.
 		ch := make(chan os.Signal, 1)

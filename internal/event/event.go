@@ -43,6 +43,10 @@ var ErrReload = errors.New("config reload")
 // "kickd cancel".
 var ErrCanceledByUser = errors.New("canceled by user")
 
+// ErrReplaced is the cancellation cause of a run stopped because a new
+// firing of its event, whose concurrency is replace, takes its place.
+var ErrReplaced = errors.New("replaced by a new run")
+
 // Event is the payload of one firing of a named event. The command
 // receives it as JSON and through environment variables.
 type Event struct {

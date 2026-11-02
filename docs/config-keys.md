@@ -53,6 +53,8 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`workdir`](settings/events.md#workdir) | the directory of the config file | The working directory of the command. It must exist. |
 | [`env`](settings/events.md#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
 | [`timeout`](settings/events.md#timeout) | none | The longest time the command may run. Without it, there is no limit. |
+| [`stop_command`](settings/events.md#stop_command) | none | What kickd runs to ask a running command to stop, before it sends SIGTERM. A string runs through the shell, and a list starts a program. |
+| [`stop_timeout`](settings/events.md#stop_timeout) | `10s` | How long kickd waits for the stop command, and then for the command after SIGTERM, before it kills it. |
 | [`concurrency`](settings/events.md#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue` or `parallel`. |
 | [`on_interrupt`](settings/events.md#on_interrupt) | `abandon` | What happens to a run that a stop or a crash cut off: `abandon` or `rerun`. |
 | [`max_attempts`](settings/events.md#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |

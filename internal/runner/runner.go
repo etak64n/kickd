@@ -54,12 +54,18 @@ var killGrace = 10 * time.Second
 
 // Spec is what the runner needs to know about a named event.
 type Spec struct {
-	Name        string
-	Command     []string
-	Shell       string
-	Workdir     string
-	Env         map[string]string
-	Timeout     time.Duration
+	Name    string
+	Command []string
+	Shell   string
+	Workdir string
+	Env     map[string]string
+	Timeout time.Duration
+	// StopCommand or StopShell asks a running command to stop before kickd
+	// sends it SIGTERM. StopTimeout is how long each of the two steps may
+	// take; without it, killGrace applies.
+	StopCommand []string
+	StopShell   string
+	StopTimeout time.Duration
 	Concurrency string
 	OnInterrupt string
 	MaxAttempts int
@@ -250,8 +256,12 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	setSysProcAttr(cmd)
-	cmd.Cancel = func() error { return terminate(cmd) }
-	cmd.WaitDelay = killGrace
+	grace := spec.StopTimeout
+	if grace <= 0 {
+		grace = killGrace
+	}
+	cmd.Cancel = func() error { return r.stop(ctx, log, spec, cmd, env, grace) }
+	cmd.WaitDelay = grace
 
 	log.Info("Run started", append([]any{"triggerId", ev.TriggerID}, eventAttrs(ev)...)...)
 	if log.Enabled(context.Background(), slog.LevelDebug) {
@@ -333,6 +343,89 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	}
 	log.Log(context.Background(), level, msg, attrs...)
 	return res
+}
+
+// stop asks a running command to stop. It runs the stop command of the
+// event first, when the event has one, and waits for it up to grace; then
+// it sends SIGTERM to the process group of the command. os/exec kills the
+// command when it is still running grace after stop returns.
+func (r *Runner) stop(ctx context.Context, log *slog.Logger, spec Spec, cmd *exec.Cmd, env []string, grace time.Duration) error {
+	if spec.StopShell != "" || len(spec.StopCommand) > 0 {
+		r.runStopCommand(log, spec, append(env, "KICKD_STOP_REASON="+stopReason(ctx)), grace)
+	}
+	return terminate(cmd)
+}
+
+// stopReason names why a run is being stopped, for KICKD_STOP_REASON.
+func stopReason(ctx context.Context) string {
+	cause := context.Cause(ctx)
+	switch {
+	case errors.Is(cause, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(cause, event.ErrCanceledByUser):
+		return "canceled"
+	case errors.Is(cause, event.ErrReplaced):
+		return "replaced"
+	}
+	return "shutdown"
+}
+
+// runStopCommand runs the stop command of spec in the working directory
+// and the environment of the run, and logs how it ended. A stop command
+// that runs past grace is stopped like a command that runs past its
+// timeout.
+func (r *Runner) runStopCommand(log *slog.Logger, spec Spec, env []string, grace time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), grace)
+	defer cancel()
+	stopSpec := Spec{Command: spec.StopCommand, Shell: spec.StopShell}
+	sc := buildCommand(ctx, stopSpec, env)
+	sc.Dir = spec.Workdir
+	sc.Env = env
+	tail := &tailBuffer{maxLines: tailLines, maxBytes: tailBytes}
+	sc.Stdout = tailWriter{tail}
+	sc.Stderr = tailWriter{tail}
+	setSysProcAttr(sc)
+	sc.Cancel = func() error { return terminate(sc) }
+	sc.WaitDelay = time.Second
+	start := time.Now()
+	log.Info("Stop command started", "stopTimeoutMs", grace.Milliseconds())
+	if log.Enabled(context.Background(), slog.LevelDebug) {
+		log.Debug("Running stop command", "command", logging.Mask(displayCommand(stopSpec)), "workdir", spec.Workdir)
+	}
+	err := sc.Run()
+	if ctx.Err() != nil {
+		if kerr := killTree(sc); kerr != nil {
+			log.Warn("Process group kill failed", logging.Err(kerr))
+		}
+	}
+	attrs := []any{"durationMs", time.Since(start).Milliseconds()}
+	if sc.ProcessState != nil {
+		attrs = append(attrs, "exitCode", sc.ProcessState.ExitCode())
+	}
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		attrs = append(attrs, "reason", "timeout", "thresholdMs", grace.Milliseconds())
+	case err != nil && sc.ProcessState == nil:
+		attrs = append(attrs, "reason", "start_failed", logging.Err(err))
+	case err != nil:
+		attrs = append(attrs, "reason", "exit_code")
+	}
+	if err != nil {
+		if t := tail.String(); t != "" {
+			attrs = append(attrs, "stderrTail", logging.Mask(t))
+		}
+		log.Warn("Stop command failed", attrs...)
+		return
+	}
+	log.Info("Stop command completed", attrs...)
+}
+
+// tailWriter keeps the last lines written to it.
+type tailWriter struct{ t *tailBuffer }
+
+func (w tailWriter) Write(p []byte) (int, error) {
+	w.t.Write(p)
+	return len(p), nil
 }
 
 // canceledBeforeStart ends a run whose context was canceled before its

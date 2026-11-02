@@ -190,6 +190,9 @@ func TestParseErrors(t *testing.T) {
 		{"required with default", "events:\n  - name: a\n    params: [{name: p, required: true, default: d}]" + ok, "cannot be required and have a default"},
 		{"required param with cron", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: cron, schedule: '@hourly'}]", "cannot supply required parameters"},
 		{"negative retention", "database: {retention: -1h}\nevents:\n  - name: a" + ok, "retention"},
+		{"negative stop_timeout", "events:\n  - name: a\n    stop_timeout: -1s" + ok, "stop_timeout must not be negative"},
+		{"empty stop program", "events:\n  - name: a\n    stop_command: []" + ok, "program of stop_command must not be empty"},
+		{"stop_command of another type", "events:\n  - name: a\n    stop_command: 42" + ok, "must be a string or a list"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -235,6 +238,44 @@ events:
 		e := cfg.Events[i]
 		if e.Shell != want.shell || !slices.Equal(e.Command, want.args) {
 			t.Errorf("%s: shell %q, command %q", e.Name, e.Shell, e.Command)
+		}
+	}
+}
+
+// stop_command takes the same forms as command, and stop_timeout has a
+// default.
+func TestStopCommand(t *testing.T) {
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: shell
+    command: ['server']
+    stop_command: 'server stop'
+    stop_timeout: 30s
+    triggers: [{type: manual}]
+  - name: list
+    command: ['server']
+    stop_command: ['container', 'stop', 'web']
+    triggers: [{type: manual}]
+  - name: none
+    command: ['server']
+    triggers: [{type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []struct {
+		shell   string
+		args    []string
+		timeout time.Duration
+	}{
+		{"server stop", nil, 30 * time.Second},
+		{"", []string{"container", "stop", "web"}, DefaultStopTimeout},
+		{"", nil, DefaultStopTimeout},
+	} {
+		e := cfg.Events[i]
+		if e.StopShell != want.shell || !slices.Equal(e.StopCommand, want.args) || e.StopTimeout != want.timeout {
+			t.Errorf("%s: stop shell %q, stop command %q, stop_timeout %v", e.Name, e.StopShell, e.StopCommand, e.StopTimeout)
 		}
 	}
 }

@@ -146,6 +146,7 @@ const (
 	DefaultDatabasePath = "kickd.db"
 	DefaultRetention    = 7 * 24 * time.Hour
 	DefaultMaxAttempts  = 3
+	DefaultStopTimeout  = 10 * time.Second
 )
 
 // Environment variables that override the log settings of the file, as
@@ -221,6 +222,8 @@ type Event struct {
 	Workdir     string            `yaml:"workdir"`
 	Env         map[string]string `yaml:"env"`
 	Timeout     time.Duration     `yaml:"timeout"`
+	StopRun     Command           `yaml:"stop_command"`
+	StopTimeout time.Duration     `yaml:"stop_timeout"`
 	Concurrency string            `yaml:"concurrency"`
 	OnInterrupt string            `yaml:"on_interrupt"`
 	MaxAttempts int               `yaml:"max_attempts"`
@@ -233,6 +236,10 @@ type Event struct {
 	// the arguments of a list, or the string that the shell runs.
 	Command []string `yaml:"-"`
 	Shell   string   `yaml:"-"`
+	// StopCommand or StopShell is the resolved stop_command: what kickd
+	// runs to ask a running command to stop, before it sends SIGTERM.
+	StopCommand []string `yaml:"-"`
+	StopShell   string   `yaml:"-"`
 	// File is the absolute path of the file that defines the event, and
 	// Index the position of the event in the events section of that file.
 	File  string `yaml:"-"`
@@ -608,6 +615,12 @@ func (c *Config) applyDefaults() {
 		if e.Run.Shell != "" || e.Run.Args != nil {
 			e.Command, e.Shell = e.Run.Args, e.Run.Shell
 		}
+		if e.StopRun.Shell != "" || e.StopRun.Args != nil {
+			e.StopCommand, e.StopShell = e.StopRun.Args, e.StopRun.Shell
+		}
+		if e.StopTimeout == 0 {
+			e.StopTimeout = DefaultStopTimeout
+		}
 		if e.Concurrency == "" {
 			e.Concurrency = ConcurrencySkip
 		}
@@ -747,6 +760,12 @@ func (c *Config) validate() error {
 		}
 		if e.Timeout < 0 {
 			fail("%s: timeout must not be negative", where)
+		}
+		if e.StopTimeout < 0 {
+			fail("%s: stop_timeout must not be negative", where)
+		}
+		if e.StopRun.Args != nil && (len(e.StopCommand) == 0 || e.StopCommand[0] == "") {
+			fail("%s: the program of stop_command must not be empty", where)
 		}
 		if e.Workdir != "" {
 			if st, err := os.Stat(e.Workdir); err != nil || !st.IsDir() {

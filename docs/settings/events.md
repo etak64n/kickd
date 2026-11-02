@@ -171,9 +171,10 @@ events:
 
 When the command runs longer, kickd stops it together with the processes that it started:
 
-- **macOS and Linux**: kickd sends SIGTERM to the process group of the command, and SIGKILL 10 seconds later to what still runs.
+- **macOS and Linux**: kickd sends SIGTERM to the process group of the command, and SIGKILL to what still runs after [`stop_timeout`](#stop_timeout), 10 seconds by default.
 - **Windows**: kickd ends the process tree of the command at once.
 
+An event with a [`stop_command`](#stop_command) runs it before SIGTERM.
 The run is recorded as `failed`, with the reason `timeout`.
 A timeout is a failure and not an interruption, so `on_interrupt: rerun` does not run the firing again.
 A negative duration is an error of the config.
@@ -185,6 +186,58 @@ events:
     timeout: 1h
     triggers:
       - type: manual
+```
+
+## `stop_command`
+
+`stop_command` is what kickd runs to ask a running command to stop, before it sends SIGTERM.
+
+- **Type**: a string or a list of strings, as for [`command`](#command): a string runs through the shell, and a list starts a program with its arguments.
+- **Default**: none, which stops the command with SIGTERM alone.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
+
+kickd stops a running command when its [`timeout`](#timeout) passes, when `kickd cancel` cancels the run, when a new firing replaces it under [`concurrency: replace`](#concurrency), and when kickd stops.
+Some programs do not stop on SIGTERM.
+For example, `container run` of Apple's `container` 1.3.0, which runs a container in the foreground, cannot pass SIGTERM on to the container, and the container keeps running after its client has been killed.
+For such programs, `stop_command` asks the program itself to stop:
+
+1. kickd runs `stop_command` in the working directory and with the environment of the run, and waits up to [`stop_timeout`](#stop_timeout) for it.
+   `KICKD_STOP_REASON` tells it why the run stops: `timeout`, `canceled`, `replaced` or `shutdown`.
+2. kickd sends SIGTERM to the process group of the command, on Windows ends its process tree, and waits up to `stop_timeout` again.
+3. kickd kills what still runs, as it does for a timeout.
+
+A stop command that fails, or runs past `stop_timeout`, is logged as `Stop command failed`, and kickd goes on with SIGTERM.
+The run keeps the status of the reason that stopped it, such as `failed` with the reason `timeout`.
+
+```yaml
+events:
+  - name: web
+    command: ['container', 'run', '--name', 'web', '--rm', 'web:latest']
+    stop_command: ['container', 'stop', 'web']
+    triggers:
+      - type: startup
+```
+
+## `stop_timeout`
+
+`stop_timeout` is how long kickd waits for a stopped command to exit before it kills it.
+
+- **Type**: a duration, such as `30s`.
+- **Default**: `10s`.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
+
+kickd waits up to `stop_timeout` for the [`stop_command`](#stop_command), when the event has one, and up to `stop_timeout` again after SIGTERM.
+A service manager gives kickd itself a limited time to stop, such as 20 seconds by default for launchd and 90 seconds for systemd.
+Keep `stop_timeout` short enough that the commands stop within that time when kickd stops.
+A negative duration is an error of the config.
+
+```yaml
+events:
+  - name: db
+    command: ['postgres', '-D', '/usr/local/var/postgres']
+    stop_timeout: 30s
+    triggers:
+      - type: startup
 ```
 
 ## `concurrency`

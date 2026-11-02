@@ -101,6 +101,7 @@ When the config file, or another YAML file next to it, is saved, the agent reloa
 
 When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
+An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
