@@ -193,6 +193,8 @@ func TestParseErrors(t *testing.T) {
 		{"negative stop_timeout", "events:\n  - name: a\n    stop_timeout: -1s" + ok, "stop_timeout must not be negative"},
 		{"empty stop program", "events:\n  - name: a\n    stop_command: []" + ok, "program of stop_command must not be empty"},
 		{"stop_command of another type", "events:\n  - name: a\n    stop_command: 42" + ok, "must be a string or a list"},
+		{"output without path", "events:\n  - name: a\n    output: {max_size_mb: 5}" + ok, "output.path is required"},
+		{"negative output size", "events:\n  - name: a\n    output: {path: out.log, max_size_mb: -1}" + ok, "output.max_size_mb must not be negative"},
 		{"bad restart", "events:\n  - name: a\n    restart: forever" + ok, `restart "forever" must be never, on-failure or always`},
 		{"negative restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: -1s" + ok, "restart_delay must not be negative"},
 		{"restart_max_delay below restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: 10s\n    restart_max_delay: 5s" + ok, "restart_max_delay must not be shorter than restart_delay"},
@@ -280,6 +282,28 @@ events:
 		if e.StopShell != want.shell || !slices.Equal(e.StopCommand, want.args) || e.StopTimeout != want.timeout {
 			t.Errorf("%s: stop shell %q, stop command %q, stop_timeout %v", e.Name, e.StopShell, e.StopCommand, e.StopTimeout)
 		}
+	}
+}
+
+// output resolves its path against the directory of the config file and
+// has the defaults of the log file.
+func TestOutputDefaults(t *testing.T) {
+	noLogEnv(t)
+	dir := t.TempDir()
+	cfg, err := Parse([]byte(`
+events:
+  - name: web
+    command: ['server']
+    output:
+      path: logs/web.log
+    triggers: [{type: startup}]
+`), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := cfg.Events[0].Output
+	if o == nil || o.Path != filepath.Join(dir, "logs", "web.log") || o.MaxSizeMB != DefaultLogSizeMB || o.MaxBackups != DefaultLogBackups {
+		t.Fatalf("output = %+v", o)
 	}
 }
 

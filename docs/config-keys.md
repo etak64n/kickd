@@ -63,6 +63,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`max_attempts`](settings/events.md#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |
 | [`stdin`](settings/events.md#stdin) | `none` | `payload` passes the payload JSON on standard input. |
 | [`log_output`](settings/events.md#log_output) | `true` | Whether kickd logs the output of the command and stores it with the run. |
+| [`output`](settings/events.md#output) | none | A file to which kickd appends the output of the command: `path`, and `max_size_mb` and `max_backups` as for the log file. |
 | [`params`](settings/events.md#params) | none | The parameters that a firing can pass. |
 | [`triggers`](settings/events.md#triggers) | none | The triggers, one or more. Required. |
 
@@ -102,7 +103,7 @@ Most keys take effect at that reload, and some wait for the next start of the ag
 | `log.*` | At the next start of the agent, which opens its log once |
 | `webhook.*` | At the reload, which restarts the HTTP server |
 | `database.*` | At the next start of the agent, which opens the database once |
-| `name`, `command`, `workdir`, `env`, `timeout`, `stop_command`, `stop_timeout`, `concurrency`, `restart`, `restart_delay`, `restart_max_delay`, `stdin`, `log_output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
+| `name`, `command`, `workdir`, `env`, `timeout`, `stop_command`, `stop_timeout`, `concurrency`, `restart`, `restart_delay`, `restart_max_delay`, `stdin`, `log_output`, `output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
 | `description` and `params` | At once for `kickd events` and `kickd event`, which read the config each time they run, and at the reload for webhook requests |
 | `on_interrupt` and `max_attempts` | At the next start of the agent, which handles the runs that were cut off when it starts |
 | Manual triggers | At once for `kickd event`, which reads the config each time it runs |

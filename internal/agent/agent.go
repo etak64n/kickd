@@ -353,11 +353,20 @@ func specs(cfg *config.Config) []runner.Spec {
 			MaxAttempts:     e.MaxAttempts,
 			Stdin:           e.Stdin,
 			LogOutput:       e.LogsOutput(),
+			Output:          outputOf(e),
 			Defaults:        defaults,
 			After:           after,
 		}
 	}
 	return out
+}
+
+// outputOf is the output file of an event for the runner, or nil.
+func outputOf(e config.Event) *runner.Output {
+	if e.Output == nil {
+		return nil
+	}
+	return &runner.Output{Path: e.Output.Path, MaxBytes: int64(e.Output.MaxSizeMB) << 20, MaxBackups: e.Output.MaxBackups}
 }
 
 // fireStartup fires the events with a startup trigger. The agent calls it

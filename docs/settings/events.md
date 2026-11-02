@@ -432,6 +432,36 @@ events:
       - type: manual
 ```
 
+## `output`
+
+`output` is a file to which kickd appends the output of the command.
+
+- **Type**: a mapping with `path`, and optionally `max_size_mb` and `max_backups`.
+- **Default**: none, which keeps the output only as [`log_output`](#log_output) says.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
+
+[`log_output`](#log_output) logs each line of output at the DEBUG level and stores the first 64 KB with the run, which suits short commands.
+The output of a long-running program, such as the access log of a server, needs a file of its own: kickd appends each line of standard output and standard error to `path`, whole lines at a time, whether `log_output` is `true` or `false`.
+
+- **`path`**: the file. A relative path starts at the directory of the config file, and kickd creates the missing directories.
+- **`max_size_mb`**: the size in MB past which kickd renames the file with `.1` appended and starts a new one, as it does for its log file. The default is `10`.
+- **`max_backups`**: how many renamed files to keep. The default is `5`.
+
+Runs that write to the same file at the same time share it, so their lines do not mix within a line.
+A file that kickd cannot open is logged as `Output file unavailable`, and the command runs without it.
+
+```yaml
+events:
+  - name: web
+    command: ['./server']
+    workdir: '~/web'
+    output:
+      path: ~/Library/Logs/web.log
+      max_size_mb: 20
+    triggers:
+      - type: startup
+```
+
 ## `params`
 
 `params` declares the **parameters** of the event: named values that a firing passes to the command.

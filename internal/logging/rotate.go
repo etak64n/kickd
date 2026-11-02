@@ -29,6 +29,14 @@ type rotatingFile struct {
 	report  io.Writer
 }
 
+// OpenRotating opens path for appending, as the log file is opened: once
+// the file would grow past maxBytes (0: never), it is renamed to <path>.1,
+// older generations shift, and backups of them are kept. report, when not
+// nil, receives a line for each rotation that fails.
+func OpenRotating(path string, maxBytes int64, backups int, report io.Writer) (io.WriteCloser, error) {
+	return openRotating(path, maxBytes, backups, report)
+}
+
 func openRotating(path string, max int64, backups int, report io.Writer) (*rotatingFile, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err

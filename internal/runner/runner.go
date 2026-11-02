@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -85,10 +86,20 @@ type Spec struct {
 	MaxAttempts     int
 	Stdin           string
 	LogOutput       bool
+	// Output, when not nil, is a file to which the output is appended.
+	Output *Output
 	// Defaults fills in parameters that a firing does not set.
 	Defaults map[string]string
 	// After lists the events whose runs fire this event when they end.
 	After []AfterTrigger
+}
+
+// Output is a file that receives the output of an event's runs, with the
+// rotation of the log file.
+type Output struct {
+	Path       string
+	MaxBytes   int64
+	MaxBackups int
 }
 
 // AfterTrigger fires an event when a run of Event ends with one of
@@ -117,13 +128,18 @@ type Runner struct {
 	log      *slog.Logger
 	inflight *inflight
 
+	// outputs are the open output files, shared by the runs that write to
+	// the same file at once.
+	outMu   sync.Mutex
+	outputs map[string]*sharedOutput
+
 	processed, succeeded, failed, canceled, interrupted, skipped, dropped atomic.Int64
 }
 
 // New creates a runner. base is a logger without requestId; procID is the
 // request ID used for lines that do not belong to one run.
 func New(ctx context.Context, base *slog.Logger, procID string) *Runner {
-	return &Runner{ctx: ctx, base: base, log: base.With("requestId", procID), inflight: newInflight()}
+	return &Runner{ctx: ctx, base: base, log: base.With("requestId", procID), inflight: newInflight(), outputs: map[string]*sharedOutput{}}
 }
 
 // Wait blocks until every in-flight run has finished.
@@ -267,6 +283,14 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	tail := &tailBuffer{maxLines: tailLines, maxBytes: tailBytes}
 	stdout := &lineWriter{log: log, stream: "stdout", capture: capture, emit: spec.LogOutput}
 	stderr := &lineWriter{log: log, stream: "stderr", capture: capture, tail: tail, emit: spec.LogOutput}
+	if spec.Output != nil {
+		if f, release, err := r.openOutput(log, *spec.Output); err != nil {
+			log.Warn("Output file unavailable", "file", spec.Output.Path, logging.Err(err))
+		} else {
+			defer release()
+			stdout.file, stderr.file = f, f
+		}
+	}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	setSysProcAttr(cmd)
@@ -361,6 +385,52 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	}
 	log.Log(context.Background(), level, msg, attrs...)
 	return res
+}
+
+// sharedOutput is an output file that runs write to at once.
+type sharedOutput struct {
+	w    io.WriteCloser
+	refs int
+}
+
+// openOutput opens the output file of a run, or shares the one that
+// another run of the same file has open. release closes it after the last
+// run that writes to it.
+func (r *Runner) openOutput(log *slog.Logger, o Output) (io.Writer, func(), error) {
+	r.outMu.Lock()
+	defer r.outMu.Unlock()
+	s := r.outputs[o.Path]
+	if s == nil {
+		w, err := logging.OpenRotating(o.Path, o.MaxBytes, o.MaxBackups, rotationReport{log: log, file: o.Path})
+		if err != nil {
+			return nil, nil, err
+		}
+		s = &sharedOutput{w: w}
+		r.outputs[o.Path] = s
+	}
+	s.refs++
+	return s.w, func() {
+		r.outMu.Lock()
+		defer r.outMu.Unlock()
+		if s.refs--; s.refs == 0 {
+			delete(r.outputs, o.Path)
+			if err := s.w.Close(); err != nil {
+				log.Warn("Output file close failed", "file", o.Path, logging.Err(err))
+			}
+		}
+	}, nil
+}
+
+// rotationReport logs the failures that the rotation of an output file
+// reports.
+type rotationReport struct {
+	log  *slog.Logger
+	file string
+}
+
+func (w rotationReport) Write(p []byte) (int, error) {
+	w.log.Warn("Output rotation failed", "file", w.file, "detail", strings.TrimSpace(string(p)))
+	return len(p), nil
 }
 
 // stop asks a running command to stop. It runs the stop command of the
@@ -636,7 +706,10 @@ type lineWriter struct {
 	capture *capBuffer
 	tail    *tailBuffer
 	emit    bool
-	buf     []byte
+	// file, when not nil, receives the output in whole lines, as the
+	// capture does.
+	file io.Writer
+	buf  []byte
 	// pending is the end of the output that has no newline yet. The capture,
 	// which both streams share, takes whole lines, so that a line of one
 	// stream does not split a line of the other.
@@ -647,9 +720,11 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 	w.pending = append(w.pending, p...)
 	if i := bytes.LastIndexByte(w.pending, '\n'); i >= 0 {
 		w.capture.Write(w.pending[:i+1])
+		w.toFile(w.pending[:i+1])
 		w.pending = append([]byte(nil), w.pending[i+1:]...)
 	} else if len(w.pending) > maxLogLine {
 		w.capture.Write(w.pending)
+		w.toFile(w.pending)
 		w.pending = nil
 	}
 	if w.tail != nil {
@@ -677,11 +752,20 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 func (w *lineWriter) flush() {
 	if len(w.pending) > 0 {
 		w.capture.Write(w.pending)
+		w.toFile(append(w.pending, '\n'))
 		w.pending = nil
 	}
 	if len(w.buf) > 0 {
 		w.line(w.buf)
 		w.buf = nil
+	}
+}
+
+// toFile appends b to the output file. A failed write does not stop the
+// command; the file's own rotation reports what it can.
+func (w *lineWriter) toFile(b []byte) {
+	if w.file != nil {
+		_, _ = w.file.Write(b)
 	}
 }
 

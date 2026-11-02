@@ -244,6 +244,7 @@ type Event struct {
 	MaxAttempts     int               `yaml:"max_attempts"`
 	Stdin           string            `yaml:"stdin"`
 	LogOutput       *bool             `yaml:"log_output"`
+	Output          *Output           `yaml:"output"`
 	Params          []Param           `yaml:"params"`
 	Triggers        []Trigger         `yaml:"triggers"`
 
@@ -280,6 +281,14 @@ func (c *Command) UnmarshalYAML(n *yaml.Node) error {
 		return n.Decode(&c.Args)
 	}
 	return fmt.Errorf("line %d: command must be a string or a list of strings", n.Line)
+}
+
+// Output is a file to which kickd appends the output of the command,
+// which it renames and keeps generations of as it does the log file.
+type Output struct {
+	Path       string `yaml:"path"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
 }
 
 // LogsOutput reports whether command output is written to the log.
@@ -664,6 +673,15 @@ func (c *Config) applyDefaults() {
 			e.Workdir = c.Dir
 		}
 		e.Workdir = c.resolve(e.Workdir)
+		if e.Output != nil {
+			e.Output.Path = c.resolve(e.Output.Path)
+			if e.Output.MaxSizeMB == 0 {
+				e.Output.MaxSizeMB = DefaultLogSizeMB
+			}
+			if e.Output.MaxBackups == 0 {
+				e.Output.MaxBackups = DefaultLogBackups
+			}
+		}
 		for k := range e.Triggers {
 			t := &e.Triggers[k]
 			t.Type = strings.ToLower(strings.TrimSpace(t.Type))
@@ -794,6 +812,16 @@ func (c *Config) validate() error {
 		}
 		if e.Timeout < 0 {
 			fail("%s: timeout must not be negative", where)
+		}
+		if o := e.Output; o != nil {
+			switch {
+			case o.Path == "":
+				fail("%s: output.path is required", where)
+			case o.MaxSizeMB < 0:
+				fail("%s: output.max_size_mb must not be negative", where)
+			case o.MaxBackups < 0:
+				fail("%s: output.max_backups must not be negative", where)
+			}
 		}
 		if e.StopTimeout < 0 {
 			fail("%s: stop_timeout must not be negative", where)
