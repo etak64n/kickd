@@ -7,6 +7,10 @@ import (
 	"os/exec"
 )
 
+// accountIDs are empty on Windows, where a command cannot run as the user
+// of its event.
+type accountIDs struct{}
+
 // accountTempDir is unused on Windows, where a command cannot run as the user
 // of its event.
 const accountTempDir = ""

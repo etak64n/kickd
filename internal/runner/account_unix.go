@@ -11,6 +11,14 @@ import (
 	"syscall"
 )
 
+// accountIDs are the user ID, the group ID and the other groups of an
+// account, which a command starts with.
+type accountIDs struct {
+	uid    uint32
+	gid    uint32
+	groups []uint32
+}
+
 // accountTempDir is the temporary directory of a command that runs as the
 // user of its event: a directory that every user can write to, where each
 // file stays with its owner.
@@ -45,7 +53,7 @@ func lookupAccount(name string) (*account, error) {
 		}
 		groups = append(groups, uint32(g))
 	}
-	return &account{name: u.Username, uid: uint32(uid), gid: uint32(gid), groups: groups, home: u.HomeDir}, nil
+	return &account{name: u.Username, home: u.HomeDir, accountIDs: accountIDs{uid: uint32(uid), gid: uint32(gid), groups: groups}}, nil
 }
 
 // runAs makes cmd start with the user, the group and the other groups of a.

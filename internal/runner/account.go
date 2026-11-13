@@ -5,11 +5,9 @@ import "sort"
 // account is the user whose rights a command runs with when its event names
 // a user.
 type account struct {
-	name   string
-	uid    uint32
-	gid    uint32
-	groups []uint32
-	home   string
+	name       string
+	home       string
+	accountIDs // the numbers of the user and its groups, on macOS and Linux
 }
 
 // env lists the variables that name the user to the programs of a command,

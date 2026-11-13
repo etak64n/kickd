@@ -157,7 +157,7 @@ func TestLookupAccountFindsTheUserAndItsGroups(t *testing.T) {
 // The payload file of a run with a user is in the shared temporary
 // directory, belongs to that user and stays closed to others.
 func TestPayloadFileOfAnAccountBelongsToIt(t *testing.T) {
-	acct := &account{name: "self", uid: uint32(os.Getuid()), gid: uint32(os.Getgid())}
+	acct := &account{name: "self", accountIDs: accountIDs{uid: uint32(os.Getuid()), gid: uint32(os.Getgid())}}
 	path, err := writeEventFile([]byte(`{}`), acct)
 	if err != nil {
 		t.Fatal(err)
