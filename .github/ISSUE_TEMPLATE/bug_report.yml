@@ -1,0 +1,50 @@
+name: Bug report
+description: kickd does something that its documentation says it does not, or does not do what it says.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `kickd version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How kickd runs
+      options:
+        - In a terminal, with kickd run
+        - As a service of one user
+        - As a service of the whole machine
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: The events involved and the settings they use, without tokens and secrets.
+      render: yaml
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The steps that show the problem, what kickd did, and what you expected it to do.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log records and runs
+      description: The records of the log around the problem, and the output of `kickd show` for the runs involved.
+      render: text
