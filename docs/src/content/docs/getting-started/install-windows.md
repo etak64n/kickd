@@ -46,7 +46,7 @@ Unblock-File 'C:\Program Files\kickd\kickd.exe'
 ## 2. Create the config file
 
 The kickd service runs the commands in its config as SYSTEM.
-Run as an administrator, kickd reads the config for the whole machine, `C:\ProgramData\kickd\config.yaml`, which only administrators can change: with the default permissions, other users cannot change files that an administrator creates under `C:\ProgramData`.
+Run as an administrator, kickd reads the config for the whole machine, `C:\ProgramData\kickd\config.yaml`, which only SYSTEM and administrators may be able to change, as [Who can change the config](#who-can-change-the-config) describes.
 The steps from here on run in PowerShell opened as administrator.
 In a PowerShell that was not opened as administrator, kickd reads the config of the user, `~\.kickd\config.yaml`, instead.
 
@@ -132,6 +132,36 @@ kickd service uninstall
 `uninstall` deletes the service definition.
 It leaves a running agent running, so stop the agent first.
 
+## Who can change the config
+
+Windows decides who can read and change a file or folder by its **access control list**: a list of rules, each of which allows or denies rights to an account, such as a user or a group.
+A file or folder inherits the rules of the folder that holds it, unless its list is protected from inheritance.
+The owner of a file or folder can always change its access control list.
+
+The commands of the config for the whole machine run as SYSTEM, so only SYSTEM and administrators may be able to change the config.
+`kickd init` creates the folder `C:\ProgramData\kickd` with a protected access control list that gives full control to SYSTEM and the Administrators group, and to no other account.
+The files and folders created in it inherit these rules, such as the config file, the other files of events, and the database and the log of the example config.
+Other users can neither read them nor add files to the folder.
+A folder created in another way, such as with `New-Item` or File Explorer, inherits the rules of `C:\ProgramData` instead, which let every user add files to the folder and read the files in it.
+
+Before an administrator's kickd or the service reads the config, it checks the folder, the config file and each other file of events:
+
+- **Owner**: the owner of each must be SYSTEM, the Administrators group, an account in the Administrators group, or TrustedInstaller, the account of Windows that owns its system files. On the desktop versions of Windows, a file that an administrator creates belongs to the account of that administrator, and on Windows Server to the Administrators group. An account counts when it is itself a member of the group, not when it belongs to it only through another group, such as the administrators of a domain.
+- **Rules**: no rule may allow another account a right that changes the file or folder: to write to it, to add files or folders to it, to delete it or what it holds, to change its attributes, or to change its access control list or its owner.
+- **Links**: for a symbolic link, kickd checks the link and the file or folder that it points to, because whoever can change the link can point it elsewhere.
+
+When one of them fails the check, kickd refuses the config: the agent does not start, a reload keeps the previous config, and `kickd check` names the file or folder, the account that can change it, and an `icacls` command that fixes it.
+The command names accounts by their security identifiers, such as `*S-1-5-18` for SYSTEM and `*S-1-5-32-544` for the Administrators group, so it works whatever the language of Windows.
+For a folder that inherits the rules of `C:\ProgramData`, the command is:
+
+```powershell
+icacls "C:\ProgramData\kickd" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"
+```
+
+`/inheritance:r` removes the rules that the folder inherits, and `/grant:r` gives full control (`F`) to SYSTEM and the Administrators group, which the files (`OI`) and the folders (`CI`) in it inherit.
+
+kickd cannot see the scripts and programs that the commands run, so these need the same protection: a script that another user can change runs as SYSTEM too.
+
 ## The environment of commands run as SYSTEM
 
 Commands run as SYSTEM see a different environment from a logged-in user's:
@@ -156,4 +186,5 @@ Accept connections from other machines only on a trusted network, or put a rever
 ## Where these steps are tested
 
 For every change, the CI of kickd follows these steps from `kickd init` on, on the Windows Server 2025 machines of GitHub Actions.
-It fires an event, checks that the command runs as SYSTEM, and checks that Windows starts kickd again after a crash.
+It checks the access control list that `kickd init` gives the folder, fires an event, checks that the command runs as SYSTEM, and checks that Windows starts kickd again after a crash.
+It also gives the Users group access to the folder, and checks that kickd refuses the config and that the `icacls` commands of `kickd check` fix it.

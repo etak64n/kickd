@@ -25,6 +25,10 @@ func (osEntries) lstat(path string) (entry, error) {
 
 func (osEntries) readlink(path string) (string, error) { return os.Readlink(path) }
 
+// MkdirConfig creates dir, the directory of a new config file, with the
+// directories above it.
+func MkdirConfig(dir string, system bool) error { return os.MkdirAll(dir, 0o755) }
+
 // checkRootOnly reports each file of the config of root that another user
 // can change, with the entry on the way to it that allows the change.
 func checkRootOnly(paths []string) error {

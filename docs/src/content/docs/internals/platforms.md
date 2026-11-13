@@ -76,7 +76,8 @@ Under launchd and on Windows, those commands keep running without the agent.
 
 On macOS and Linux, `kickd init` creates the config file and the events file with the permission 0600, and a new database, with its `-wal` and `-shm` files, gets 0600 as well, because both can hold secrets and command output.
 The log file is created with the permissions that the umask allows, usually 0644, so other users can read it.
-On Windows, the files take the permissions of their folder, and files that an administrator creates under `C:\ProgramData` cannot be changed by other users.
+On Windows, the files take the access control list of their folder, the list of rules that decides who can read and change them.
+`kickd init` gives the folder of the config for the whole machine, `C:\ProgramData\kickd`, an access control list that lets only SYSTEM and the Administrators group in, so other users can neither read nor change the config, the database and the log there.
 
 macOS guards some locations, such as the Desktop, Documents and Downloads folders and removable volumes, with a privacy framework called TCC.
 macOS checks the access of a command against the permission of kickd, the program that started it, so kickd needs Full Disk Access to watch or process those locations.

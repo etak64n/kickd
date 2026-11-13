@@ -17,7 +17,7 @@ In each package:
 
 - `kickd_test.go` builds kickd and holds the harness: a home directory for each test, and helpers that run kickd and read its runs. `start` returns when the agent has loaded its config, while its webhook server and the watches of its file triggers can still be starting, so a test that sends a webhook request or changes a watched file right after the start uses `startListening` or `startWatching`, which also wait for the log records `Webhook server listening` and `File watch started`.
 - `testdata/` holds a directory for each config, laid out as a home directory: the config file `.kickd/config.yaml`, and the scripts and files of its events next to it, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` on Windows.
-- The tests on Windows run as an administrator, as the runners of GitHub Actions do, and kickd reads the config file of an administrator from the folder `kickd` of `ProgramData`. The folder of a test is also the `ProgramData` folder of its kickd, so the config file of a Windows test is `kickd\config.yaml`.
+- The tests on Windows run as an administrator, as the runners of GitHub Actions do, and kickd reads the config file of an administrator from the folder `kickd` of `ProgramData`. The folder of a test is also the `ProgramData` folder of its kickd, so the config file of a Windows test is `kickd\config.yaml`. An administrator's kickd refuses a config that other accounts can change, so the harness creates the folder `kickd` as `kickd init` does, with an access control list that gives SYSTEM and the Administrators group alone access to it, and the files copied into it inherit that list.
 - In the configs of `testdata/cron` and `testdata/cron-missed`, `{{at "ZONE"}}` stands for a cron schedule 25 seconds after the test starts, in the time zone ZONE.
 - kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: the files `edits/config.*.yaml` are edits of a `config.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
 
@@ -349,11 +349,15 @@ kickd installed as a service as the installation guides do: launchd on macOS, sy
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
 | `TestServiceAcceptsAWebhookRequest` |  |  | ✓ |
+| `TestServiceAgentDoesNotStartWithAConfigThatUsersCanChange` |  |  | ✓ |
+| `TestServiceCheckOfAnAdministratorPrintsTheCommandsThatFixTheConfig` |  |  | ✓ |
+| `TestServiceCheckOfAnAdministratorRefusesAConfigThatUsersCanChange` |  |  | ✓ |
 | `TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine` | ✓ | ✓ |  |
 | `TestServiceCheckWithSudoRefusesAConfigThatOtherUsersCanChange` | ✓ | ✓ |  |
 | `TestServiceGivesCommandsTheProfileOfSystem` |  |  | ✓ |
 | `TestServiceGivesCommandsTheTempFolderOfWindows` |  |  | ✓ |
 | `TestServiceInitMakesTheConfigReadableOnlyByItsOwner` |  | ✓ |  |
+| `TestServiceInitOfAnAdministratorLetsOnlySystemAndAdministratorsIntoTheConfigFolder` |  |  | ✓ |
 | `TestServiceInitOfAnAdministratorWritesTheConfigForTheWholeMachine` |  |  | ✓ |
 | `TestServiceInitWithSudoWritesTheConfigForTheWholeMachine` | ✓ | ✓ |  |
 | `TestServiceInstallEnablesTheSystemUnitForMultiUserTarget` |  | ✓ |  |

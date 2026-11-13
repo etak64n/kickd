@@ -10,15 +10,19 @@ package windows
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 // changesTheMachine skips a test that changes the machine, unless
@@ -51,6 +55,7 @@ func windowsService(t *testing.T) *service {
 		database: `C:\ProgramData\kickd\kickd.db`,
 	}
 	s.removeAtEnd()
+	makeConfigFolder(t, `C:\ProgramData\kickd`)
 	copyTree(t, `testdata\service`, `C:\ProgramData\kickd`)
 	s.mustKickd("service", "install")
 	s.mustKickd("service", "start")
@@ -218,6 +223,108 @@ func TestServiceInitOfAnAdministratorWritesTheConfigForTheWholeMachine(t *testin
 		if !strings.Contains(string(b), want) {
 			t.Errorf("the config has no %q:\n%s", want, b)
 		}
+	}
+}
+
+// accessList returns the access control list of the file or folder at
+// path, in the form of a security descriptor string, such as
+// D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA).
+func accessList(t *testing.T, path string) string {
+	t.Helper()
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sd.String()
+}
+
+// trustees returns the accounts to which the rules of the access control
+// list acl, in the form of a security descriptor string, give or deny
+// rights, such as "SY BA" for SYSTEM and the Administrators group.
+func trustees(acl string) string {
+	var out []string
+	for _, m := range regexp.MustCompile(`\((?:[^;()]*;){5}([^;()]+)\)`).FindAllStringSubmatch(acl, -1) {
+		out = append(out, m[1])
+	}
+	return strings.Join(out, " ")
+}
+
+func TestServiceInitOfAnAdministratorLetsOnlySystemAndAdministratorsIntoTheConfigFolder(t *testing.T) {
+	changesTheMachine(t)
+	s := &service{t: t, config: `C:\ProgramData\kickd\config.yaml`}
+	s.removeAtEnd()
+	s.mustKickd("init")
+	if got, want := accessList(t, `C:\ProgramData\kickd`), "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"; got != want {
+		t.Errorf(`the access control list of C:\ProgramData\kickd is %s, want %s`, got, want)
+	}
+	for _, p := range []string{s.config, `C:\ProgramData\kickd\event.example.yaml`} {
+		if got := accessList(t, p); trustees(got) != "SY BA" {
+			t.Errorf("the access control list of %s is %s, want rules for SY and BA alone", p, got)
+		}
+	}
+}
+
+// usersCanChange writes the config for the whole machine as an
+// administrator does, with kickd init and then the config of
+// testdata/service, which kickd check accepts. It then gives the Users
+// group write access to the config folder and the files in it with
+// icacls.
+func usersCanChange(t *testing.T) *service {
+	t.Helper()
+	changesTheMachine(t)
+	s := &service{t: t, config: `C:\ProgramData\kickd\config.yaml`, log: `C:\ProgramData\kickd\kickd.log`}
+	s.removeAtEnd()
+	s.mustKickd("init", "--no-examples")
+	copyTree(t, `testdata\service`, `C:\ProgramData\kickd`)
+	s.mustKickd("check")
+	if r := s.run("icacls", `C:\ProgramData\kickd`, "/grant", "*S-1-5-32-545:(OI)(CI)W"); r.code != 0 {
+		t.Fatalf("icacls: exit %d\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	return s
+}
+
+func TestServiceCheckOfAnAdministratorRefusesAConfigThatUsersCanChange(t *testing.T) {
+	s := usersCanChange(t)
+	r := s.kickd("check")
+	// The name of the group depends on the language of Windows, and its
+	// security identifier does not.
+	for _, want := range []string{`C:\ProgramData\kickd can be changed by `, "(S-1-5-32-545); give only SYSTEM and the Administrators group access to it"} {
+		if r.code == 0 || !strings.Contains(r.stderr, want) {
+			t.Errorf("kickd check: exit %d, want an error with %q\n%s%s", r.code, want, r.stdout, r.stderr)
+		}
+	}
+}
+
+func TestServiceCheckOfAnAdministratorPrintsTheCommandsThatFixTheConfig(t *testing.T) {
+	s := usersCanChange(t)
+	r := s.kickd("check")
+	fixes := regexp.MustCompile(`(?m)icacls ".*$`).FindAllString(r.stderr, -1)
+	if r.code == 0 || len(fixes) == 0 {
+		t.Fatalf("kickd check: exit %d, want icacls commands\n%s%s", r.code, r.stdout, r.stderr)
+	}
+	// An administrator runs the commands in PowerShell, as the
+	// installation guide does.
+	for _, fix := range fixes {
+		if r := s.run("powershell", "-NoProfile", "-Command", fix); r.code != 0 {
+			t.Fatalf("%s: exit %d\n%s%s", fix, r.code, r.stdout, r.stderr)
+		}
+	}
+	if r := s.kickd("check"); r.code != 0 {
+		t.Errorf("kickd check after %s: exit %d\n%s%s", strings.Join(fixes, "; "), r.code, r.stdout, r.stderr)
+	}
+}
+
+func TestServiceAgentDoesNotStartWithAConfigThatUsersCanChange(t *testing.T) {
+	usersCanChange(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, kickdPath, "run")
+	out, _ := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("kickd run started with the config:\n%s", out)
+	}
+	if code := cmd.ProcessState.ExitCode(); code != 1 || !strings.Contains(string(out), "Config load failed") || !strings.Contains(string(out), "can be changed by") {
+		t.Errorf("kickd run: exit %d\n%s", code, out)
 	}
 }
 

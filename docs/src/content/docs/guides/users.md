@@ -38,7 +38,12 @@ On macOS and Linux, kickd checks this before it reads the config of root, whethe
 Root must own the config file, every other file of events, every directory on the way to each of them, and the file that each link on the way points to, and neither their group nor other users may write to them.
 Otherwise, kickd refuses the config, and `kickd check` names the file or directory that another user can change, with the `sudo chown` or `sudo chmod` command that fixes it.
 kickd cannot see the scripts and programs that the commands run, so these need the same protection: a script that another user can change runs as root too.
-On Windows, kickd does not check the permissions of the config.
+On Windows, the **access control list** of a file or folder, a list of rules that each allow or deny rights to an account, decides who can change it.
+Before an administrator's kickd or the service reads the config for the whole machine, kickd checks the folder `C:\ProgramData\kickd`, the config file and every other file of events, and for a link, also the file or folder that it points to.
+SYSTEM, the Administrators group, an account in that group, or TrustedInstaller must own each of them, and no rule of their access control lists may allow another account to write to them, add files to the folder, delete them, or change their attributes, their access control list or their owner.
+`kickd init` creates the folder with an access control list that gives SYSTEM and the Administrators group alone access to it, and the files in it inherit that list.
+Otherwise, kickd refuses the config, and `kickd check` names the file or folder that another account can change, with the `icacls` command that fixes it.
+[Installing on Windows](/kickd/getting-started/install-windows/#who-can-change-the-config) describes the check and the command.
 
 ## The user of the commands
 
@@ -83,6 +88,7 @@ On Windows, cmd expands `%VAR%` before it parses the line, so a value that conta
 | Payload file of a run | The user of the agent, or the `user` of the event | 0600 |
 | Files that a command writes | The user of the agent, or the `user` of the event | Chosen by the command |
 
+On Windows, the files in `C:\ProgramData\kickd` inherit the access control list of that folder, which gives SYSTEM and the Administrators group alone access to them.
 A command of an agent that runs as root writes files that belong to root, even in the home directory of another user, unless its event has a `user`.
 
 ## Choosing the user
