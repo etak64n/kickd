@@ -38,6 +38,7 @@ func TestAdminsOnlyAcceptsWhatOnlySystemAndAdministratorsCanChange(t *testing.T)
 		{"a rule only for what the folder holds", "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICIIO;GA;;;CO)(A;OICIIO;FA;;;BU)"},
 		{"a rule that denies users", "O:BAD:P(D;;FA;;;BU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"},
 		{"an empty access control list", "O:BAD:P"},
+		{"a rule for the built-in Administrator, a member of the Administrators group", "O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;LA)"},
 	} {
 		if errs := adminsOnly(configFolder, sd(t, c.sddl)); len(errs) > 0 {
 			t.Errorf("%s: %v", c.name, errors.Join(errs...))
@@ -53,7 +54,6 @@ func TestAdminsOnlyRefusesWhatOtherAccountsCanChange(t *testing.T) {
 	for _, c := range []struct{ name, sddl, want string }{
 		{"the folder that os.MkdirAll creates in ProgramData",
 			"O:BAD:AI(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIIOID;GA;;;CO)(A;OICIID;0x1200a9;;;BU)(A;CIID;DCLCRPCR;;;BU)", users},
-		{"the temporary folder of the local administrator", "O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;LA)", "-500); give only SYSTEM"},
 		{"an owner that is not trusted", "O:BUD:P" + admins, "(S-1-5-32-545); make the Administrators group its owner"},
 		{"write data", "O:BAD:P" + admins + "(A;;0x2;;;BU)", users},
 		{"append data", "O:BAD:P" + admins + "(A;;0x4;;;BU)", users},
@@ -75,6 +75,24 @@ func TestAdminsOnlyRefusesWhatOtherAccountsCanChange(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
 		}
+	}
+}
+
+// On the desktop versions of Windows, the files that an administrator
+// creates belong to the account of the administrator, which is a member of
+// the Administrators group.
+func TestAdminsOnlyAcceptsAnOwnerInTheAdministratorsGroup(t *testing.T) {
+	needsAdministrator(t)
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !administrator(user.User.Sid) {
+		t.Skip("the account of the test belongs to the Administrators group only through another group")
+	}
+	me := user.User.Sid.String()
+	if errs := adminsOnly(configFile, sd(t, "O:"+me+"D:(A;;FA;;;"+me+")(A;ID;FA;;;SY)(A;ID;FA;;;BA)")); len(errs) > 0 {
+		t.Errorf("a file of the administrator who runs the test: %v", errors.Join(errs...))
 	}
 }
 

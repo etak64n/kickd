@@ -146,7 +146,7 @@ A folder created in another way, such as with `New-Item` or File Explorer, inher
 
 Before an administrator's kickd or the service reads the config, it checks the folder, the config file and each other file of events:
 
-- **Owner**: the owner of each must be SYSTEM, the Administrators group or TrustedInstaller, the account of Windows that owns its system files.
+- **Owner**: the owner of each must be SYSTEM, the Administrators group, an account in the Administrators group, or TrustedInstaller, the account of Windows that owns its system files. On the desktop versions of Windows, a file that an administrator creates belongs to the account of that administrator, and on Windows Server to the Administrators group. An account counts when it is itself a member of the group, not when it belongs to it only through another group, such as the administrators of a domain.
 - **Rules**: no rule may allow another account a right that changes the file or folder: to write to it, to add files or folders to it, to delete it or what it holds, to change its attributes, or to change its access control list or its owner.
 - **Links**: for a symbolic link, kickd checks the link and the file or folder that it points to, because whoever can change the link can point it elsewhere.
 

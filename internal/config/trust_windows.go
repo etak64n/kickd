@@ -37,6 +37,54 @@ func trusted(sid string) bool {
 	return sid == sidSystem || sid == sidAdministrators || sid == sidTrustedInstaller
 }
 
+// procNetLocalGroupGetMembers lists the members of a local group of the
+// machine. x/sys/windows does not wrap it.
+var procNetLocalGroupGetMembers = windows.NewLazySystemDLL("netapi32.dll").NewProc("NetLocalGroupGetMembers")
+
+// administrator reports whether sid is an account in the Administrators
+// group of the machine. Such an account can change anything on the machine
+// already, so it may own the config and change it. On the desktop versions
+// of Windows, the files that an administrator creates belong to the
+// account of the administrator rather than to the Administrators group,
+// unlike on Windows Server. The group's direct members count, so an
+// account that belongs to it only through another group, such as the
+// administrators of a domain, does not.
+func administrator(sid *windows.SID) bool {
+	admins, err := windows.StringToSid(sidAdministrators)
+	if err != nil {
+		return false
+	}
+	group, _, _, err := admins.LookupAccount("")
+	if err != nil {
+		return false
+	}
+	name, err := windows.UTF16PtrFromString(group)
+	if err != nil {
+		return false
+	}
+	const maxPreferredLength = 0xFFFFFFFF
+	var (
+		buf         *byte
+		read, total uint32
+		resume      uintptr
+	)
+	// The members come back at level 0, as LOCALGROUP_MEMBERS_INFO_0
+	// records, each of which is the pointer to the SID of one member.
+	r, _, _ := procNetLocalGroupGetMembers.Call(0, uintptr(unsafe.Pointer(name)), 0,
+		uintptr(unsafe.Pointer(&buf)), maxPreferredLength,
+		uintptr(unsafe.Pointer(&read)), uintptr(unsafe.Pointer(&total)), uintptr(unsafe.Pointer(&resume)))
+	if r != 0 || buf == nil {
+		return false
+	}
+	defer windows.NetApiBufferFree(buf)
+	for _, member := range unsafe.Slice((**windows.SID)(unsafe.Pointer(buf)), read) {
+		if member != nil && member.Equals(sid) {
+			return true
+		}
+	}
+	return false
+}
+
 // systemFolderSDDL is the security descriptor that kickd init gives the
 // folder of the config for the whole machine: an access control list that
 // does not inherit the rules of the folder above it, and gives SYSTEM and
@@ -202,8 +250,9 @@ func finalPath(h windows.Handle, path string) string {
 }
 
 // adminsOnly returns the problems that let an account other than SYSTEM,
-// the Administrators group and TrustedInstaller change e, whose security
-// descriptor is sd: an owner that is not one of them, and the rules of
+// the Administrators group, its members and TrustedInstaller change e,
+// whose security descriptor is sd: an owner that is not one of them, and
+// the rules of
 // its access control list that allow another account a right that changes
 // e. A rule that applies only to what a folder holds does not count, and
 // neither does a rule that denies rights. Each problem names the icacls
@@ -215,7 +264,7 @@ func adminsOnly(e aclEntry, sd *windows.SECURITY_DESCRIPTOR) []error {
 		return []error{err}
 	case owner == nil:
 		errs = append(errs, fmt.Errorf("%s has no owner; make the Administrators group its owner with %s", e.name(), e.icacls("/setowner", "*"+sidAdministrators)))
-	case !trusted(owner.String()):
+	case !trusted(owner.String()) && !administrator(owner):
 		errs = append(errs, fmt.Errorf("%s belongs to %s; make the Administrators group its owner with %s", e.name(), account(owner), e.icacls("/setowner", "*"+sidAdministrators)))
 	}
 	dacl, _, err := sd.DACL()
@@ -239,7 +288,7 @@ func adminsOnly(e aclEntry, sd *windows.SECURITY_DESCRIPTOR) []error {
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		s := sid.String()
-		if trusted(s) {
+		if trusted(s) || administrator(sid) {
 			continue
 		}
 		if !named[s] {
