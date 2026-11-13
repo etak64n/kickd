@@ -11,12 +11,14 @@ import (
 	"syscall"
 )
 
-// accountIDs are the user ID, the group ID and the other groups of an
-// account, which a command starts with.
-type accountIDs struct {
+// account is the user whose rights a command runs with when its event names
+// a user.
+type account struct {
+	name   string
 	uid    uint32
 	gid    uint32
 	groups []uint32
+	home   string
 }
 
 // accountTempDir is the temporary directory of a command that runs as the
@@ -53,7 +55,7 @@ func lookupAccount(name string) (*account, error) {
 		}
 		groups = append(groups, uint32(g))
 	}
-	return &account{name: u.Username, home: u.HomeDir, accountIDs: accountIDs{uid: uint32(uid), gid: uint32(gid), groups: groups}}, nil
+	return &account{name: u.Username, uid: uint32(uid), gid: uint32(gid), groups: groups, home: u.HomeDir}, nil
 }
 
 // runAs makes cmd start with the user, the group and the other groups of a.

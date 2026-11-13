@@ -7,9 +7,13 @@ import (
 	"os/exec"
 )
 
-// accountIDs are empty on Windows, where a command cannot run as the user
-// of its event.
-type accountIDs struct{}
+// account is the user of an event, which Windows does not support: the
+// config rejects user there, so the account has only what the code of
+// every OS reads.
+type account struct {
+	name string
+	home string
+}
 
 // accountTempDir is unused on Windows, where a command cannot run as the user
 // of its event.
