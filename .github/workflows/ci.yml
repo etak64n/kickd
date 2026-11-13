@@ -107,10 +107,12 @@ jobs:
           go-version: stable
           check-latest: true
 
+      # staticcheck runs on the runner and checks the code of each OS.
       - name: Staticcheck
         run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
           for goos in linux darwin windows; do
-            GOOS=$goos go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...
+            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" ./...
           done
 
   # Feeds the parsers of the config and the webhook handler with generated
