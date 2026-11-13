@@ -175,6 +175,13 @@ var (
 	paramNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 )
 
+// The problems of an event with a user that depend on the machine rather
+// than on the config: the OS, and the user that reads the config.
+var (
+	errUserOnWindows = errors.New("user is not supported on Windows, where every command runs as the user of the agent")
+	errUserNotRoot   = errors.New("user needs kickd to run as root, because only root can start a command as another user")
+)
+
 // Config is the root of the configuration file.
 type Config struct {
 	Log      Log      `yaml:"log"`
@@ -236,6 +243,7 @@ type Event struct {
 	Run             Command           `yaml:"command"`
 	Workdir         string            `yaml:"workdir"`
 	Env             map[string]string `yaml:"env"`
+	User            string            `yaml:"user"`
 	Timeout         time.Duration     `yaml:"timeout"`
 	StopRun         Command           `yaml:"stop_command"`
 	StopTimeout     time.Duration     `yaml:"stop_timeout"`
@@ -676,6 +684,7 @@ func (c *Config) applyDefaults() {
 			e.Workdir = c.Dir
 		}
 		e.Workdir = c.resolve(e.Workdir)
+		e.User = strings.TrimSpace(e.User)
 		if e.Output != nil {
 			e.Output.Path = c.resolve(e.Output.Path)
 			if e.Output.MaxSizeMB == 0 {
@@ -835,6 +844,16 @@ func (c *Config) validate() error {
 		if e.Workdir != "" {
 			if st, err := os.Stat(e.Workdir); err != nil || !st.IsDir() {
 				fail("%s: workdir %q is not a directory", where, e.Workdir)
+			}
+		}
+		// The user is looked up when a run starts, so that a config loads
+		// before the accounts of the machine are available at boot.
+		if e.User != "" {
+			switch {
+			case runtime.GOOS == "windows":
+				fail("%s: %w", where, errUserOnWindows)
+			case !System():
+				fail("%s: %w", where, errUserNotRoot)
 			}
 		}
 		params := map[string]bool{}

@@ -644,7 +644,7 @@ func TestEnvOfTheConfigFileIsUnderTheEnvOfTheEvent(t *testing.T) {
 		BaseEnv: map[string]string{"LAYER": "base", "ONLY_BASE": "b", "CHAIN": "base:${KICKD_TEST_BASE}"},
 		Env:     map[string]string{"LAYER": "event", "FROM_BASE": "${ONLY_BASE}-event", "CHAIN": "event:${CHAIN}"},
 	}
-	env := buildEnv(spec, fileEvent(), "payload.json")
+	env := buildEnv(spec, fileEvent(), "payload.json", nil)
 	for k, want := range map[string]string{
 		"LAYER":     "event",
 		"ONLY_BASE": "b",
@@ -654,5 +654,45 @@ func TestEnvOfTheConfigFileIsUnderTheEnvOfTheEvent(t *testing.T) {
 		if got := envValue(env, k); got != want {
 			t.Errorf("%s = %q, want %q", k, got, want)
 		}
+	}
+}
+
+// The variables that name the user of an event replace those of the agent,
+// and the env of the config file and of the event can still set them or
+// refer to them.
+func TestEnvOfAnAccountReplacesTheAgentsUnderTheLayers(t *testing.T) {
+	t.Setenv("HOME", "/agent/home")
+	acct := &account{name: "alice", home: "/home/alice"}
+	spec := Spec{
+		BaseEnv: map[string]string{"CACHE": "${HOME}/.cache"},
+		Env:     map[string]string{"TMPDIR": "/var/tmp/alice"},
+	}
+	env := buildEnv(spec, fileEvent(), "payload.json", acct)
+	for k, want := range map[string]string{
+		"HOME":    "/home/alice",
+		"USER":    "alice",
+		"LOGNAME": "alice",
+		"TMPDIR":  "/var/tmp/alice",
+		"CACHE":   "/home/alice/.cache",
+	} {
+		if got := envValue(env, k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+}
+
+// A user that the machine does not have fails the run before the command
+// starts, with the reason that the run records.
+func TestUnknownUserFailsTheRunBeforeTheCommandStarts(t *testing.T) {
+	r, rec, _ := newRunner(t)
+	job := helperJob("exit", "0")
+	job.User = "kickd-test-no-such-user"
+	res := r.Execute(context.Background(), job, fileEvent())
+	if res.Reason != "start_failed" || res.ExitCode != -1 {
+		t.Fatalf("result = %+v", res)
+	}
+	got := rec.find("Run failed")
+	if len(got) != 1 || got[0]["detail"] != "user" {
+		t.Fatalf("Run failed = %v", got)
 	}
 }

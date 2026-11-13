@@ -49,6 +49,7 @@ The database is a file, so waiting runs survive a restart of the agent or of the
 - **Overlap control**: each event chooses whether a firing that arrives while it is running is skipped, queued, run at the same time, or replaces the run.
 - **Long-running commands**: `restart` starts a command again when it exits, with a delay that grows while it keeps failing, `stop_command` stops a program that ignores SIGTERM, and `output` keeps its output in a file that kickd rotates.
 - **Time limits**: commands that run past their limit are stopped.
+- **Commands as another user**: on macOS and Linux, an agent that runs as root starts the command of an event as the user that the event names with `user`.
 - **Live reload**: saving the config file, or a file of events next to it, applies the change without a restart.
 - **Events in several files**: each group of events can have a YAML file of its own next to the config file.
 - **Queue commands**: the command line shows the queue and the run history, and cancels runs.

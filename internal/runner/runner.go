@@ -72,6 +72,10 @@ type Spec struct {
 	// BaseEnv is the env of the config file, which every event gets under
 	// its own Env.
 	BaseEnv map[string]string
+	// User, when not empty, is the user whose rights the command and the
+	// stop command run with, on macOS and Linux with an agent that runs as
+	// root. The runner looks it up when each run starts.
+	User    string
 	Timeout time.Duration
 	// StopCommand or StopShell asks a running command to stop before kickd
 	// sends it SIGTERM. StopTimeout is how long each of the two steps may
@@ -266,7 +270,13 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	if err != nil {
 		return r.startFailure(log, start, "event_encode", err)
 	}
-	eventFile, err := writeEventFile(payload)
+	var acct *account
+	if spec.User != "" {
+		if acct, err = lookupAccount(spec.User); err != nil {
+			return r.startFailure(log, start, "user", err)
+		}
+	}
+	eventFile, err := writeEventFile(payload, acct)
 	if err != nil {
 		return r.startFailure(log, start, "event_file", err)
 	}
@@ -276,7 +286,7 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 		}
 	}()
 
-	env := buildEnv(spec, ev, eventFile)
+	env := buildEnv(spec, ev, eventFile, acct)
 	cmd := buildCommand(ctx, spec, env)
 	cmd.Dir = spec.Workdir
 	cmd.Env = env
@@ -298,11 +308,12 @@ func (r *Runner) execute(ctx context.Context, spec Spec, ev event.Event, summary
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	setSysProcAttr(cmd)
+	runAs(cmd, acct)
 	grace := spec.StopTimeout
 	if grace <= 0 {
 		grace = killGrace
 	}
-	cmd.Cancel = func() error { return r.stop(ctx, log, spec, cmd, env, grace) }
+	cmd.Cancel = func() error { return r.stop(ctx, log, spec, acct, cmd, env, grace) }
 	cmd.WaitDelay = grace
 
 	log.Info("Run started", append([]any{"triggerId", ev.TriggerID}, eventAttrs(ev)...)...)
@@ -441,9 +452,9 @@ func (w rotationReport) Write(p []byte) (int, error) {
 // event first, when the event has one, and waits for it up to grace; then
 // it sends SIGTERM to the process group of the command. os/exec kills the
 // command when it is still running grace after stop returns.
-func (r *Runner) stop(ctx context.Context, log *slog.Logger, spec Spec, cmd *exec.Cmd, env []string, grace time.Duration) error {
+func (r *Runner) stop(ctx context.Context, log *slog.Logger, spec Spec, acct *account, cmd *exec.Cmd, env []string, grace time.Duration) error {
 	if spec.StopShell != "" || len(spec.StopCommand) > 0 {
-		r.runStopCommand(log, spec, append(env, "KICKD_STOP_REASON="+stopReason(ctx)), grace)
+		r.runStopCommand(log, spec, acct, append(env, "KICKD_STOP_REASON="+stopReason(ctx)), grace)
 	}
 	return terminate(cmd)
 }
@@ -462,11 +473,11 @@ func stopReason(ctx context.Context) string {
 	return "shutdown"
 }
 
-// runStopCommand runs the stop command of spec in the working directory
-// and the environment of the run, and logs how it ended. A stop command
-// that runs past grace is stopped like a command that runs past its
-// timeout.
-func (r *Runner) runStopCommand(log *slog.Logger, spec Spec, env []string, grace time.Duration) {
+// runStopCommand runs the stop command of spec in the working directory,
+// the environment and as the user of the run, and logs how it ended. A stop
+// command that runs past grace is stopped like a command that runs past
+// its timeout.
+func (r *Runner) runStopCommand(log *slog.Logger, spec Spec, acct *account, env []string, grace time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), grace)
 	defer cancel()
 	stopSpec := Spec{Command: spec.StopCommand, Shell: spec.StopShell}
@@ -477,6 +488,7 @@ func (r *Runner) runStopCommand(log *slog.Logger, spec Spec, env []string, grace
 	sc.Stdout = tailWriter{tail}
 	sc.Stderr = tailWriter{tail}
 	setSysProcAttr(sc)
+	runAs(sc, acct)
 	sc.Cancel = func() error { return terminate(sc) }
 	sc.WaitDelay = time.Second
 	start := time.Now()
@@ -581,9 +593,11 @@ func buildCommand(ctx context.Context, spec Spec, env []string) *exec.Cmd {
 }
 
 // buildEnv layers the env of the config file, the env of the event and the
-// event variables over the agent environment. ${VAR} in a value of a layer
-// is VAR as the layers below give it.
-func buildEnv(spec Spec, ev event.Event, eventFile string) []string {
+// event variables over the agent environment. With an account, the
+// variables that name the user replace those of the agent first, so that
+// the layers above can still set them. ${VAR} in a value of a layer is VAR
+// as the layers below give it.
+func buildEnv(spec Spec, ev event.Event, eventFile string, acct *account) []string {
 	env := os.Environ()
 	set := map[string]string{} // what the layers set, by envKey
 	lookup := func(k string) string {
@@ -591,6 +605,13 @@ func buildEnv(spec Spec, ev event.Event, eventFile string) []string {
 			return v
 		}
 		return os.Getenv(k)
+	}
+	if acct != nil {
+		for _, kv := range acct.env() {
+			k, v, _ := strings.Cut(kv, "=")
+			env = append(env, kv)
+			set[envKey(k)] = v
+		}
 	}
 	for _, layer := range []map[string]string{spec.BaseEnv, spec.Env} {
 		keys := make([]string, 0, len(layer))
@@ -620,8 +641,16 @@ func envKey(k string) string {
 	return k
 }
 
-func writeEventFile(payload []byte) (string, error) {
-	f, err := os.CreateTemp("", "kickd-payload-*.json")
+// writeEventFile writes the payload to a new file that only the user of the
+// command can read. For the user of an event, the file goes to the shared
+// temporary directory and belongs to that user, because the temporary
+// directory of the agent can be closed to other users.
+func writeEventFile(payload []byte, acct *account) (string, error) {
+	dir := "" // the temporary directory of the agent
+	if acct != nil {
+		dir = accountTempDir
+	}
+	f, err := os.CreateTemp(dir, "kickd-payload-*.json")
 	if err != nil {
 		return "", err
 	}
@@ -631,6 +660,10 @@ func writeEventFile(payload []byte) (string, error) {
 		return "", err
 	}
 	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	if err := giveTo(f.Name(), acct); err != nil {
 		os.Remove(f.Name())
 		return "", err
 	}

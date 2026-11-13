@@ -14,7 +14,7 @@ In kickd, a named command in the config file is an **event**, each firing of an 
 | Stopping a command | SIGTERM to the group, then SIGKILL after 10 seconds | `taskkill /T /F` at once |
 | Exit status | The exit code, or `-1` and the signal name | The exit code |
 | Separator in `KICKD_FILE_PATHS` | `:` | `;` |
-| Directory of payload files | `$TMPDIR`, or `/tmp` when it is not set | The temporary folder of the account, from `%TMP%` or `%TEMP%` |
+| Directory of payload files | `$TMPDIR`, or `/tmp` when it is not set. `/tmp` for an event with a `user` | The temporary folder of the account, from `%TMP%` or `%TEMP%` |
 
 ## Signals
 

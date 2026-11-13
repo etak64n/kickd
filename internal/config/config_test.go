@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -304,6 +305,67 @@ events:
 	o := cfg.Events[0].Output
 	if o == nil || o.Path != filepath.Join(dir, "logs", "web.log") || o.MaxSizeMB != DefaultLogSizeMB || o.MaxBackups != DefaultLogBackups {
 		t.Fatalf("output = %+v", o)
+	}
+}
+
+// An event with a user loads only where kickd can start a command as that
+// user: as root on macOS and Linux.
+func TestUserNeedsRootOnMacOSAndLinux(t *testing.T) {
+	noLogEnv(t)
+	_, err := Parse([]byte(`
+events:
+  - name: report
+    command: ['id', '-un']
+    user: ' alice '
+    triggers: [{type: manual}]
+`), t.TempDir())
+	var want error
+	switch {
+	case runtime.GOOS == "windows":
+		want = errUserOnWindows
+	case !System():
+		want = errUserNotRoot
+	}
+	if want == nil {
+		if err != nil {
+			t.Fatalf("as root: %v", err)
+		}
+		return
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) || len(ve.Problems) != 1 || !errors.Is(ve.Problems[0], want) {
+		t.Fatalf("err = %v, want %v", err, want)
+	}
+	if !strings.Contains(err.Error(), `event "report": user`) {
+		t.Fatalf("the error does not name the event: %v", err)
+	}
+}
+
+// As root, the user loads without the spaces around it, and an event
+// without a user has none.
+func TestUserTrimsSpaces(t *testing.T) {
+	if runtime.GOOS == "windows" || !System() {
+		t.Skip("only root on macOS and Linux loads a user")
+	}
+	noLogEnv(t)
+	cfg, err := Parse([]byte(`
+events:
+  - name: report
+    command: ['id', '-un']
+    user: ' alice '
+    triggers: [{type: manual}]
+  - name: other
+    command: ['id', '-un']
+    triggers: [{type: manual}]
+`), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Events[0].User; got != "alice" {
+		t.Errorf("user = %q, want alice", got)
+	}
+	if got := cfg.Events[1].User; got != "" {
+		t.Errorf("user of other = %q, want none", got)
 	}
 }
 

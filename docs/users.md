@@ -35,11 +35,14 @@ Only root and administrators can change the files in its directory, because its 
 
 ## The user of the commands
 
-kickd never switches users.
 A command starts as a child process of the agent and runs as the same user: with the same groups on macOS and Linux, and with the same access token on Windows.
 The command also inherits the environment of the agent, so `HOME` or `USERPROFILE` points to the home directory of that user, when the user has one.
 
-The user who fires an event decides which kickd the event reaches, and the agent of that kickd runs the command as its own user.
+On macOS and Linux, an agent that runs as root can run the command of an event as another user, whom the event names with [`user`](settings/events.md#user).
+The command and the stop command then run with the user ID, the groups and the home directory of that user.
+Windows has no such setting, and the config of any user other than root cannot have it.
+
+The user who fires an event decides which kickd the event reaches, and the agent of that kickd runs the command as its own user, or as the `user` of the event.
 `kickd event` reads the config file of the user who runs it, writes a run into the database of that config, and the agent runs the command later.
 A run records who fired it in `source`, which the command reads as `KICKD_MANUAL_SOURCE`: the user and host of the `kickd event` process.
 Under `sudo`, that user is root.
@@ -68,15 +71,16 @@ On Windows, cmd expands `%VAR%` before it parses the line, so a value that conta
 | Config file and events file written by `kickd init` | The user who ran `kickd init` | 0600 |
 | Database, with its `-wal` and `-shm` files | The user whose kickd process created it | 0600 |
 | Log file | The user of the agent | Allowed by the umask, usually 0644 |
-| Payload file of a run | The user of the agent | 0600 |
-| Files that a command writes | The user of the agent | Chosen by the command |
+| Payload file of a run | The user of the agent, or the `user` of the event | 0600 |
+| Files that a command writes | The user of the agent, or the `user` of the event | Chosen by the command |
 
-A command of an agent that runs as root writes files that belong to root, even in the home directory of another user.
+A command of an agent that runs as root writes files that belong to root, even in the home directory of another user, unless its event has a `user`.
 
 ## Choosing the user
 
 - **A per-user service**, a LaunchAgent on macOS or a per-user unit on Linux, suits events that work on the files of one user. The commands have the permissions of that user, and no more.
-- **A system-wide service**, as root on macOS and Linux or as SYSTEM on Windows, suits tasks for the whole machine. Every command in the config file then runs with full rights, and the config file is the config for the whole machine, which only root and administrators can change.
+- **A system-wide service**, as root on macOS and Linux or as SYSTEM on Windows, suits tasks for the whole machine. Every command in the config file then runs with full rights, unless its event has a `user`, and the config file is the config for the whole machine, which only root and administrators can change.
+- **A system-wide service with `user`**, on macOS and Linux, suits a machine where tasks of one user must run without that user logging in. The agent starts at boot as root, and each event with a [`user`](settings/events.md#user) runs with the permissions of that user, and no more.
 - **Windows** has only the service that runs as SYSTEM.
 
 The service managers themselves can run a service as another user.
@@ -89,5 +93,3 @@ kickd does not set this up, and these settings have not been tested with kickd:
 kickd then runs as that user, so it reads the config file of that user, `~/.kickd/config.yaml` in the home directory of the user.
 The user needs read access to that file, and read and write access to the database and its directory.
 Uninstalling the service and installing it again with kickd removes such a change.
-
-A command of an agent that runs as root can also switch users by itself, for example with `sudo -u alice ./task.sh` on macOS or `runuser -u alice -- ./task.sh` on Linux.

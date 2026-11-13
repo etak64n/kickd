@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -132,5 +133,63 @@ func TestStopTimeoutBoundsTheWaitBeforeSIGKILL(t *testing.T) {
 	// killGrace (10 seconds) would apply without stop_timeout.
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("the run took %v; stop_timeout did not bound the wait", d)
+	}
+}
+
+// The account of the user who runs the test has the ids of that user.
+func TestLookupAccountFindsTheUserAndItsGroups(t *testing.T) {
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := lookupAccount(u.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int(a.uid) != os.Getuid() || int(a.gid) != os.Getgid() || a.name != u.Username || a.home != u.HomeDir {
+		t.Fatalf("account = %+v, want uid %d, gid %d, home %s", a, os.Getuid(), os.Getgid(), u.HomeDir)
+	}
+	if len(a.groups) == 0 {
+		t.Fatalf("account %s has no groups", a.name)
+	}
+}
+
+// The payload file of a run with a user is in the shared temporary
+// directory, belongs to that user and stays closed to others.
+func TestPayloadFileOfAnAccountBelongsToIt(t *testing.T) {
+	acct := &account{name: "self", uid: uint32(os.Getuid()), gid: uint32(os.Getgid())}
+	path, err := writeEventFile([]byte(`{}`), acct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+	if filepath.Dir(path) != accountTempDir {
+		t.Fatalf("payload file %s is not in %s", path, accountTempDir)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys := st.Sys().(*syscall.Stat_t)
+	if int(sys.Uid) != os.Getuid() || st.Mode().Perm() != 0o600 {
+		t.Fatalf("payload file: uid %d, mode %v", sys.Uid, st.Mode().Perm())
+	}
+}
+
+// As root, the command and the stop command run as the user of the event.
+func TestCommandRunsAsTheUserOfItsEvent(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("only root can start a command as another user")
+	}
+	if _, err := user.Lookup("nobody"); err != nil {
+		t.Skip("no user nobody:", err)
+	}
+	r, _, _ := newRunner(t)
+	// The temporary directory of root can be closed to nobody, so the
+	// command works in the root directory.
+	job := Spec{Name: "as-nobody", Shell: `id -un; test -r "$KICKD_PAYLOAD_FILE" && echo payload`, Workdir: "/", User: "nobody"}
+	res := r.Execute(context.Background(), job, fileEvent())
+	if want := "nobody\npayload\n"; res.ExitCode != 0 || res.Output != want {
+		t.Fatalf("result = %+v, want output %q", res, want)
 	}
 }

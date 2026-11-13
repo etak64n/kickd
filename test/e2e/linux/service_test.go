@@ -350,6 +350,13 @@ func TestServiceOfTheSystemRunsCommandsAsRoot(t *testing.T) {
 	}
 }
 
+func TestServiceOfTheSystemRunsTheCommandOfAnEventAsItsUser(t *testing.T) {
+	s := systemUnit(t)
+	if r := s.waitForRun(s.fire("whoami-nobody")); r.Output != "nobody\n/nonexistent\npayload\n" {
+		t.Errorf("whoami-nobody: %s\n%s", r.Status, r.Output)
+	}
+}
+
 func TestServiceOfTheSystemAcceptsAWebhookRequest(t *testing.T) {
 	s := systemUnit(t)
 	res := request(t, "POST", 9787, "/hooks/whoami", "", "Authorization", "Bearer whoami-token")

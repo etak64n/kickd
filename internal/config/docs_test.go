@@ -91,15 +91,19 @@ func TestExamplesLoad(t *testing.T) {
 	}
 }
 
-// checkLoads loads a config and reports every problem except directories
-// that exist only on the machine the config was written for.
+// checkLoads loads a config and reports every problem except those of the
+// machine the config was written for: directories that exist only there,
+// and a user for the commands, which needs kickd to run as root on macOS
+// or Linux.
 func checkLoads(t *testing.T, name, path string) {
 	t.Helper()
 	_, err := Load(path)
 	var ve *ValidationError
 	if errors.As(err, &ve) {
 		for _, p := range ve.Problems {
-			if !strings.Contains(p.Error(), "is not a directory") {
+			machine := strings.Contains(p.Error(), "is not a directory") ||
+				errors.Is(p, errUserOnWindows) || errors.Is(p, errUserNotRoot)
+			if !machine {
 				t.Errorf("%s: %v", name, p)
 			}
 		}
