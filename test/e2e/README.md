@@ -161,7 +161,7 @@ kickd started on the database of an earlier release, in which that release left 
 
 ### Runs
 
-`concurrency`, `on_interrupt`, `timeout` and `kickd cancel`. Windows has no signal that asks a console program to stop, so there a crash cuts runs off, and a stop does only in a service.
+`concurrency`, `on_interrupt`, `timeout` and `kickd cancel`. Windows has no signal that asks a console program to stop, so there a crash cuts runs off, and a stop does only in a service: the Windows tests of a stop install kickd as a Windows service, stop it with `kickd service stop` and start it again, so they change the machine.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -172,6 +172,8 @@ kickd started on the database of an earlier release, in which that release left 
 | `TestQueueRunsFiringsOneAfterAnother` | ✓ | ✓ | ✓ |
 | `TestRerunRunsARunCutOffByACrashAgain` | ✓ | ✓ | ✓ |
 | `TestRerunRunsARunCutOffByAStopAgain` | ✓ | ✓ |  |
+| `TestServiceAbandonGivesUpARunCutOffByAStop` |  |  | ✓ |
+| `TestServiceRerunRunsARunCutOffByAStopAgain` |  |  | ✓ |
 | `TestSkipRunsOnlyTheFirstOfTheFiringsThatWaitedWhileKickdWasStopped` | ✓ | ✓ | ✓ |
 | `TestSkipSkipsAFiringWhileTheEventRuns` | ✓ | ✓ | ✓ |
 | `TestTimeoutStopsTheCommand` | ✓ | ✓ | ✓ |
@@ -263,13 +265,14 @@ Each language has an event whose program prints the variables and the payload of
 
 ### Long-running commands
 
-A server that ignores SIGTERM, with `env` in the config file, `stop_command`, `concurrency: replace`, `restart: always` and an `output` file. The tests on Windows do not cover it yet.
+A server that ignores SIGTERM, with `env` in the config file, `stop_command`, `concurrency: replace`, `restart: always` and an `output` file. Windows has no SIGTERM, so there the server is a PowerShell script that runs until its stop command asks it to stop, and the stop command waits until it has stopped, because kickd ends the process tree of the command once the stop command returns. A stop of kickd on Windows is a stop of the Windows service, so that test changes the machine.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
-| `TestLongRunningCommandIsReplacedThroughItsStopCommand` | ✓ | ✓ | |
-| `TestLongRunningCommandRestartsWhenItExits` | ✓ | ✓ | |
+| `TestLongRunningCommandIsReplacedThroughItsStopCommand` | ✓ | ✓ | ✓ |
+| `TestLongRunningCommandRestartsWhenItExits` | ✓ | ✓ | ✓ |
 | `TestLongRunningCommandStopsWithKickdThroughItsStopCommand` | ✓ | ✓ | |
+| `TestServiceStopsALongRunningCommandThroughItsStopCommand` |  |  | ✓ |
 
 ### The output of commands
 

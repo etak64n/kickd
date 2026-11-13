@@ -116,6 +116,7 @@ When the config file, or another YAML file next to it, is saved, the agent reloa
 
 When the service stops, kickd ends the commands that are running, together with their child processes.
 Windows gives kickd no reliable signal to ask a command to exit, so the commands end at once, without a chance to clean up.
+An event can run a [`stop_command`](/kickd/settings/events/#stop_command) first, which asks its command to stop, and set the wait for it with [`stop_timeout`](/kickd/settings/events/#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
