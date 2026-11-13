@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -199,6 +200,21 @@ func TestParseErrors(t *testing.T) {
 		{"bad restart", "events:\n  - name: a\n    restart: forever" + ok, `restart "forever" must be never, on-failure or always`},
 		{"negative restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: -1s" + ok, "restart_delay must not be negative"},
 		{"restart_max_delay below restart_delay", "events:\n  - name: a\n    restart: always\n    restart_delay: 10s\n    restart_max_delay: 5s" + ok, "restart_max_delay must not be shorter than restart_delay"},
+		{"bad log level", "log: {level: verbose}\nevents:\n  - name: a" + ok, `log.level "verbose" must be one of trace, debug, info, warn, error, fatal`},
+		{"bad log format", "log: {format: xml}\nevents:\n  - name: a" + ok, `log.format "xml" must be one of auto, json, text`},
+		{"negative log size", "log: {max_size_mb: -1}\nevents:\n  - name: a" + ok, "log.max_size_mb must not be negative"},
+		{"negative log backups", "log: {max_backups: -1}\nevents:\n  - name: a" + ok, "log.max_backups must not be negative"},
+		{"negative timeout", "events:\n  - name: a\n    timeout: -1s" + ok, `event "a": timeout must not be negative`},
+		{"negative output backups", "events:\n  - name: a\n    output: {path: out.log, max_backups: -1}" + ok, "output.max_backups must not be negative"},
+		{"workdir that does not exist", "events:\n  - name: a\n    workdir: nope" + ok, fmt.Sprintf(`event "a": workdir %q is not a directory`, filepath.Join(dir, "nope"))},
+		{"duplicate param", "events:\n  - name: a\n    params: [{name: ref}, {name: ref}]" + ok, "duplicate parameter ref"},
+		{"trigger without type", "events:\n  - name: a" + ok + "    triggers: [{schedule: '@hourly'}]", "triggers[0]: type is required"},
+		{"cron without schedule", "events:\n  - name: a" + ok + "    triggers: [{type: cron}]", "triggers[0]: schedule is required"},
+		{"webhook without path", "events:\n  - name: a" + ok + "    triggers: [{type: webhook}]", "triggers[0]: path is required"},
+		{"empty webhook method", "events:\n  - name: a" + ok + "    triggers: [{type: webhook, path: /h, methods: [POST, '']}]", "methods must not contain an empty entry"},
+		{"file without path", "events:\n  - name: a" + ok + "    triggers: [{type: file}]", "triggers[0]: path is required"},
+		{"negative debounce", "events:\n  - name: a" + ok + "    triggers: [{type: file, path: " + d + ", debounce: -1s}]", "debounce must not be negative"},
+		{"required param with file", "events:\n  - name: a\n    params: [{name: p, required: true}]" + ok + "    triggers: [{type: file, path: " + d + "}]", "a file trigger cannot supply required parameters"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
