@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -173,7 +174,19 @@ var (
 	logFormats  = []string{"auto", "json", "text"}
 	eventNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`)
 	paramNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	// A webhook path is matched as it is written, so it holds only the
+	// characters that a URL path carries without escaping and that have no
+	// meaning in the patterns of Go's HTTP router.
+	webhookPathRe = regexp.MustCompile(`^/[A-Za-z0-9._~/-]*$`)
 )
+
+// ExampleToken is the token of the webhook trigger in the examples of the
+// README and the docs. "kickd init" writes a random token in its place.
+const ExampleToken = "replace-with-a-long-random-string"
+
+// errExampleValue is the problem of a token or a secret left at the value
+// of the examples, which anyone who read them knows.
+var errExampleValue = errors.New("is the example value " + ExampleToken + ", which anyone who read the examples knows; replace it with a long random string")
 
 // The problems of an event with a user that depend on the machine rather
 // than on the config: the OS, and the user that reads the config.
@@ -923,6 +936,10 @@ func (c *Config) validate() error {
 					fail("%s: path %q must start with /", twhere, t.Path)
 				case t.Path == "/healthz":
 					fail("%s: path /healthz is reserved", twhere)
+				case !webhookPathRe.MatchString(t.Path):
+					fail("%s: path %q may contain only letters, digits, '-', '.', '_', '~' and '/'", twhere, t.Path)
+				case !cleanWebhookPath(t.Path):
+					fail("%s: path %q must not contain an empty segment (//), . or ..", twhere, t.Path)
 				case hookPaths[t.Path]:
 					fail("%s: path %q is used by another trigger", twhere, t.Path)
 				default:
@@ -933,6 +950,15 @@ func (c *Config) validate() error {
 						fail("%s: methods must not contain an empty entry", twhere)
 					}
 				}
+				if t.Token == ExampleToken {
+					fail("%s: token %w", twhere, errExampleValue)
+				}
+				if t.Secret == ExampleToken {
+					fail("%s: secret %w", twhere, errExampleValue)
+				}
+				if params["token"] {
+					fail("%s: an event with a webhook trigger cannot have a parameter named token, because the query value token is the token of the request", twhere)
+				}
 			case TriggerFile:
 				if t.Path == "" {
 					fail("%s: path is required", twhere)
@@ -942,6 +968,16 @@ func (c *Config) validate() error {
 				for _, ch := range t.Changes {
 					if !slices.Contains(trigger.ValidFileOps, ch) {
 						fail("%s: unknown change %q (valid: %s)", twhere, ch, strings.Join(trigger.ValidFileOps, ", "))
+					}
+				}
+				for _, list := range []struct {
+					key      string
+					patterns []string
+				}{{"include", t.Include}, {"exclude", t.Exclude}} {
+					for _, p := range list.patterns {
+						if _, err := path.Match(strings.TrimPrefix(p, "/"), ""); err != nil {
+							fail("%s: %s pattern %q is malformed, as an unclosed [ makes it", twhere, list.key, p)
+						}
 					}
 				}
 				if t.Debounce < 0 {
@@ -992,6 +1028,20 @@ func (c *Config) validate() error {
 		return nil
 	}
 	return &ValidationError{Problems: errs}
+}
+
+// cleanWebhookPath reports whether p, which starts with /, has no
+// empty segment and no . or .. segment. The router cleans the path of a
+// request before it matches it, so such a path would match no request.
+// A trailing / is allowed: it makes the path receive its subpaths.
+func cleanWebhookPath(p string) bool {
+	segs := strings.Split(p[1:], "/")
+	for i, s := range segs {
+		if s == "" && i < len(segs)-1 || s == "." || s == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // article returns the indefinite article for the type of trigger typ.

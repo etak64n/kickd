@@ -41,6 +41,6 @@ events:
       - type: webhook
         path: /hooks/restart
         methods: [POST]
-        token: 'replace-with-a-long-random-token'
+        token: 'replace-with-a-long-random-string'
         wait: true
       - type: manual

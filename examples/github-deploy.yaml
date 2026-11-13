@@ -46,7 +46,7 @@ events:
         methods: [POST]
         # kickd checks X-Hub-Signature-256, which GitHub computes with this
         # secret. Generate one with: openssl rand -hex 32
-        secret: 'replace-with-the-webhook-secret'
+        secret: 'replace-with-a-long-random-string'
         # GitHub waits at most 10 seconds for a response, so kickd answers
         # with 202 at once instead of waiting for the deploy.
       - type: manual

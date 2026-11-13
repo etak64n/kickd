@@ -416,6 +416,7 @@ type Ended struct {
 	ID       int64
 	Event    string
 	Status   string
+	Reason   string
 	ExitCode *int
 }
 
@@ -423,7 +424,7 @@ type Ended struct {
 // and that the agent has not yet handed to after triggers. Retried runs,
 // which a rerun replaces, are among them, so that the agent marks them.
 func (s *Store) UnfollowedRuns(ctx context.Context, limit int) ([]Ended, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, event, status, exit_code FROM runs
+	rows, err := s.db.QueryContext(ctx, `SELECT id, event, status, COALESCE(reason, ''), exit_code FROM runs
 		WHERE followed = 0 AND status NOT IN (?, ?, ?) ORDER BY id LIMIT ?`,
 		StatusQueued, StatusRunning, StatusInterrupted, limit)
 	if err != nil {
@@ -434,7 +435,7 @@ func (s *Store) UnfollowedRuns(ctx context.Context, limit int) ([]Ended, error) 
 	for rows.Next() {
 		var e Ended
 		var exit sql.NullInt64
-		if err := rows.Scan(&e.ID, &e.Event, &e.Status, &exit); err != nil {
+		if err := rows.Scan(&e.ID, &e.Event, &e.Status, &e.Reason, &exit); err != nil {
 			return nil, err
 		}
 		if exit.Valid {
@@ -585,13 +586,18 @@ func (s *Store) RequestCancel(ctx context.Context, id int64) (Run, error) {
 		return Run{}, err
 	}
 	switch r.Status {
-	case StatusQueued:
+	case StatusQueued, StatusInterrupted:
+		// An interrupted run waits for the next start of the agent to run
+		// again, so it is canceled like a run in the queue.
 		now := time.Now()
-		if _, err := tx.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = ? WHERE id = ?`,
+		if _, err := tx.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = COALESCE(finished_at, ?) WHERE id = ?`,
 			StatusCanceled, "canceled_by_user", ms(now), id); err != nil {
 			return Run{}, err
 		}
-		r.Status, r.Reason, r.FinishedAt = StatusCanceled, "canceled_by_user", now
+		if r.FinishedAt.IsZero() {
+			r.FinishedAt = now
+		}
+		r.Status, r.Reason = StatusCanceled, "canceled_by_user"
 	case StatusRunning:
 		if _, err := tx.ExecContext(ctx, `UPDATE runs SET cancel_requested = 1 WHERE id = ?`, id); err != nil {
 			return Run{}, err
@@ -610,7 +616,8 @@ func (s *Store) RequestCancelEvent(ctx context.Context, event string) ([]Run, er
 		return nil, err
 	}
 	defer tx.Rollback()
-	runs, err := queryRuns(ctx, tx, `SELECT `+runColumns+` FROM runs WHERE event = ? AND status IN (?, ?) ORDER BY id`, event, StatusQueued, StatusRunning)
+	runs, err := queryRuns(ctx, tx, `SELECT `+runColumns+` FROM runs WHERE event = ? AND status IN (?, ?, ?) ORDER BY id`,
+		event, StatusQueued, StatusRunning, StatusInterrupted)
 	if err != nil {
 		return nil, err
 	}
@@ -618,12 +625,15 @@ func (s *Store) RequestCancelEvent(ctx context.Context, event string) ([]Run, er
 	for i := range runs {
 		r := &runs[i]
 		switch r.Status {
-		case StatusQueued:
-			if _, err := tx.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = ? WHERE id = ?`,
+		case StatusQueued, StatusInterrupted:
+			if _, err := tx.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = COALESCE(finished_at, ?) WHERE id = ?`,
 				StatusCanceled, "canceled_by_user", ms(now), r.ID); err != nil {
 				return nil, err
 			}
-			r.Status, r.Reason, r.FinishedAt = StatusCanceled, "canceled_by_user", now
+			if r.FinishedAt.IsZero() {
+				r.FinishedAt = now
+			}
+			r.Status, r.Reason = StatusCanceled, "canceled_by_user"
 		case StatusRunning:
 			if _, err := tx.ExecContext(ctx, `UPDATE runs SET cancel_requested = 1 WHERE id = ?`, r.ID); err != nil {
 				return nil, err
@@ -683,6 +693,14 @@ func (s *Store) Retry(ctx context.Context, r Run, payload []byte, reason string)
 		return 0, err
 	}
 	return id, tx.Commit()
+}
+
+// CancelInterrupted records as canceled an interrupted run that "kickd
+// cancel" asked to stop while no agent ran.
+func (s *Store) CancelInterrupted(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE runs SET status = ?, reason = ?, finished_at = COALESCE(finished_at, ?), cancel_requested = 0
+		WHERE id = ?`, StatusCanceled, "canceled_by_user", ms(time.Now()), id)
+	return err
 }
 
 // Abandon records an interrupted run as abandoned.

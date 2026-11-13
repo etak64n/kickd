@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -433,7 +434,10 @@ func cmdInit(path string, system bool, args []string) error {
 		return err
 	}
 	if !*noExamples {
-		if err := os.WriteFile(events, []byte(config.ExampleEvents(runtime.GOOS)), 0o600); err != nil {
+		// The token of the example is known to everyone who read the
+		// README, so the file gets a random one.
+		text := strings.Replace(config.ExampleEvents(runtime.GOOS), "'"+config.ExampleToken+"'", "'"+rand.Text()+"'", 1)
+		if err := os.WriteFile(events, []byte(text), 0o600); err != nil {
 			return err
 		}
 	}
@@ -560,11 +564,14 @@ func serviceConfig(cfgPath string, user bool) *service.Config {
 }
 
 // systemdUnit returns the template of the unit that kickd service install
-// writes on Linux: the template of kardianos/service v1.3.0 with two
+// writes on Linux: the template of kardianos/service v1.3.0 with three
 // changes. systemd starts kickd again 5 seconds after it exits, where the
-// original waits 120 seconds. A per-user unit is wanted by default.target,
-// because the systemd of a user has no multi-user.target, the target that
-// the original names.
+// original waits 120 seconds. A stop sends SIGTERM to kickd alone
+// (KillMode=mixed), so kickd stops its commands itself, with their stop
+// commands first, and systemd kills what is left only when the stop times
+// out; by default, systemd signals every process of the unit at once. A
+// per-user unit is wanted by default.target, because the systemd of a user
+// has no multi-user.target, the target that the original names.
 func systemdUnit(user bool) string {
 	target := "multi-user.target"
 	if user {
@@ -590,6 +597,7 @@ StandardError=file:{{LogDirectory}}/{{Name}}.err
 {{end}}{{if Restart}}Restart={{Restart}}
 {{end}}{{if SuccessExitStatus}}SuccessExitStatus={{SuccessExitStatus}}
 {{end}}RestartSec=5
+KillMode=mixed
 EnvironmentFile=-/etc/sysconfig/{{Name}}
 
 {{range EnvVars}}{{.}}
@@ -622,6 +630,10 @@ func (p *program) Start(service.Service) error {
 
 func (p *program) Stop(service.Service) error {
 	p.cancel(agent.ErrServiceStop)
+	if stopTimeout == 0 {
+		<-p.done
+		return nil
+	}
 	select {
 	case <-p.done:
 	case <-time.After(stopTimeout):
@@ -630,9 +642,18 @@ func (p *program) Stop(service.Service) error {
 	return nil
 }
 
-// stopTimeout bounds how long the service manager's stop request waits
-// for running commands.
-const stopTimeout = 30 * time.Second
+// stopTimeout bounds how long a stop of the Windows service waits for the
+// running commands, so that the Service Control Manager sees the service
+// stop. launchd and systemd kill kickd themselves when it takes longer
+// than they allow, and an agent that exited earlier would leave its
+// commands running, so on macOS and Linux kickd waits for every command,
+// which stop_timeout bounds.
+var stopTimeout = func() time.Duration {
+	if runtime.GOOS == "windows" {
+		return 30 * time.Second
+	}
+	return 0
+}()
 
 func fileExists(p string) bool {
 	st, err := os.Stat(p)

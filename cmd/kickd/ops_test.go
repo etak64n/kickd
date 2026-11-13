@@ -98,7 +98,7 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "canceled run 2 (deploy); it had not started") {
 		t.Errorf("cancel --event: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "no run of deploy is queued or running") {
+	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "no run of deploy is queued, running or interrupted") {
 		t.Errorf("cancel --event without runs: %d %q", code, out)
 	}
 	if code, _, errOut := ops(t, cfg, "cancel", "--event", "nope"); code != exitFailed || !strings.Contains(errOut, `unknown event "nope"`) {

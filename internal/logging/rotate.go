@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -24,6 +25,7 @@ type rotatingFile struct {
 	path    string
 	max     int64
 	backups int
+	perm    fs.FileMode
 	f       *os.File
 	size    int64
 	report  io.Writer
@@ -32,19 +34,21 @@ type rotatingFile struct {
 // OpenRotating opens path for appending, as the log file is opened: once
 // the file would grow past maxBytes (0: never), it is renamed to <path>.1,
 // older generations shift, and backups of them are kept. report, when not
-// nil, receives a line for each rotation that fails.
-func OpenRotating(path string, maxBytes int64, backups int, report io.Writer) (io.WriteCloser, error) {
-	return openRotating(path, maxBytes, backups, report)
+// nil, receives a line for each rotation that fails. New files get the
+// permissions perm, and an existing file with more permissions than perm
+// loses the extra ones.
+func OpenRotating(path string, maxBytes int64, backups int, perm fs.FileMode, report io.Writer) (io.WriteCloser, error) {
+	return openRotating(path, maxBytes, backups, perm, report)
 }
 
-func openRotating(path string, max int64, backups int, report io.Writer) (*rotatingFile, error) {
+func openRotating(path string, max int64, backups int, perm fs.FileMode, report io.Writer) (*rotatingFile, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
 	if backups <= 0 {
 		backups = DefaultMaxBackups
 	}
-	r := &rotatingFile{path: path, max: max, backups: backups, report: report}
+	r := &rotatingFile{path: path, max: max, backups: backups, perm: perm, report: report}
 	if err := r.open(); err != nil {
 		return nil, err
 	}
@@ -52,7 +56,7 @@ func openRotating(path string, max int64, backups int, report io.Writer) (*rotat
 }
 
 func (r *rotatingFile) open() error {
-	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, r.perm)
 	if err != nil {
 		return err
 	}
@@ -60,6 +64,12 @@ func (r *rotatingFile) open() error {
 	if err != nil {
 		f.Close()
 		return err
+	}
+	if extra := st.Mode().Perm() &^ r.perm; extra != 0 && runtime.GOOS != "windows" {
+		if err := f.Chmod(st.Mode().Perm() &^ extra); err != nil {
+			f.Close()
+			return err
+		}
 	}
 	r.f, r.size = f, st.Size()
 	return nil

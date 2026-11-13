@@ -1,0 +1,17 @@
+log:
+  path: 'kickd.log'
+webhook:
+  listen: '127.0.0.1:18789'
+events:
+  # Deploys on a request with the token.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    triggers:
+      - type: webhook
+        path: '/hooks/deploy'
+        token: 'deploy-token'
+  # Prepares once when kickd starts.
+  - name: prepare
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'prepare.ps1']
+    triggers:
+      - type: startup
