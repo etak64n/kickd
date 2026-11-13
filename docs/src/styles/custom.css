@@ -11,3 +11,43 @@
   --sl-color-accent: #4051b5;
   --sl-color-accent-high: #283593;
 }
+
+/* The colors of the states in the step-by-step figures (Timeline.astro),
+   in the dark theme of Starlight and in its light theme. */
+:root {
+  --kd-event-bg: #2e2a5c;
+  --kd-event-fg: #d4cdff;
+  --kd-queued-bg: #2b2b2b;
+  --kd-queued-fg: #d4d4d4;
+  --kd-running-bg: #1d3a5c;
+  --kd-running-fg: #cfe3ff;
+  --kd-succeeded-bg: #173d2a;
+  --kd-succeeded-fg: #c7f0d6;
+  --kd-failed-bg: #4a1d1d;
+  --kd-failed-fg: #ffd0d0;
+  --kd-interrupted-bg: #4a3a12;
+  --kd-interrupted-fg: #ffe7a8;
+  --kd-ended-bg: #1f1f1f;
+  --kd-ended-fg: #a3a3a3;
+  --kd-off-bg: #3a3a3a;
+  --kd-off-fg: #c4c4c4;
+}
+
+:root[data-theme="light"] {
+  --kd-event-bg: #e8e6fb;
+  --kd-event-fg: #2f2a7a;
+  --kd-queued-bg: #ededed;
+  --kd-queued-fg: #3d3d3d;
+  --kd-running-bg: #dbeafe;
+  --kd-running-fg: #1e3a8a;
+  --kd-succeeded-bg: #dcfce7;
+  --kd-succeeded-fg: #14532d;
+  --kd-failed-bg: #fee2e2;
+  --kd-failed-fg: #7f1d1d;
+  --kd-interrupted-bg: #fef3c7;
+  --kd-interrupted-fg: #78350f;
+  --kd-ended-bg: #f6f6f6;
+  --kd-ended-fg: #6b6b6b;
+  --kd-off-bg: #d6d6d6;
+  --kd-off-fg: #333333;
+}

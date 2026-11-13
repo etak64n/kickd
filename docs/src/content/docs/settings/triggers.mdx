@@ -3,6 +3,10 @@ title: Trigger settings
 description: Manual, cron, webhook, file, after, startup and wake triggers, and the keys of each type.
 ---
 
+import Timeline from "../../../components/Timeline.astro";
+import { missedRun, missedSkip } from "../../../figures";
+
+
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
 In kickd, a named command in the config is an **event**, and a **trigger** fires an event.
 Each firing is recorded as a **run** in the **database**, a SQLite file, and the long-running kickd process, called the **agent**, starts the command of each run.
@@ -136,6 +140,10 @@ A time that the agent notices more than a minute late counts as **missed**.
 
 - **run**: the event fires once, right after the machine wakes or the agent starts, however many times passed. The command receives `KICKD_CRON_MISSED=1`, and in `KICKD_CRON_SCHEDULED_AT`, the latest of the missed times.
 - **skip**: the missed times do not fire, and the event waits for its next time.
+
+<Timeline {...missedRun} />
+
+<Timeline {...missedSkip} />
 
 The agent logs `Missed schedule caught up` or `Missed schedule skipped`, with the number of missed times in `count`.
 

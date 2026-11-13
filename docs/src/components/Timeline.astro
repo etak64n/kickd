@@ -1,0 +1,251 @@
+---
+// A figure that shows, one moment at a time, what happens to the runs of
+// kickd. Each lane is a column and each moment a row, read from the top.
+// The figure starts at the first moment, and Next adds the next row with
+// the sentence that explains it; nothing moves until the reader clicks.
+// Without JavaScript, every row and every sentence shows at once.
+import type { Figure } from "../figures";
+
+type Props = Figure;
+
+const { title, moments, lanes, steps } = Astro.props;
+const rows = moments.map((moment, i) => ({
+  moment,
+  cells: lanes.map((lane) => {
+    const cell = lane.cells[i];
+    if (cell == null) return null;
+    return typeof cell === "string" ? { text: cell, tone: "plain" } : { tone: "plain", ...cell };
+  }),
+}));
+---
+
+<figure class="kd-timeline" data-steps={steps.length}>
+  <figcaption class="kd-title">{title}</figcaption>
+  <div class="kd-scroll">
+    <table>
+      <thead>
+        <tr>
+          <td></td>
+          {lanes.map((lane) => <th scope="col">{lane.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((row, i) => (
+            <tr data-step={i}>
+              <th scope="row">{row.moment}</th>
+              {row.cells.map((cell) => (
+                <td>{cell && <span class={`kd-cell kd-${cell.tone}`}>{cell.text}</span>}</td>
+              ))}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+  <ol class="kd-steps">
+    {steps.map((s, i) => <li data-step={i} set:html={s} />)}
+  </ol>
+  <div class="kd-controls" hidden>
+    <button type="button" data-action="back">Back</button>
+    <span class="kd-count" aria-live="polite"></span>
+    <button type="button" data-action="next">Next</button>
+  </div>
+</figure>
+
+<script>
+  // Each figure keeps its own position. A click moves it one moment, and
+  // nothing changes by itself.
+  for (const fig of document.querySelectorAll<HTMLElement>(".kd-timeline")) {
+    const total = Number(fig.dataset.steps);
+    const controls = fig.querySelector<HTMLElement>(".kd-controls")!;
+    const back = controls.querySelector<HTMLButtonElement>('[data-action="back"]')!;
+    const next = controls.querySelector<HTMLButtonElement>('[data-action="next"]')!;
+    const count = controls.querySelector<HTMLElement>(".kd-count")!;
+    const parts = [...fig.querySelectorAll<HTMLElement>("[data-step]")];
+    let at = 0;
+    const show = () => {
+      for (const el of parts) {
+        const step = Number(el.dataset.step);
+        el.classList.toggle("kd-later", step > at);
+        el.classList.toggle("kd-now", step === at);
+      }
+      back.disabled = at === 0;
+      next.disabled = at === total - 1;
+      count.textContent = `${at + 1} / ${total}`;
+    };
+    back.addEventListener("click", () => {
+      if (at > 0) at--;
+      show();
+    });
+    next.addEventListener("click", () => {
+      if (at < total - 1) at++;
+      show();
+    });
+    fig.classList.add("kd-stepping");
+    controls.hidden = false;
+    show();
+  }
+</script>
+
+<style>
+  .kd-timeline {
+    --kd-radius: 4px;
+    margin: 1.5rem 0;
+    padding: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--kd-radius);
+    font-size: var(--sl-text-sm);
+  }
+  .kd-title {
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .kd-scroll {
+    overflow-x: auto;
+  }
+  table {
+    display: table;
+    width: auto;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0.25rem;
+    font-size: var(--sl-text-xs);
+  }
+  th,
+  td {
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    vertical-align: middle;
+  }
+  thead th {
+    max-width: 9rem;
+    padding: 0 0.5rem 0.25rem;
+    color: var(--sl-color-white);
+    font-weight: 600;
+    vertical-align: bottom;
+  }
+  tbody th {
+    padding-right: 0.25rem;
+    color: var(--sl-color-gray-3);
+    font-weight: 500;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .kd-cell {
+    display: block;
+    min-width: 7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--kd-radius);
+    white-space: nowrap;
+  }
+  .kd-plain {
+    color: var(--sl-color-gray-2);
+  }
+  .kd-event {
+    background: var(--kd-event-bg);
+    color: var(--kd-event-fg);
+  }
+  .kd-queued {
+    background: var(--kd-queued-bg);
+    color: var(--kd-queued-fg);
+  }
+  .kd-running {
+    background: var(--kd-running-bg);
+    color: var(--kd-running-fg);
+  }
+  .kd-succeeded {
+    background: var(--kd-succeeded-bg);
+    color: var(--kd-succeeded-fg);
+  }
+  .kd-failed {
+    background: var(--kd-failed-bg);
+    color: var(--kd-failed-fg);
+  }
+  .kd-interrupted {
+    background: var(--kd-interrupted-bg);
+    color: var(--kd-interrupted-fg);
+  }
+  .kd-ended {
+    background: var(--kd-ended-bg);
+    color: var(--kd-ended-fg);
+  }
+  .kd-off {
+    background: var(--kd-off-bg);
+    color: var(--kd-off-fg);
+  }
+  .kd-steps {
+    margin: 0.75rem 0 0;
+    padding-left: 1.5rem;
+  }
+  .kd-steps li + li {
+    margin-top: 0.25rem;
+  }
+  .kd-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .kd-controls[hidden] {
+    display: none;
+  }
+  .kd-controls button {
+    height: 1.75rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: var(--kd-radius);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-white);
+    font: inherit;
+    cursor: pointer;
+  }
+  .kd-controls button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .kd-count {
+    color: var(--sl-color-gray-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* On a narrow screen, the lanes share the width, and a long state wraps. */
+  @media (max-width: 30rem) {
+    .kd-timeline {
+      padding: 0.5rem;
+    }
+    thead th {
+      padding: 0 0.25rem 0.25rem;
+    }
+    .kd-cell {
+      min-width: 0;
+      padding: 0.25rem 0.375rem;
+      white-space: normal;
+    }
+  }
+
+  /* With JavaScript: the rows after the current moment are empty, and only
+     the sentence of the current moment shows. The empty rows keep their
+     height, so the figure does not move while the reader steps through. */
+  .kd-stepping tr.kd-later {
+    visibility: hidden;
+  }
+  .kd-stepping tr.kd-now th {
+    color: var(--sl-color-white);
+    font-weight: 600;
+  }
+  .kd-stepping .kd-steps {
+    padding-left: 0;
+    list-style: none;
+    min-height: 4.5em;
+  }
+  .kd-stepping .kd-steps li {
+    display: none;
+  }
+  .kd-stepping .kd-steps li.kd-now {
+    display: block;
+  }
+</style>

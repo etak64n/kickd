@@ -24,6 +24,7 @@ The source, the releases and the examples are on [GitHub](https://github.com/eta
 
 ## Guides
 
+- [How kickd works](/kickd/guides/how-kickd-works/): step by step, how a trigger fires an event, how the firing becomes a run, and how the agent runs its command
 - [Configuration](/kickd/guides/configuration/): where the config lives, defining events, events in several files, applying changes, examples
 - [Runs](/kickd/guides/runs/): how firings become runs, run statuses, interrupted runs, the database
 - [Running commands](/kickd/guides/commands/): the environment of a command under each kind of service, the working directory and `PATH`, Python and Node.js

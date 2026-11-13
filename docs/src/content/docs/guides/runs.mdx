@@ -3,6 +3,10 @@ title: Runs
 description: How firings become runs, run statuses, interrupted runs, and the database.
 ---
 
+import Timeline from "../../../components/Timeline.astro";
+import { concurrencySkip, concurrencyQueue, concurrencyParallel, concurrencyReplace, interruptRerun, interruptAbandon } from "../../../figures";
+
+
 In kickd, a named command in the config file is an **event**, and asking kickd to run an event is **firing** it.
 Every firing is recorded as a **run** in the **database**, a SQLite file.
 The long-running kickd process, the **agent**, starts the event's command for each run.
@@ -21,6 +25,16 @@ The event's `concurrency` setting decides what happens to a run when the same ev
 - **queue**: the run waits until the running one finishes. Waiting runs start one at a time, in the order they were queued. Each event can have up to 1000 waiting runs.
 - **parallel**: the run starts at once, alongside the running one.
 - **replace**: kickd stops the running one, and the run starts when it has stopped.
+
+In each figure below, one event fires three times in a row with one of the settings.
+
+<Timeline {...concurrencySkip} />
+
+<Timeline {...concurrencyQueue} />
+
+<Timeline {...concurrencyParallel} />
+
+<Timeline {...concurrencyReplace} />
 
 An event whose `restart` setting is `on-failure` or `always` fires again when a run of it ends: kickd queues a run with the trigger `restart`, which waits for the restart delay before it starts.
 `kickd history` shows when such a run starts, and `kickd cancel` cancels it like any queued run.
@@ -72,6 +86,10 @@ The agent tells two kinds of stop apart:
 - **Crash**: when the agent is killed or the machine loses power, the run stays `running` in the database. When the agent starts again, it treats such runs as interrupted.
 
 In the log, the `reason` of an interrupted run is `agent_stopped` after a clean stop and `agent_crashed` after a crash.
+
+<Timeline {...interruptRerun} />
+
+<Timeline {...interruptAbandon} />
 
 Every firing has a **request ID**, which kickd's log records and the command's environment carry as `requestId` and `KICKD_REQUEST_ID`.
 A rerun keeps the request ID of the original run, and its attempt number is one higher.
