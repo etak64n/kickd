@@ -269,6 +269,7 @@ For such programs, `stop_command` asks the program itself to stop:
 3. kickd kills what still runs, as it does for a timeout.
 
 A stop command that fails, or runs past `stop_timeout`, is logged as `Stop command failed`, and kickd goes on with SIGTERM.
+Windows has no signal that asks a program to stop, so there kickd ends the process tree of the command as soon as the stop command exits: a stop command on Windows has to wait until the program has stopped.
 The run keeps the status of the reason that stopped it, such as `failed` with the reason `timeout`.
 
 ```yaml
