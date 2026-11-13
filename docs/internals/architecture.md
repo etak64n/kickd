@@ -59,13 +59,14 @@ With `parallel`, kickd sets no limit on the number of commands running at once.
 
 When the config file, or another YAML file of its directory, changes, the agent loads the config from all the files again and validates all of it before using any part.
 When the new config is valid, the agent stops every trigger, gives the dispatcher the new event definitions, and starts the triggers of the new config.
+When the new config moves the webhook server to another address, the agent binds the new address before it stops the old triggers, and when the address is in use, it keeps the previous config, as for an invalid one.
 Runs that are running keep the definition they started with.
 Runs that are waiting take the new definition when they start.
 When the new config is invalid, the agent logs the errors and keeps the triggers and definitions of the previous config.
 
 Restarting the triggers has three effects:
 
-- The webhook server closes its listener and opens a new one, so a request that arrives in between is refused.
+- The webhook server closes its listener and opens a new one, so a request that arrives in between is refused. When it keeps its address and another program takes the port in between, no trigger runs until the config is saved again.
 - Each file trigger discards the changes it has collected but not yet fired.
 - Each cron trigger continues from the time it was last handled, which the database keeps, so a scheduled time that falls in the reload still runs.
 
@@ -76,5 +77,7 @@ Stopping cancels the triggers and the running commands at the same moment, and n
 The agent then waits for the commands to exit, records their runs as `interrupted`, and marks itself as stopped in the database.
 Runs that were still waiting stay `queued`.
 
-When the agent starts, it first settles the runs that the previous agent process left unfinished, and only then consumes the queue.
+When the agent starts, it first takes the lock that lets one agent at a time run on the database, then settles the runs that the previous agent process left unfinished, then starts the triggers, and only then consumes the queue.
 The event's `on_interrupt` setting decides whether each unfinished run starts again.
+A trigger that cannot start, such as a webhook server whose address is in use, therefore stops the agent before it starts any command.
+A trigger that fails after the start stops the agent as a clean stop does, so the runs that started are recorded as `interrupted`.

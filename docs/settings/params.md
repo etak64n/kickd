@@ -41,7 +41,7 @@ Webhook requests use the parameters of the config that the long-running kickd pr
 `name` identifies the parameter.
 
 - **Type**: a string of 1 to 64 characters: letters, digits and `_`, not starting with a digit.
-- **Default**: none. `name` is required, and no two parameters of one event can have the same name.
+- **Default**: none. `name` is required, and no two parameters of one event can have the same name. An event with a webhook trigger cannot have a parameter named `token`, because the query value `token` carries the token of the request.
 - **Takes effect**: at once for `kickd event`, and for webhook requests when the file that defines the event is saved.
 
 The command receives the value in the environment variable `KICKD_DATA_` followed by the name in capitals, so `ref` arrives in `KICKD_DATA_REF`.

@@ -31,6 +31,17 @@ A webhook trigger can require a token, a signature, or both:
 
 When a trigger has both, a request must pass both checks.
 A request that fails a check gets 401.
+kickd checks the token before it reads the body, and the signature after it, because the signature is computed over the body.
+
+The signature covers the body alone, not the query or the headers, and a signed request carries no time.
+Whoever holds one signed request can send it again, with another query, so put the values that must not change in the body, and give the event a command that tolerates running twice.
+The payload leaves out the headers that carry the token and the signature, so a command, the database and `kickd show` never hand them on.
+
+## Requests from web browsers
+
+A web page that a user opens can make the browser send requests to `127.0.0.1`, the address on which kickd listens by default.
+Browsers mark such requests with the header `Origin`, or with `Sec-Fetch-Site` and `Sec-Fetch-Mode`, and programs that call webhooks do not send these headers.
+kickd refuses every request that carries one of them with 403, so a web page cannot fire events on the machine of the person who opened it.
 
 ## Request IDs
 
@@ -65,16 +76,34 @@ Responses are JSON.
 | With `wait: true`, the command exited with code 0 | 200 | `{"requestId":"...","event":"deploy","exitCode":0,"durationMs":...,"output":"...","outputTruncated":false,"error":""}` |
 | With `wait: true`, the command failed or timed out | 500 | The same fields as for exit code 0, with the reason, such as `timeout`, in `error` |
 | Authentication failed | 401 | `{"requestId":"...","error":"unauthorized"}` |
+| A web browser sent the request | 403 | `{"requestId":"...","error":"requests from web browsers are not accepted"}` |
 | The method is not in `methods` | 405 | `{"requestId":"...","error":"method not allowed"}` |
 | A required parameter is missing | 400 | `{"requestId":"...","error":"missing parameter ref"}` |
 | The body could not be read | 400 | `{"requestId":"...","error":"cannot read body"}` |
 | The body is larger than `webhook.max_body_bytes` | 413 | `{"requestId":"...","error":"body too large"}` |
+| The database could not record the run, which therefore does not run | 503 | `{"requestId":"...","event":"deploy","status":"failed","error":"the run could not be recorded"}` |
 
 With `wait: true`, `output` holds the first 64 KB of the command's output.
 Output beyond 64 KB is cut off, and `outputTruncated` is `true`.
 
 If the caller disconnects before a `wait: true` response, the run still continues to the end.
 The `Request completed` log record of that request then shows `status` 499.
+When `kickd cancel` cancels the run while it waits in the queue, the answer is 500 with `canceled` in `error`.
+
+## Limits of the server
+
+The server limits what one client can hold, so that clients that keep connections open or send slowly cannot use up the memory and the file descriptors of the agent:
+
+| Limit | Value |
+|---|---|
+| Connections served at once; further connections wait to be accepted | 256 |
+| Time to send the request line and the headers | 10 seconds |
+| Size of the request line and the headers | 64 KB |
+| Time to send the body | 30 seconds |
+| Time that a kept-alive connection may stay without a request | 60 seconds |
+
+`webhook.max_body_bytes` limits the size of the body.
+A `wait: true` request has no limit on the time of its run.
 
 ## Exposing webhooks to other machines
 

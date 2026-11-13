@@ -34,7 +34,7 @@ The name of a variable about one kind of trigger starts with that kind: `KICKD_M
 | `KICKD_FILE_PATH` | `file` | The file that changed last |
 | `KICKD_FILE_OP` | `file` | The kind of the last change |
 | `KICKD_FILE_COUNT` | `file` | The number of changes combined into this firing |
-| `KICKD_FILE_PATHS` | `file` | The paths of those changes, joined with `:` on macOS and Linux and with `;` on Windows |
+| `KICKD_FILE_PATHS` | `file` | The paths of those changes, joined with `:` on macOS and Linux and with `;` on Windows; empty when they are longer than 30 KiB, because the OS limits the size of a variable, and the payload lists them all |
 | `KICKD_AFTER_EVENT` | `after` | The event whose run ended |
 | `KICKD_AFTER_RUN_ID` | `after` | The run ID of that run |
 | `KICKD_AFTER_STATUS` | `after` | How that run ended: `succeeded`, `failed`, `canceled`, `skipped`, `dropped` or `abandoned` |
@@ -65,7 +65,7 @@ Six keys hold the details of one kind of trigger each, and they are empty for th
 
 In `webhook`, a header or query parameter with several values keeps only its first value.
 The body is stored as a JSON string, so bytes that are not valid UTF-8 are replaced with U+FFFD.
-kickd removes the headers `Authorization` and `X-Kickd-Token` and the query parameter `token`, which carry credentials.
+kickd removes the headers `Authorization` and `X-Kickd-Token` and the query parameter `token`, which carry the token, and the headers `X-Hub-Signature-256`, `X-Hub-Signature` and `X-Kickd-Signature`, which carry the signature.
 
 The payload of a webhook firing looks like this:
 

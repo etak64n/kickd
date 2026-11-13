@@ -109,12 +109,22 @@ The scan leaves out the runs of events that already run under `concurrency: queu
 A long backlog of one event therefore never hides the runs of other events behind it, however many runs wait.
 When a scan reads all 500 places and starts or settles at least one run, the agent scans again at once, so the runs after the first 500 start without delay.
 
+## One agent per database
+
+An agent takes a lock on the file `kickd.db.lock`, the path of the database with `.lock` appended, before it opens the database, and holds it until it exits.
+The lock is a lock of the OS on the open file, `flock` on macOS and Linux and `LockFileEx` on Windows, so the OS releases it when the agent exits, also after a crash.
+A second agent that finds the lock taken stops with the FATAL record `Agent start failed`, which names the PID of the first agent, written in the file.
+
+Two agents on one database would both run every firing, and each would take the running runs of the other for runs that a crash cut off.
+The subcommands, such as `kickd event`, do not take the lock, so they work while the agent runs.
+
 ## Canceling a run
 
 `kickd cancel` only changes the database:
 
 - A queued run becomes `canceled` at once.
-- A running run gets `cancel_requested` set. The agent sees the write within 0.2 seconds, stops the command, and records the run as `canceled`.
+- An interrupted run, which waits for the next start of the agent, becomes `canceled` at once too, so it does not run again.
+- A running run gets `cancel_requested` set. The agent sees the write within 0.2 seconds, stops the command, and records the run as `canceled`. When no agent runs, the next agent records the run as `canceled` when it starts.
 
 ## Heartbeat
 
@@ -134,6 +144,7 @@ For each such run, the event's `on_interrupt` and `max_attempts` decide:
 
 | Case | Result |
 |---|---|
+| `kickd cancel` asked to stop the run | `canceled`, with the reason `canceled_by_user` |
 | The config no longer defines the event | `abandoned`, with the reason `event_removed` |
 | `on_interrupt: abandon` | `abandoned`, with the reason `agent_stopped` or `agent_crashed` |
 | `on_interrupt: rerun`, and `attempt` has reached `max_attempts` | `abandoned`, with the reason `max_attempts_reached` |

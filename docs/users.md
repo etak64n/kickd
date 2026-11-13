@@ -61,7 +61,7 @@ For example, with kickd installed as a system-wide unit on Linux, `sudo kickd ev
 Every trigger except cron lets someone other than the user of the agent make the agent run a command as that user:
 
 - **Manual**: for an event with a manual trigger, anyone who can read the config file and read and write the database, with `kickd event`. The database belongs to the user whose kickd process created it, and on macOS and Linux only that user and root can open it.
-- **Webhook**: anyone who can reach the webhook server and knows the `token` or `secret` of the trigger. When the trigger has neither, anyone who can reach the server.
+- **Webhook**: anyone who can reach the webhook server and knows the `token` or `secret` of the trigger. When the trigger has neither, anyone who can reach the server. A web page that the user opens cannot make the browser fire it, because kickd refuses requests from web browsers.
 - **File**: anyone who can create, change, remove or rename files in the watched directory.
 - **Cron**: nobody, because the schedule fires by itself.
 
@@ -76,7 +76,9 @@ On Windows, cmd expands `%VAR%` before it parses the line, so a value that conta
 |---|---|---|
 | Config file and events file written by `kickd init` | The user who ran `kickd init` | 0600 |
 | Database, with its `-wal` and `-shm` files | The user whose kickd process created it | 0600 |
+| Lock of the agent, `kickd.db.lock` next to the database | The user of the agent that created it | 0600 |
 | Log file | The user of the agent | Allowed by the umask, usually 0644 |
+| Output file of an event | The user of the agent | 0600 |
 | Payload file of a run | The user of the agent, or the `user` of the event | 0600 |
 | Files that a command writes | The user of the agent, or the `user` of the event | Chosen by the command |
 

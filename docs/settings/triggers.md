@@ -172,6 +172,7 @@ Query values whose names the event declares in `params` become parameters of the
 - **Takes effect**: when the file that defines the event is saved.
 
 No two webhook triggers of the config can have the same path, and `/healthz` is reserved for the health check of the server.
+A path is made of letters, digits, `-`, `.`, `_`, `~` and `/`, and has no empty segment (`//`) and no `.` or `..` segment, because kickd matches it as it is written.
 A request to a path that no trigger has gets 404.
 A path that ends with `/` also receives the requests to every path below it, so `/hooks/` receives `/hooks/deploy` too.
 
@@ -223,7 +224,10 @@ A request carries the token in one of three places, which kickd checks in this o
 - **The query value `token`**, as in `/hooks/deploy?token=<token>`, for callers that cannot set headers. The URL, and the token in it, can end up in the logs of proxies.
 
 A request without the token, or with another one, gets 401, and its event does not fire.
+kickd checks the token before it reads the body of the request.
 A long random value makes a good token, such as the output of `openssl rand -hex 32`.
+The examples of the documentation write `replace-with-a-long-random-string` where the token goes, and a token with that value is an error of the config, because everyone who read the examples knows it.
+`kickd init` writes a random token in its place.
 kickd does not write the token to its log.
 
 ```yaml
@@ -249,6 +253,11 @@ The caller computes the HMAC-SHA256 of the request body, with the secret as the 
 `X-Hub-Signature-256` is the header that GitHub webhooks send, so the secret of a GitHub webhook works here as it is.
 A request without a signature, or with one that does not match its body, gets 401, and its event does not fire.
 A trigger with both `token` and `secret` requires both from each request.
+A secret with the value of the examples, `replace-with-a-long-random-string`, is an error of the config, as a token with it is.
+
+The signature covers the body alone, not the path, the query or the headers.
+Whoever holds one request signed with the secret can send it again, with another query, so the values that must not change belong in the body, and the command should give the same result when it runs twice.
+The payload leaves out the headers of the signature, `X-Hub-Signature-256`, `X-Hub-Signature` and `X-Kickd-Signature`, so that the command, the database and `kickd show` do not hand a signed request on.
 
 ```yaml
 events:
@@ -294,6 +303,7 @@ It collects the changes that arrive close together and fires once for them.
 
 The command receives the changes in the payload JSON, as a list of paths with the kind of each change.
 The variables `KICKD_FILE_PATH` and `KICKD_FILE_OP` give the last change, `KICKD_FILE_COUNT` the number of changes, and `KICKD_FILE_PATHS` every path, separated by `:` on macOS and Linux and by `;` on Windows.
+The OS limits the size of one environment variable, so `KICKD_FILE_PATHS` is empty when the paths are longer than 30 KiB, as after a large checkout, and the payload JSON lists every path.
 
 ### `path`
 
@@ -360,6 +370,7 @@ A pattern is matched in one of two ways:
 
 In a pattern, `*` matches any characters except `/`, `?` matches one character, and `[...]` matches one of the characters in the brackets.
 `**` has no special meaning, so a pattern for every depth is a pattern without `/`.
+A malformed pattern, such as one with a `[` that is not closed, is an error of the config.
 A change of a file that no pattern matches does not fire the event.
 
 ```yaml

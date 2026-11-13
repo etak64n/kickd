@@ -213,6 +213,8 @@ The [configuration reference](config-keys.md#when-changes-take-effect) lists whe
 | Example paths | `~/project`, `/srv/data` | `'C:\Data\Import'`, `C:/Data/Import` |
 
 To run PowerShell on Windows, start `powershell` with `command`.
+cmd expands `%KICKD_DATA_REF%` before it parses the line, so a value that contains `&`, `|` or `>` can start another command or redirect the output.
+A value that a caller chooses, such as a parameter of a webhook, is safe in a PowerShell script that reads `$env:KICKD_DATA_REF`.
 
 ## Example: rebuild when source files change
 

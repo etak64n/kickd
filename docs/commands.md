@@ -156,7 +156,7 @@ On Windows, some programs print in a code page of Windows instead, and when that
 | Program | What it prints | What makes it print UTF-8 |
 |---|---|---|
 | Python | The ANSI code page, when its output goes to a pipe as under kickd. A letter that the code page lacks stops the script with `UnicodeEncodeError`. | `PYTHONUTF8: '1'` in the `env` of the event |
-| cmd | The output code page of the console | `chcp 65001 >nul` before the commands, as in `command: 'chcp 65001 >nul& echo %KICKD_DATA_MSG%'` |
+| cmd | The output code page of the console | `chcp 65001 >nul` before the commands, as in `command: 'chcp 65001 >nul& type notes.txt'` |
 | PowerShell | The output code page of the console | `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at the start of the script |
 | Node.js, Ruby, Rust | UTF-8 | Nothing |
 
