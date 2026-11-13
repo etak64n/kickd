@@ -15,11 +15,11 @@ windows/   the tests on Windows: PowerShell scripts and batch files, and kickd a
 
 In each package:
 
-- `kickd_test.go` builds kickd and holds the harness: a home directory for each test, and helpers that run kickd and read its runs.
+- `kickd_test.go` builds kickd and holds the harness: a home directory for each test, and helpers that run kickd and read its runs. `start` returns when the agent has loaded its config, while its webhook server and the watches of its file triggers can still be starting, so a test that sends a webhook request or changes a watched file right after the start uses `startListening` or `startWatching`, which also wait for the log records `Webhook server listening` and `File watch started`.
 - `testdata/` holds a directory for each config, laid out as a home directory: the config file `.kickd/config.yaml`, and the scripts and files of its events next to it, as a user keeps them. A test copies one of these directories into a new home directory. kickd and its commands see that directory as the home directory of the user: `HOME` on macOS and Linux, and `USERPROFILE` on Windows.
 - The tests on Windows run as an administrator, as the runners of GitHub Actions do, and kickd reads the config file of an administrator from the folder `kickd` of `ProgramData`. The folder of a test is also the `ProgramData` folder of its kickd, so the config file of a Windows test is `kickd\config.yaml`.
 - In the configs of `testdata/cron` and `testdata/cron-missed`, `{{at "ZONE"}}` stands for a cron schedule 25 seconds after the test starts, in the time zone ZONE.
-- kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: `edits/config.edited.yaml` and `edits/config.broken.yaml` are edits of a `config.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
+- kickd reads the events of every YAML file next to its config file, so the files that a test saves while kickd runs wait in the subdirectory `edits`: the files `edits/config.*.yaml` are edits of a `config.yaml`, which a test saves over it, and `edits/restore.yaml` is a file with events, which a test saves next to it.
 
 ## Running the tests
 
@@ -32,7 +32,8 @@ go test -tags e2e ./test/e2e/windows   # on Windows
 ```
 
 A test whose program, such as Ruby or `rustc`, is not installed is skipped.
-With `KICKD_E2E_ALL=1`, it fails instead.
+The upgrade tests download earlier releases of kickd from GitHub, and are skipped when the download fails.
+With `KICKD_E2E_ALL=1`, these tests fail instead.
 
 Some tests change the machine: they install kickd as a service, write to the folders of the system, and move the clock.
 They need sudo on macOS and Linux, and an administrator on Windows.
@@ -75,7 +76,7 @@ One moment written in time zones with offsets of whole hours, half an hour and t
 
 ### File triggers
 
-Every kind of change, new directories, `include`, `exclude`, `changes`, `recursive` and the debounce.
+Every kind of change, new directories, `include`, `exclude`, `changes`, `recursive` and the debounce. Each test also checks that the command of the run gets the changes in the variables `KICKD_FILE_PATH`, `KICKD_FILE_OP`, `KICKD_FILE_COUNT` and `KICKD_FILE_PATHS`, as its payload has them.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -119,6 +120,8 @@ An event that follows the runs of another event.
 | `TestAfterDoesNotFireForAStatusThatIsNotListed` | ✓ | ✓ | ✓ |
 | `TestAfterFiresForARunThatKickdCancelCanceledWhileItWaited` | ✓ | ✓ | ✓ |
 | `TestAfterFiresWhenTheFollowedRunFails` | ✓ | ✓ | ✓ |
+| `TestAfterFiresWhenTheFollowedRunIsAbandoned` | ✓ | ✓ | ✓ |
+| `TestAfterFiresWhenTheFollowedRunIsSkipped` | ✓ | ✓ | ✓ |
 | `TestAfterFollowsAnEventThatAnAfterTriggerFired` | ✓ | ✓ | ✓ |
 
 ### Startup triggers
@@ -146,6 +149,16 @@ One agent at a time on a database, and no command when a trigger cannot start.
 | `TestASecondAgentDoesNotStartOnTheDatabaseOfARunningOne` | ✓ | ✓ | ✓ |
 | `TestAnAgentWhoseWebhookAddressIsInUseStartsNoCommand` | ✓ | ✓ | ✓ |
 
+### Upgrades
+
+kickd started on the database of an earlier release, in which that release left a run that ended, a run that a crash cut off, and a run that waits. Each test runs for v0.6.0, whose database has the schema version 4, and for v0.7.0, whose database has the version 5, as `kickd` of that release for the OS and the architecture of the machine leaves them.
+
+| Test | macOS | Linux | Windows |
+|---|:-:|:-:|:-:|
+| `TestUpgradeKeepsTheRunsThatEndedInTheDatabaseOfAnEarlierRelease` | ✓ | ✓ | ✓ |
+| `TestUpgradeRunsTheRunThatACrashCutOffInTheDatabaseOfAnEarlierReleaseAgain` | ✓ | ✓ | ✓ |
+| `TestUpgradeRunsTheRunThatWaitedInTheDatabaseOfAnEarlierRelease` | ✓ | ✓ | ✓ |
+
 ### Runs
 
 `concurrency`, `on_interrupt`, `timeout` and `kickd cancel`. Windows has no signal that asks a console program to stop, so there a crash cuts runs off, and a stop does only in a service.
@@ -159,13 +172,18 @@ One agent at a time on a database, and no command when a trigger cannot start.
 | `TestQueueRunsFiringsOneAfterAnother` | ✓ | ✓ | ✓ |
 | `TestRerunRunsARunCutOffByACrashAgain` | ✓ | ✓ | ✓ |
 | `TestRerunRunsARunCutOffByAStopAgain` | ✓ | ✓ |  |
+| `TestSkipRunsOnlyTheFirstOfTheFiringsThatWaitedWhileKickdWasStopped` | ✓ | ✓ | ✓ |
 | `TestSkipSkipsAFiringWhileTheEventRuns` | ✓ | ✓ | ✓ |
 | `TestTimeoutStopsTheCommand` | ✓ | ✓ | ✓ |
 
 ### Reloading the config
 
+A save of the config and SIGHUP, the runs that wait during a reload, and a change of `database.path`, which takes effect only when kickd starts again.
+
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
+| `TestARunWaitingInTheQueueRunsWithTheSavedConfig` | ✓ | ✓ | ✓ |
+| `TestChangingTheDatabasePathKeepsTheOldDatabase` | ✓ | ✓ | ✓ |
 | `TestSavingABrokenConfigKeepsThePreviousConfig` | ✓ | ✓ | ✓ |
 | `TestSavingTheConfigAddsAnEvent` | ✓ | ✓ | ✓ |
 | `TestSighupReloadsTheConfig` | ✓ | ✓ |  |
@@ -222,6 +240,16 @@ The layers that [Running commands](https://etak64n.github.io/kickd/guides/comman
 | `TestTheEnvOfTheEventExpandsTheVariablesOfKickd` | ✓ | ✓ | ✓ |
 | `TestTheEnvOfTheEventGivesAValueThatTheRunLacks` | ✓ | ✓ | ✓ |
 | `TestTheParametersOfTheRunReplaceTheEnvOfTheEvent` | ✓ | ✓ | ✓ |
+
+### The payload file
+
+The JSON file at `KICKD_PAYLOAD_FILE`: a new one for each run, readable only by the user of kickd on macOS and Linux, and deleted when the command ends.
+
+| Test | macOS | Linux | Windows |
+|---|:-:|:-:|:-:|
+| `TestARerunGetsANewPayloadFileWithTheNextAttempt` | ✓ | ✓ | ✓ |
+| `TestOnlyTheUserOfKickdCanReadThePayloadFile` | ✓ | ✓ |  |
+| `TestThePayloadFileIsDeletedWhenTheCommandEnds` | ✓ | ✓ | ✓ |
 
 ### Programs in many languages
 

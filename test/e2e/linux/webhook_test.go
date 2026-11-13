@@ -16,11 +16,11 @@ import (
 // tests run one at a time.
 
 // webhook returns a home with the config of testdata/webhook, and its
-// agent running.
+// agent running with its webhook server listening.
 func webhook(t *testing.T) *home {
 	t.Helper()
 	h := newHome(t, "webhook")
-	h.start()
+	h.startListening()
 	return h
 }
 
@@ -80,16 +80,22 @@ func TestWebhookRefusesARequestWithoutASignature(t *testing.T) {
 }
 
 func TestWebhookRefusesARequestWithoutTheToken(t *testing.T) {
-	webhook(t)
+	h := webhook(t)
 	if res := request(t, "POST", 18787, "/hooks/build", ""); res.status != http.StatusUnauthorized {
-		t.Errorf("a request without the token: %d %s", res.status, res.body)
+		t.Fatalf("a request without the token: %d %s", res.status, res.body)
+	}
+	if rs := h.runs("build"); len(rs) != 0 {
+		t.Errorf("build ran: %v", rs)
 	}
 }
 
 func TestWebhookRefusesARequestWithAWrongToken(t *testing.T) {
-	webhook(t)
+	h := webhook(t)
 	if res := request(t, "POST", 18787, "/hooks/build", "", "Authorization", "Bearer another-token"); res.status != http.StatusUnauthorized {
-		t.Errorf("a request with a wrong token: %d %s", res.status, res.body)
+		t.Fatalf("a request with a wrong token: %d %s", res.status, res.body)
+	}
+	if rs := h.runs("build"); len(rs) != 0 {
+		t.Errorf("build ran: %v", rs)
 	}
 }
 

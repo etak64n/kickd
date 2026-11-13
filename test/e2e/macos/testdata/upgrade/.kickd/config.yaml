@@ -1,0 +1,19 @@
+log:
+  path: 'kickd.log'
+events:
+  # Writes a report in a moment.
+  - name: report
+    command: ['./report.sh']
+    triggers:
+      - type: manual
+  # A sync takes 4 seconds, and runs again when a crash cuts it off.
+  - name: sync
+    command: ['./sync.sh']
+    on_interrupt: rerun
+    triggers:
+      - type: manual
+  # Deploys in a moment.
+  - name: deploy
+    command: ['./deploy.sh']
+    triggers:
+      - type: manual

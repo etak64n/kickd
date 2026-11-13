@@ -1,0 +1,19 @@
+log:
+  path: 'kickd.log'
+events:
+  # Writes a report in a moment.
+  - name: report
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'report.ps1']
+    triggers:
+      - type: manual
+  # A sync takes 4 seconds, and runs again when a crash cuts it off.
+  - name: sync
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'sync.ps1']
+    on_interrupt: rerun
+    triggers:
+      - type: manual
+  # Deploys in a moment.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    triggers:
+      - type: manual

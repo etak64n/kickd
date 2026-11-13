@@ -1,0 +1,22 @@
+log:
+  path: 'kickd.log'
+# Saved while kickd runs, to keep the runs in another file from now on.
+database:
+  path: 'runs.db'
+events:
+  # Builds when a source file changes.
+  - name: build
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'build.ps1']
+    triggers:
+      - type: file
+        path: 'src'
+      - type: manual
+  # Deploys to TARGET once the release is ready, when the file ready
+  # exists. Deploys wait for each other.
+  - name: deploy
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'deploy.ps1']
+    concurrency: queue
+    env:
+      TARGET: 'staging'
+    triggers:
+      - type: manual
