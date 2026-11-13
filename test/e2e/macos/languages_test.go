@@ -55,7 +55,7 @@ func buildRust(h *home, dir, source, program string) {
 func checkRun(t *testing.T, r run, event, msg, dir string) {
 	t.Helper()
 	if r.Status != "succeeded" || r.line("event") != event || r.line("trigger") != "manual" || r.line("msg") != msg {
-		t.Errorf("%s printed:\n%s", r.Status, r.Output)
+		t.Errorf("%s (%s) printed:\n%s", r.Status, r.ending(), r.Output)
 	}
 	if got, _ := filepath.EvalSymlinks(r.line("dir")); got != dir {
 		t.Errorf("ran in %q, want %q", r.line("dir"), dir)
