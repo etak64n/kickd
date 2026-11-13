@@ -1,0 +1,104 @@
+# Measures which statements the unit tests and the end-to-end tests run,
+# on each OS, and writes the coverage of each package into the summary of
+# the run. The end-to-end tests run kickd built with -cover, and kickd
+# writes its counters to GOCOVERDIR when it exits; a kickd that a test
+# kills, or that a service manager starts, writes none, so the numbers are
+# a lower bound. It runs once a week and on demand.
+name: Coverage
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suite: linux
+            machine: 'TestService|TestClock'
+          - os: macos-latest
+            suite: macos
+            machine: 'TestService|TestClock'
+          - os: windows-latest
+            suite: windows
+            machine: 'TestService|TestClock|TestReadme'
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Directories
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then root=$(cygpath -m "$PWD"); else root=$PWD; fi
+          mkdir -p cover/unit cover/e2e cover/machine
+          echo "COVER=$root/cover" >> "$GITHUB_ENV"
+          echo "COVERPKG=github.com/etak64n/kickd/cmd/...,github.com/etak64n/kickd/internal/..." >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        continue-on-error: true
+        run: go test -cover -covermode=set -coverpkg="$COVERPKG" ./... -args -test.gocoverdir="$COVER/unit"
+
+      - name: Build the end-to-end tests
+        run: go test -c -tags e2e -o "$COVER/e2e.test$(go env GOEXE)" ./test/e2e/${{ matrix.suite }}
+
+      # The test binary runs go build for kickd, which takes GOFLAGS.
+      - name: End-to-end tests
+        continue-on-error: true
+        working-directory: test/e2e/${{ matrix.suite }}
+        env:
+          KICKD_E2E_ALL: '1'
+        run: |
+          GOFLAGS="-cover -covermode=set -coverpkg=$COVERPKG" GOCOVERDIR="$COVER/e2e" \
+            "$COVER/e2e.test$(go env GOEXE)" -test.count=1 -test.timeout=30m
+
+      - name: End-to-end tests that change the machine
+        continue-on-error: true
+        working-directory: test/e2e/${{ matrix.suite }}
+        env:
+          KICKD_E2E_ALL: '1'
+          KICKD_MACHINE_TEST: '1'
+        run: |
+          GOFLAGS="-cover -covermode=set -coverpkg=$COVERPKG" GOCOVERDIR="$COVER/machine" \
+            "$COVER/e2e.test$(go env GOEXE)" -test.count=1 -test.timeout=30m -test.run '${{ matrix.machine }}'
+
+      - name: Report
+        if: always()
+        working-directory: cover
+        run: |
+          for set in unit e2e machine unit,e2e,machine; do
+            echo "== $set" | tee -a percent.txt
+            go tool covdata percent -i="$set" | tee -a percent.txt || true
+          done
+          go tool covdata textfmt -i=unit -o unit.txt || true
+          go tool covdata textfmt -i=e2e,machine -o e2e.txt || true
+          go tool covdata textfmt -i=unit,e2e,machine -o all.txt || true
+          go tool cover -func=all.txt > func.txt || true
+          tail -n 1 func.txt
+          {
+            echo "### ${{ matrix.suite }}"
+            echo '```'
+            cat percent.txt
+            tail -n 1 func.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.suite }}
+          path: |
+            cover/*.txt
