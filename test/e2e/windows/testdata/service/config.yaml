@@ -19,3 +19,26 @@ events:
     command: 'set'
     triggers:
       - type: manual
+  # A server that runs until its stop command asks it to stop, which the
+  # stop command does when the service stops.
+  - name: server
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'server.ps1']
+    stop_command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'stop.ps1']
+    stop_timeout: 20s
+    output:
+      path: 'server.log'
+    triggers:
+      - type: manual
+  # A sync runs until the service stops, and runs again when the service
+  # starts again.
+  - name: sync
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'sync.ps1']
+    on_interrupt: rerun
+    triggers:
+      - type: manual
+  # A release runs until the service stops, and is given up.
+  - name: release
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'release.ps1']
+    on_interrupt: abandon
+    triggers:
+      - type: manual

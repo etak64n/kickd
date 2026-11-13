@@ -3,6 +3,8 @@
 package windows
 
 import (
+	"encoding/json"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -83,6 +85,60 @@ func TestRerunRunsARunCutOffByACrashAgain(t *testing.T) {
 	rs := h.waitForRuns("sync", 1)
 	if last := rs[len(rs)-1]; last.RetryOf != first || last.Attempt != 2 || last.Status != "succeeded" || last.line("attempt") != "2" {
 		t.Errorf("the rerun: %+v\n%s", last, last.Output)
+	}
+}
+
+// runs returns the runs of event, oldest first.
+func (s *service) runs(event string) []run {
+	s.t.Helper()
+	var rs []run
+	if err := json.Unmarshal([]byte(s.mustKickd("history", "--event", event, "--limit", "200", "--json")), &rs); err != nil {
+		s.t.Fatal(err)
+	}
+	sort.Slice(rs, func(i, j int) bool { return rs[i].ID < rs[j].ID })
+	return rs
+}
+
+// cutOffByAStop fires event, waits until its command runs, stops the
+// service, which cuts the run off, and starts the service again. It
+// returns the ID of the run. Windows has no signal that asks a console
+// program to stop, so kickd stops cleanly only as a service.
+func cutOffByAStop(s *service, event string) int64 {
+	s.t.Helper()
+	id := s.fire(event)
+	waitFor(s.t, event+" runs", 60*time.Second, func() bool { return s.show(id).Status == "running" }, s.describe)
+	pid := s.agentPID()
+	s.mustKickd("service", "stop")
+	if r := s.show(id); r.Status != "interrupted" {
+		s.t.Fatalf("%s after the stop of the service: %s %s", event, r.Status, r.Reason)
+	}
+	s.mustKickd("service", "start")
+	s.waitForAgent(pid)
+	return id
+}
+
+func TestServiceRerunRunsARunCutOffByAStopAgain(t *testing.T) {
+	s := windowsService(t)
+	first := cutOffByAStop(s, "sync")
+	var last run
+	waitFor(t, "the rerun of sync ends", 60*time.Second, func() bool {
+		rs := s.runs("sync")
+		last = s.show(rs[len(rs)-1].ID)
+		return len(rs) == 2 && last.ended()
+	}, s.describe)
+	if last.RetryOf != first || last.Attempt != 2 || last.Status != "succeeded" || last.line("attempt") != "2" {
+		t.Errorf("the rerun: %+v\n%s", last, last.Output)
+	}
+}
+
+func TestServiceAbandonGivesUpARunCutOffByAStop(t *testing.T) {
+	s := windowsService(t)
+	id := cutOffByAStop(s, "release")
+	if r := s.waitForRun(id); r.Status != "abandoned" || r.Reason != "agent_stopped" {
+		t.Errorf("release: %s %s", r.Status, r.Reason)
+	}
+	if rs := s.runs("release"); len(rs) != 1 {
+		t.Errorf("release ran again: %+v", rs)
 	}
 }
 

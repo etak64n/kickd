@@ -1,0 +1,21 @@
+log:
+  path: 'kickd.log'
+env:
+  GREETING: 'hello'
+events:
+  # A server that runs until its stop command asks it to stop. Windows has
+  # no signal that asks a program to stop, and kickd ends the process tree
+  # of the command once the stop command returns, so the stop command waits
+  # until the server has stopped.
+  - name: server
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'server.ps1']
+    stop_command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'stop.ps1']
+    stop_timeout: 20s
+    concurrency: replace
+    restart: always
+    restart_delay: 200ms
+    output:
+      path: 'server.log'
+    triggers:
+      - type: startup
+      - type: manual
