@@ -43,6 +43,7 @@ export default defineConfig({
         {
           label: "Guides",
           items: [
+            "guides/how-kickd-works",
             "guides/configuration",
             "guides/runs",
             "guides/commands",

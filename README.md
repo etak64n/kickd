@@ -42,6 +42,7 @@ Each firing is first recorded as a **run** in the **database**, a SQLite file.
 The long-running kickd process, called the **agent**, starts the command of each run.
 A run that has not started yet, such as one that waits for the previous run of its event, waits in the **queue**.
 The database is a file, so waiting runs survive a restart of the agent or of the machine.
+[How kickd works](https://etak64n.github.io/kickd/guides/how-kickd-works/) in the documentation shows this path step by step, and the guide to [runs](https://etak64n.github.io/kickd/guides/runs/) shows, in the same way, what each event can choose for overlapping firings and for runs that a stop or a crash cut off.
 
 ## Features
 

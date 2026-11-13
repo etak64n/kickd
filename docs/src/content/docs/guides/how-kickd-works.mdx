@@ -1,0 +1,44 @@
+---
+title: How kickd works
+description: Step by step, how a trigger fires an event, how the firing becomes a run in the database, and how the agent runs its command.
+---
+
+import Timeline from "../../../components/Timeline.astro";
+import { firingPath } from "../../../figures";
+
+In kickd, a named command in the config file is an **event**.
+A **trigger** of the event, such as a cron schedule or a webhook, **fires** it, and each firing becomes a **run**: one execution of the event's command.
+kickd records every run in the **database**, a SQLite file, before the command starts, and the runs that have not started yet form the **queue**.
+The long-running kickd process, called the **agent**, takes runs from the queue and starts their commands as its child processes.
+
+The figure below follows two events of this config through one night.
+`backup` copies a directory at 3:00, and `notify` runs when a run of `backup` ends as `failed`:
+
+```yaml
+events:
+  - name: backup
+    command: ['rsync', '-a', '/srv/data/', '/mnt/backup/data/']
+    concurrency: skip
+    triggers:
+      - type: cron
+        schedule: '0 3 * * *'
+  - name: notify
+    command: ['./notify.sh']
+    concurrency: parallel
+    triggers:
+      - type: after
+        event: backup
+        status: [failed]
+```
+
+<Timeline {...firingPath} />
+
+Every firing takes this path, whatever fired it: a cron schedule, a webhook request, a change of files, `kickd event`, the end of another run, the start of the agent, or the machine waking from sleep.
+`kickd event` writes its run into the database from a process of its own, so it works while the agent is not running, and the agent starts the run when it starts.
+
+Two settings of an event decide what happens to its runs, and [Runs](/kickd/guides/runs/) shows each of them step by step:
+
+- [`concurrency`](/kickd/guides/runs/#from-firing-to-run) decides what a firing does while a run of the same event is running.
+- [`on_interrupt`](/kickd/guides/runs/#interrupted-runs) decides what the agent does, at its next start, with a run that a stop or a crash cut off.
+
+For cron triggers, [`missed`](/kickd/settings/triggers/#missed) decides what happens to the times that passed while the machine slept, and its section shows that step by step too.
