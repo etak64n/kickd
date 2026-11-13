@@ -27,11 +27,14 @@ const (
 	// fullScanEvery bounds the time between scans even without writes.
 	fullScanEvery  = 5 * time.Second
 	heartbeatEvery = 5 * time.Second
-	pruneEvery     = time.Hour
 )
 
 // scheduleBatch is how many queued runs one scan reads. Tests shrink it.
 var scheduleBatch = 500
+
+// pruneEvery is how often the loop deletes the runs that ended longer ago
+// than the retention, after it does so when it starts. Tests shorten it.
+var pruneEvery = time.Hour
 
 // HeartbeatWindow is how old a heartbeat may be before "kickd status" reports that
 // kickd is not running.

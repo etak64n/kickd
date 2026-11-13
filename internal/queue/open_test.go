@@ -1,7 +1,9 @@
 package queue
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -37,5 +39,26 @@ func TestConcurrentFirstOpen(t *testing.T) {
 	}
 	if failures > 0 {
 		t.Fatalf("%d of 80 concurrent opens failed", failures)
+	}
+}
+
+// A database that a newer kickd upgraded has a schema that this kickd does
+// not know, so Open refuses it rather than misread its runs.
+func TestOpenRefusesADatabaseWithANewerSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kickd.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion+1)); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	want := fmt.Sprintf("schema version %d is newer than this program supports (%d)", schemaVersion+1, schemaVersion)
+	if s, err := Open(path); err == nil || !strings.Contains(err.Error(), want) {
+		if err == nil {
+			s.Close()
+		}
+		t.Fatalf("Open = %v, want an error with %q", err, want)
 	}
 }
