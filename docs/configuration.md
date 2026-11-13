@@ -136,7 +136,7 @@ The rules of these files are:
 - **What they hold**: an `events` section, in the same form as that of the config file. The `log`, `webhook`, `database` and `env` sections belong in the config file, and another file that has one is an error.
 - **Which files count**: the files directly in the directory. kickd reads no subdirectories, so a directory such as `~/.kickd/disabled` keeps files out of the config.
 - **Files without events**: a YAML file without an `events` section is left out, and `kickd check` names it as not read.
-- **Links**: a symbolic link to a file counts as the file, so the events of an app can stay in its repository, with a link to them in the directory.
+- **Links**: a symbolic link to a file counts as the file, so the events of an app can stay in its repository, with a link to them in the directory. For the config of root on macOS and Linux, root must own the file that the link points to and the directories on the way to it, as [User accounts](users.md#the-user-of-the-agent) describes.
 - **Order**: the events of the config file come first, then those of the other files in the order of the file names.
 - **Names**: event names are unique across all the files, and an after trigger can follow an event of another file.
 - **Paths**: a relative path in any of the files starts at the directory of the config file.

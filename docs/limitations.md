@@ -11,4 +11,5 @@ In kickd, a named command in the config file is an **event**, and the long-runni
 - **One agent per database**: several agents cannot share one database.
 - **Status after a crash**: for about 15 seconds after the agent crashes, `kickd status` still reports it as running. `kickd status` judges whether the agent is alive by a timestamp that the agent writes every 5 seconds.
 - **No TLS**: the webhook server speaks plain HTTP only.
+- **Permissions on Windows**: kickd checks that only root can change the config of root on macOS and Linux, and does not check the permissions of the config on Windows.
 - **Unsigned executables**: the release executables are not signed with an Apple Developer ID or a Windows code signing certificate. Gatekeeper on macOS and SmartScreen on Windows may block files downloaded with a browser.
