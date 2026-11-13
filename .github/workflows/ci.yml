@@ -1,11 +1,13 @@
 # Runs the tests on Linux, macOS and Windows for every push to main and
-# every pull request.
+# every pull request. The release workflow calls it too, so that no release
+# is built from a commit whose tests failed on any OS.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -92,6 +94,64 @@ jobs:
         env:
           KICKD_E2E_ALL: '1'
           KICKD_MACHINE_TEST: '1'
+
+  # Checks for bugs that go vet does not look for, such as unused results,
+  # deprecated calls and dead code.
+  staticcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      # staticcheck runs on the runner and checks the code of each OS.
+      - name: Staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
+          for goos in linux darwin windows; do
+            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" ./...
+          done
+
+  # Feeds the parsers of the config and the webhook handler with generated
+  # inputs, for 30 seconds each, to find inputs that crash them or that
+  # break their rules.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Fuzz the config
+        run: go test -run '^$' -fuzz '^FuzzParse$' -fuzztime 30s ./internal/config
+
+      - name: Fuzz the webhook handler
+        run: go test -run '^$' -fuzz '^FuzzWebhookRequest$' -fuzztime 30s ./internal/trigger
+
+  # Runs the end-to-end tests with kickd built with the race detector, which
+  # watches the agent itself while it runs the way its users run it.
+  e2e-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      # The tests build kickd with go build, which takes GOFLAGS.
+      - name: End-to-end tests with the race detector
+        run: go test -tags e2e -count=1 -timeout 45m ./test/e2e/linux
+        env:
+          GOFLAGS: -race
+          KICKD_E2E_ALL: '1'
 
   # go.mod promises that Go 1.25 builds kickd.
   minimum-go:

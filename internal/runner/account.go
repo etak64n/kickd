@@ -2,16 +2,6 @@ package runner
 
 import "sort"
 
-// account is the user whose rights a command runs with when its event names
-// a user.
-type account struct {
-	name   string
-	uid    uint32
-	gid    uint32
-	groups []uint32
-	home   string
-}
-
 // env lists the variables that name the user to the programs of a command,
 // in the order of their names. TMPDIR leaves the temporary directory of the
 // agent, which on macOS belongs to root and is closed to other users.

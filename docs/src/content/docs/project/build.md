@@ -57,7 +57,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o kickd-linux-arm64 ./cmd/kickd
 ## Release builds
 
 Pushing a tag whose name starts with `v`, such as `v0.2.0`, starts the release workflow on GitHub Actions.
-The workflow runs the tests, checks that the list of licenses is current, builds the six executables with `scripts/build-all.sh`, and publishes them as a release named after the tag.
+The workflow runs every check of the CI workflow for the tagged commit, on macOS, Linux and Windows, and stops when one of them fails.
+It then checks that the list of licenses is current, builds the six executables with `scripts/build-all.sh`, records the provenance of each one, and publishes them as a release named after the tag.
 The workflow builds with the latest Go release, so release executables include its security fixes.
 
 ```sh
@@ -66,6 +67,17 @@ git push origin v0.2.0
 ```
 
 The file names carry no version, so `https://github.com/etak64n/kickd/releases/latest/download/<file>` always points to the file of the latest release.
+
+### Provenance of the release executables
+
+The release workflow records, for each executable, a signed statement of the repository, the commit and the workflow that built it.
+GitHub keeps these statements, and the GitHub CLI checks a downloaded executable against them:
+
+```sh
+gh attestation verify kickd-linux-amd64 -R etak64n/kickd
+```
+
+The check fails for a file that the release workflow did not build, or that changed after the build.
 
 ## Licenses
 

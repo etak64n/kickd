@@ -11,6 +11,16 @@ import (
 	"syscall"
 )
 
+// account is the user whose rights a command runs with when its event names
+// a user.
+type account struct {
+	name   string
+	uid    uint32
+	gid    uint32
+	groups []uint32
+	home   string
+}
+
 // accountTempDir is the temporary directory of a command that runs as the
 // user of its event: a directory that every user can write to, where each
 // file stays with its owner.
