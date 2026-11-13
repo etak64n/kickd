@@ -455,7 +455,11 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if System() {
+	// The commands of the config for the whole machine run as root, or as
+	// SYSTEM on Windows, so kickd reads it only when nobody else can change
+	// it. Load also reads config files at other paths, such as those of
+	// tests, which the CI runs as an administrator on Windows.
+	if System() && abs == Path() {
 		files := []string{abs}
 		for _, f := range others {
 			files = append(files, f.path)

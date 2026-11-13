@@ -427,7 +427,10 @@ func cmdInit(path string, system bool, args []string) error {
 			return fmt.Errorf("%s already exists", p)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// On Windows, the folder of the config for the whole machine lets only
+	// SYSTEM and administrators in, and the files that kickd init writes,
+	// and the log and the database of the example config, inherit that.
+	if err := config.MkdirConfig(filepath.Dir(path), system); err != nil {
 		return err
 	}
 	if err := os.WriteFile(path, []byte(config.ExampleConfig(runtime.GOOS, system)), 0o600); err != nil {

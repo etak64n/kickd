@@ -33,6 +33,7 @@ import (
 	// Windows has no IANA time zone database, and the cron tests write
 	// their schedules in named time zones.
 	_ "time/tzdata"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -121,13 +122,38 @@ func newHome(t *testing.T, fixture string) *home {
 }
 
 // copy copies the files under src into the folder of the test, and fills
-// in the times in the config file.
+// in the times in the config file. The folder kickd gets the access
+// control list that kickd init gives it, which the files in it inherit.
 func (h *home) copy(src string) {
 	h.t.Helper()
+	if st, err := os.Stat(filepath.Join(src, "kickd")); err == nil && st.IsDir() {
+		makeConfigFolder(h.t, h.dir)
+	}
 	copyTree(h.t, src, h.homeDir)
 	b, err := os.ReadFile(h.config())
 	if err == nil && bytes.Contains(b, []byte("{{")) {
 		h.write("config.yaml", string(h.fillTimes(b)))
+	}
+}
+
+// makeConfigFolder creates the folder dir of the config of an
+// administrator as kickd init does: with an access control list that gives
+// full control to SYSTEM and the Administrators group alone, and that the
+// files and folders in it inherit. An administrator's kickd refuses a
+// config that other accounts can change.
+func makeConfigFolder(t *testing.T, dir string) {
+	t.Helper()
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, err := windows.UTF16PtrFromString(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
+	if err := windows.CreateDirectory(name, sa); err != nil {
+		t.Fatalf("creating %s: %v", dir, err)
 	}
 }
 
