@@ -148,6 +148,7 @@ func TestPanicAttrs(t *testing.T) {
 			}
 		}()
 		var m map[string]int
+		//lint:ignore SA5000 the test needs a panic of the Go runtime itself
 		m["boom"] = 1
 	}()
 	var rec map[string]any

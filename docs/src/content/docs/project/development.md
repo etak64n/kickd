@@ -12,9 +12,19 @@ go vet ./...               # static checks
 ./scripts/build-all.sh     # build kickd for six platforms into dist/
 ```
 
-GitHub Actions runs `go vet` and the tests on Linux, macOS and Windows for every push to `main` and every pull request.
-On Linux, it also runs the tests with the race detector, builds kickd for every platform, and runs the tests with the oldest Go version that `go.mod` allows.
-On all three OSes, it also runs the end-to-end tests of that OS.
+## Checks on GitHub Actions
+
+For every push to `main` and every pull request, the CI workflow runs these checks:
+
+- **Unit tests** and `go vet` on Linux, macOS and Windows, and the unit tests again with the race detector on Linux.
+- **End-to-end tests** of each OS on that OS, then the end-to-end tests that change the machine.
+- **End-to-end tests with the race detector**: the end-to-end tests of Linux once more, with kickd built with `-race`, so that the detector watches the agent itself.
+- **Staticcheck**, a checker for bugs that `go vet` does not look for, for the three OSes.
+- **Fuzzing** of the config parser and of the webhook handler, for 30 seconds each: generated configs and requests must not crash them, every webhook path of a config that the parser accepts must register with the server, and no request may fire an event without its token or signature.
+- **Builds** of kickd for every platform, and the tests with the oldest Go version that `go.mod` allows.
+
+govulncheck, the vulnerability checker of the Go team, checks the dependencies and the Go standard library for every push to `main`, every pull request, and once a week.
+The Coverage workflow, once a week and when run by hand, measures which statements the unit tests and the end-to-end tests run on each OS, and writes the coverage of each package into the summary of its run.
 
 ## End-to-end tests
 
@@ -43,16 +53,18 @@ KICKD_MACHINE_TEST=1 go test -tags e2e -run 'TestService|TestClock' ./test/e2e/l
 
 A runner cannot sleep, so the unit tests of `internal/trigger` check wake triggers with a clock that the test moves, and the end-to-end tests check that wake triggers do not fire while the machine is awake.
 
-Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
+## Releases
 
-govulncheck, the vulnerability checker of the Go team, checks the dependencies and the Go standard library for every push to `main`, every pull request, and once a week.
-
-After a change to the dependencies in `go.mod`, run `./scripts/third-party-licenses.sh` and commit `internal/licenses/licenses.txt`, the text that `kickd licenses` prints. CI fails while that file is out of date.
+Pushing a tag whose name starts with `v` publishes a release.
+The release workflow runs every check of the CI workflow for the tagged commit, on all three OSes, and builds the six executables only when all of them passed.
+[Building kickd](/kickd/project/build/#release-builds) describes the rest.
 
 ```sh
 git tag v0.2.0
 git push origin v0.2.0
 ```
+
+After a change to the dependencies in `go.mod`, run `./scripts/third-party-licenses.sh` and commit `internal/licenses/licenses.txt`, the text that `kickd licenses` prints. CI fails while that file is out of date.
 
 ## The documentation site
 
