@@ -25,3 +25,17 @@ events:
       - type: after
         event: alert
         status: [succeeded]
+  # A backup takes 4 seconds. A firing while it runs is skipped, and a
+  # backup that a crash cuts off is given up.
+  - name: backup
+    command: ['./backup.sh']
+    triggers:
+      - type: manual
+  # Notifies when a backup is given up or skipped.
+  - name: notify
+    command: ['./notify.sh']
+    concurrency: queue
+    triggers:
+      - type: after
+        event: backup
+        status: [abandoned, skipped]

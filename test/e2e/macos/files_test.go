@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,8 +17,7 @@ import (
 func watching(t *testing.T) *home {
 	t.Helper()
 	h := newHome(t, "files")
-	h.start()
-	h.waitForLog(h.path("kickd.log"), 0, "File watch started", 4)
+	h.startWatching(4)
 	return h
 }
 
@@ -33,17 +34,51 @@ func changes(rs []run) []string {
 	return out
 }
 
-// waitForChange waits until the runs of event hold the change "op path".
+// waitForChange waits until a run of event holds the change "op path", and
+// checks the variables that the command of that run printed.
 func (h *home) waitForChange(event, op, path string) {
 	h.t.Helper()
 	want := op + " " + path
+	var holder run
 	h.waitFor(fmt.Sprintf("%s gets %q", event, want), 30*time.Second, func() bool {
-		rs := h.runs(event)
-		for i := range rs {
-			rs[i] = h.show(rs[i].ID)
+		for _, r := range h.runs(event) {
+			if r = h.show(r.ID); slices.Contains(changes([]run{r}), want) {
+				holder = r
+				return true
+			}
 		}
-		return slices.Contains(changes(rs), want)
+		return false
 	})
+	h.checkFileVariables(h.waitForRun(holder.ID))
+}
+
+// checkFileVariables checks that the command of the run r printed the
+// variables of its file trigger as its payload gives the changes:
+// KICKD_FILE_PATH and KICKD_FILE_OP the last change, KICKD_FILE_COUNT the
+// number of changes, and KICKD_FILE_PATHS every path, joined with ":".
+func (h *home) checkFileVariables(r run) {
+	h.t.Helper()
+	files, _ := r.Payload["files"].([]any)
+	if len(files) == 0 {
+		h.t.Errorf("run %d of %s has no changes", r.ID, r.Event)
+		return
+	}
+	var paths []string
+	for _, f := range files {
+		c, _ := f.(map[string]any)
+		paths = append(paths, fmt.Sprint(c["path"]))
+	}
+	last, _ := files[len(files)-1].(map[string]any)
+	for _, v := range []struct{ name, want string }{
+		{"file", fmt.Sprint(last["path"])},
+		{"op", fmt.Sprint(last["op"])},
+		{"count", strconv.Itoa(len(files))},
+		{"paths", strings.Join(paths, ":")},
+	} {
+		if got := r.line(v.name); got != v.want {
+			h.t.Errorf("run %d of %s printed %s=%q, want %q from its changes %v\n%s", r.ID, r.Event, v.name, got, v.want, changes([]run{r}), r.Output)
+		}
+	}
 }
 
 // changesAfterAWhile waits 2 seconds, longer than the debounce of every

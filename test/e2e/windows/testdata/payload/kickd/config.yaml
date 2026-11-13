@@ -1,0 +1,15 @@
+log:
+  path: 'kickd.log'
+events:
+  # Reports the payload file of its run.
+  - name: report
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'report.ps1']
+    triggers:
+      - type: manual
+  # A sync takes 4 seconds, and runs again when a crash cuts it off. Each
+  # run notes its payload file in payloads.txt when it starts.
+  - name: sync
+    command: ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'sync.ps1']
+    on_interrupt: rerun
+    triggers:
+      - type: manual

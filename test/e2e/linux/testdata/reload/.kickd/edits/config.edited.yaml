@@ -8,6 +8,15 @@ events:
       - type: file
         path: 'src'
       - type: manual
+  # Deploys to TARGET once the release is ready, when the file ready
+  # exists. Deploys wait for each other.
+  - name: deploy
+    command: ['./deploy.sh']
+    concurrency: queue
+    env:
+      TARGET: 'staging'
+    triggers:
+      - type: manual
   # Added while kickd runs.
   - name: test
     command: ['./test.sh']

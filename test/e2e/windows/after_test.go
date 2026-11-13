@@ -56,3 +56,30 @@ func TestAfterFollowsAnEventThatAnAfterTriggerFired(t *testing.T) {
 		t.Errorf("report:\n%s", r.Output)
 	}
 }
+
+func TestAfterFiresWhenTheFollowedRunIsAbandoned(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "after")
+	h.start()
+	backup := h.fire("backup")
+	h.waitFor("backup runs", 30*time.Second, func() bool { return h.show(backup).Status == "running" })
+	h.kill()
+	h.start()
+	r := h.waitForRuns("notify", 1)[0]
+	if r.line("after") != "backup" || r.line("run") != strconv.FormatInt(backup, 10) || r.line("status") != "abandoned" || !hasLine(r.Output, "exit=") {
+		t.Errorf("notify:\n%s", r.Output)
+	}
+}
+
+func TestAfterFiresWhenTheFollowedRunIsSkipped(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "after")
+	h.start()
+	first := h.fire("backup")
+	h.waitFor("backup runs", 30*time.Second, func() bool { return h.show(first).Status == "running" })
+	second := h.fire("backup")
+	r := h.waitForRuns("notify", 1)[0]
+	if r.line("after") != "backup" || r.line("run") != strconv.FormatInt(second, 10) || r.line("status") != "skipped" || !hasLine(r.Output, "exit=") {
+		t.Errorf("notify:\n%s", r.Output)
+	}
+}

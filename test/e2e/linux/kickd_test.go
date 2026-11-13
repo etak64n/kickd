@@ -177,7 +177,14 @@ type result struct {
 // home.
 func (h *home) kickd(args ...string) result {
 	h.t.Helper()
-	cmd := exec.Command(kickdPath, args...)
+	return h.kickdOf(kickdPath, args...)
+}
+
+// kickdOf runs the kickd executable exe, such as the kickd of an earlier
+// release, with args, as kickd runs the current kickd.
+func (h *home) kickdOf(exe string, args ...string) result {
+	h.t.Helper()
+	cmd := exec.Command(exe, args...)
 	cmd.Env, cmd.Dir = h.env, h.homeDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -210,7 +217,41 @@ func (h *home) logFile() string {
 }
 
 // start runs "kickd run" and waits until the agent has loaded the config.
+// The webhook server and the watches of file triggers can still be
+// starting then, so a test that sends a webhook request or changes a
+// watched file right after the start uses startListening or startWatching.
 func (h *home) start() {
+	h.t.Helper()
+	h.startOf(kickdPath)
+}
+
+// startListening runs "kickd run", as start does, and waits until the
+// webhook server of the agent accepts requests.
+func (h *home) startListening() {
+	h.t.Helper()
+	h.startAndWaitFor("Webhook server listening", 1)
+}
+
+// startWatching runs "kickd run", as start does, and waits until the n file
+// triggers of the config watch their directories.
+func (h *home) startWatching(n int) {
+	h.t.Helper()
+	h.startAndWaitFor("File watch started", n)
+}
+
+// startAndWaitFor runs "kickd run", as start does, and waits until the
+// agent has also logged n records with the message msg.
+func (h *home) startAndWaitFor(msg string, n int) {
+	h.t.Helper()
+	log := h.logFile()
+	offset := fileSize(log)
+	h.start()
+	h.waitForLog(log, offset, msg, n)
+}
+
+// startOf runs "run" of the kickd executable exe, such as the kickd of an
+// earlier release, as start runs the current kickd.
+func (h *home) startOf(exe string) {
 	h.t.Helper()
 	log := h.logFile()
 	offset := fileSize(log)
@@ -218,7 +259,7 @@ func (h *home) start() {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	cmd := exec.Command(kickdPath, "run")
+	cmd := exec.Command(exe, "run")
 	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = h.env, h.homeDir, out, out
 	if err := cmd.Start(); err != nil {
 		h.t.Fatal(err)

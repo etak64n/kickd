@@ -38,6 +38,21 @@ func TestSkipSkipsAFiringWhileTheEventRuns(t *testing.T) {
 	}
 }
 
+func TestSkipRunsOnlyTheFirstOfTheFiringsThatWaitedWhileKickdWasStopped(t *testing.T) {
+	t.Parallel()
+	h := newHome(t, "runs")
+	backups := []int64{h.fire("backup"), h.fire("backup"), h.fire("backup")}
+	h.start()
+	if r := h.waitForRun(backups[0]); r.Status != "succeeded" || r.Skipped != 2 {
+		t.Errorf("the first backup: %s, skipped %d", r.Status, r.Skipped)
+	}
+	for _, id := range backups[1:] {
+		if r := h.waitForRun(id); r.Status != "skipped" || r.Reason != "already_running" {
+			t.Errorf("backup %d: %s %s", id, r.Status, r.Reason)
+		}
+	}
+}
+
 func TestParallelRunsFiringsAtTheSameTime(t *testing.T) {
 	t.Parallel()
 	h := newHome(t, "runs")

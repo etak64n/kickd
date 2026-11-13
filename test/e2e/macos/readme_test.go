@@ -47,7 +47,7 @@ func TestReadmeNotifyRunsByHand(t *testing.T) {
 
 func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 	h := readme(t)
-	h.start()
+	h.startListening()
 	res := request(t, "POST", 9787, "/hooks/deploy", "", "Authorization", "Bearer "+initToken(t, h))
 	if res.status != http.StatusAccepted {
 		t.Fatalf("POST /hooks/deploy: %d %s", res.status, res.body)
@@ -60,7 +60,7 @@ func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 
 func TestReadmeWebhookRefusesARequestWithoutTheToken(t *testing.T) {
 	h := readme(t)
-	h.start()
+	h.startListening()
 	if res := request(t, "POST", 9787, "/hooks/deploy", ""); res.status != http.StatusUnauthorized {
 		t.Fatalf("POST /hooks/deploy without the token: %d %s", res.status, res.body)
 	}
@@ -71,7 +71,7 @@ func TestReadmeWebhookRefusesARequestWithoutTheToken(t *testing.T) {
 
 func TestReadmeBuildRunsWhenASourceFileChanges(t *testing.T) {
 	h := readme(t)
-	h.start()
+	h.startWatching(1)
 	h.writeFile(h.inHome("app", "src", "util.c"), "int util(void) { return 1; }\n")
 	r := h.waitForRuns("build", 1)[0]
 	if r.Status != "succeeded" || r.line("trigger") != "file" || r.line("file") != h.inHome("app", "src", "util.c") {

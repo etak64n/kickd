@@ -1,0 +1,15 @@
+log:
+  path: 'kickd.log'
+events:
+  # Reports the payload file of its run, with the permissions of the file.
+  - name: report
+    command: ['./report.sh']
+    triggers:
+      - type: manual
+  # A sync takes 4 seconds, and runs again when a crash cuts it off. Each
+  # run notes its payload file in payloads.txt when it starts.
+  - name: sync
+    command: ['./sync.sh']
+    on_interrupt: rerun
+    triggers:
+      - type: manual
