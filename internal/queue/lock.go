@@ -7,10 +7,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // errLocked is the error of lockFile when another process holds the lock.
 var errLocked = errors.New("locked")
+
+// lockWait is how long LockAgent tries a lock that is taken.
+var lockWait = 5 * time.Second
 
 // AgentRunningError is the error of LockAgent when another agent runs on
 // the database.
@@ -46,7 +50,19 @@ func LockAgent(path string) (release func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := lockFile(f); err != nil {
+	// The OS releases the lock of an agent that crashed when it ends the
+	// process, and Windows can take a moment to do so, so a lock that is
+	// taken is tried again for a few seconds before it counts as another
+	// agent's.
+	deadline := time.Now().Add(lockWait)
+	for {
+		err = lockFile(f)
+		if !errors.Is(err, errLocked) || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil {
 		f.Close()
 		if errors.Is(err, errLocked) {
 			return nil, &AgentRunningError{Database: abs, PID: lockHolder(name)}

@@ -114,7 +114,7 @@ When a scan reads all 500 places and starts or settles at least one run, the age
 
 An agent takes a lock on the file `kickd.db.lock`, the path of the database with `.lock` appended, before it opens the database, and holds it until it exits.
 The lock is a lock of the OS on the open file, `flock` on macOS and Linux and `LockFileEx` on Windows, so the OS releases it when the agent exits, also after a crash.
-A second agent that finds the lock taken stops with the FATAL record `Agent start failed`, which names the PID of the first agent, written in the file.
+A second agent that finds the lock taken tries it for 5 seconds, because Windows can take a moment to release the lock of a process that ended, and then stops with the FATAL record `Agent start failed`, which names the PID of the first agent, written in the file.
 
 Two agents on one database would both run every firing, and each would take the running runs of the other for runs that a crash cut off.
 The subcommands, such as `kickd event`, do not take the lock, so they work while the agent runs.

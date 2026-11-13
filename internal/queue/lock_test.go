@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // One agent at a time holds the lock of a database, and the lock is free
 // again once the agent releases it.
 func TestASecondAgentCannotTakeTheLockOfTheDatabase(t *testing.T) {
+	defer func(d time.Duration) { lockWait = d }(lockWait)
+	lockWait = 300 * time.Millisecond
 	path := filepath.Join(t.TempDir(), "kickd.db")
 	release, err := LockAgent(path)
 	if err != nil {
@@ -32,6 +35,22 @@ func TestASecondAgentCannotTakeTheLockOfTheDatabase(t *testing.T) {
 	again, err := LockAgent(path)
 	if err != nil {
 		t.Fatalf("LockAgent after release = %v", err)
+	}
+	again()
+}
+
+// A lock that is released while LockAgent tries it is taken, as the lock
+// of an agent that just crashed is once the OS releases it.
+func TestTheLockOfAnAgentThatEndsIsTakenAMomentLater(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kickd.db")
+	release, err := LockAgent(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.AfterFunc(500*time.Millisecond, release)
+	again, err := LockAgent(path)
+	if err != nil {
+		t.Fatalf("LockAgent while the lock is released = %v", err)
 	}
 	again()
 }
