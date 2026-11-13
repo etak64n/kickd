@@ -1,6 +1,7 @@
-# Quick start
-
-[Documentation index](index.md)
+---
+title: Quick start
+description: A first event, run in a terminal and fired by hand.
+---
 
 In kickd, a named command in the config file is an **event**, and firing an event requests one run of its command.
 The long-running kickd process, called the **agent**, runs the commands.
@@ -46,4 +47,4 @@ With `kickd` on the `PATH`, these steps define an event, run the agent in a term
    ```
 
 `kickd help` lists every subcommand, and `kickd help history` shows the flags of `kickd history`, which lists the runs.
-To keep kickd running in the background, install it as a service by following the guide for the OS: [macOS](install-macos.md), [Linux](install-linux.md) or [Windows](install-windows.md).
+To keep kickd running in the background, install it as a service by following the guide for the OS: [macOS](/kickd/getting-started/install-macos/), [Linux](/kickd/getting-started/install-linux/) or [Windows](/kickd/getting-started/install-windows/).

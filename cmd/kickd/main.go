@@ -446,14 +446,14 @@ func cmdInit(path string, system bool, args []string) error {
 	if *noExamples {
 		fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 		fmt.Printf("Add a .yaml file of events next to it, then run: %skickd check\n", sudo(system))
-		fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
+		fmt.Println("Every key is described in https://etak64n.github.io/kickd/settings/config-keys/")
 		return nil
 	}
 	fmt.Printf("wrote %s\n", events)
 	fmt.Printf("log:      %s\ndatabase: %s\n", p.Log, p.Database)
 	fmt.Printf("Edit them, then run: %skickd check\n", sudo(system))
 	fmt.Println("kickd reads the events of every .yaml and .yml file next to the config file.")
-	fmt.Println("Every key is described in https://github.com/etak64n/kickd/blob/main/docs/config-keys.md")
+	fmt.Println("Every key is described in https://etak64n.github.io/kickd/settings/config-keys/")
 	return nil
 }
 

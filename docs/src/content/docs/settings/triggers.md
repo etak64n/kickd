@@ -1,6 +1,7 @@
-# Trigger settings
-
-[Documentation index](../index.md)
+---
+title: Trigger settings
+description: Manual, cron, webhook, file, after, startup and wake triggers, and the keys of each type.
+---
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
 In kickd, a named command in the config is an **event**, and a **trigger** fires an event.
@@ -37,7 +38,7 @@ The agent reloads its config when the config file, or another YAML file next to 
 At the switch, the agent stops its triggers and starts them again from the new config, so a change to a cron, webhook, file, after or wake trigger takes effect when the file that defines its event is saved.
 
 Every run gets environment variables that describe its firing, and each type of trigger except `startup` fills its own: `KICKD_MANUAL_SOURCE` for manual triggers, and `KICKD_CRON_*`, `KICKD_WEBHOOK_*`, `KICKD_FILE_*`, `KICKD_AFTER_*` and `KICKD_WAKE_*` for the others.
-[What a command receives](../payload.md) lists all of them.
+[What a command receives](/kickd/reference/payload/) lists all of them.
 
 ## Manual triggers
 
@@ -156,12 +157,12 @@ events:
 ## Webhook triggers
 
 A webhook trigger fires the event when an HTTP request arrives at its path.
-The agent runs one HTTP server for all webhook triggers of the config, and the `webhook` section of the config file sets its address and limits; [Webhook server settings](webhook.md) describes that section.
+The agent runs one HTTP server for all webhook triggers of the config, and the `webhook` section of the config file sets its address and limits; [Webhook server settings](/kickd/settings/webhook/) describes that section.
 
 The command receives the request in the payload JSON: its method, path, headers, query and body.
 The payload leaves out the `Authorization` and `X-Kickd-Token` headers and the `token` query value, so the token does not reach the command.
 Query values whose names the event declares in `params` become parameters of the firing.
-[Webhooks](../webhook.md) describes how to call a webhook and every response.
+[Webhooks](/kickd/guides/webhooks/) describes how to call a webhook and every response.
 
 ### `path`
 

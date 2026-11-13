@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
-  <img alt="kickd" src="docs/images/logo-light.svg" width="300">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/src/assets/logo-dark.svg">
+  <img alt="kickd" src="docs/src/assets/logo-light.svg" width="300">
 </picture>
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/etak64n/kickd.svg)](https://pkg.go.dev/github.com/etak64n/kickd)
@@ -17,7 +17,7 @@ kickd runs commands when something happens: a schedule comes due, an HTTP reques
 It is a single executable for macOS, Linux and Windows.
 Its config file is YAML and has the same format on every OS.
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. The kickd agent runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/images/overview.svg)
+![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. The kickd agent runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](docs/src/assets/overview.svg)
 
 ## How kickd works
 
@@ -86,7 +86,7 @@ Go places the executable in `$(go env GOPATH)/bin`, which is `~/go/bin` unless G
 go install github.com/etak64n/kickd/cmd/kickd@latest
 ```
 
-The installation guides for [macOS](docs/install-macos.md), [Linux](docs/install-linux.md) and [Windows](docs/install-windows.md) cover each OS in detail, including running kickd as a service.
+The installation guides for [macOS](https://etak64n.github.io/kickd/getting-started/install-macos/), [Linux](https://etak64n.github.io/kickd/getting-started/install-linux/) and [Windows](https://etak64n.github.io/kickd/getting-started/install-windows/) cover each OS in detail, including running kickd as a service.
 
 ## Quick start
 
@@ -334,12 +334,11 @@ Relative paths start at the directory of the config file, and a leading `~` is t
 Strings are in single quotes, which keep backslashes and double quotes as they are.
 
 `kickd check` validates the config, lists the files whose events it reads, and prints the events with their triggers and where the log, the database and each command run.
-The [configuration reference](docs/config-keys.md) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
+The [configuration reference](https://etak64n.github.io/kickd/settings/config-keys/) describes every key, and the [examples](examples/README.md) are complete configs for common tasks.
 
 ## Documentation
 
 The [documentation site](https://etak64n.github.io/kickd/) has the guides, the settings of every key, and the internals of kickd, as of the latest release.
-The same pages are the Markdown files in `docs`, which [the documentation index](docs/index.md) lists.
 
 ## License
 

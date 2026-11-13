@@ -7,5 +7,7 @@
 *.db-wal
 *.db-shm
 
-# The documentation site that mkdocs build writes
-/site/
+# The documentation site: its dependencies, its build, and the types that Astro writes.
+/docs/node_modules/
+/docs/dist/
+/docs/.astro/

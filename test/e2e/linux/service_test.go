@@ -3,10 +3,10 @@
 package linux
 
 // The tests in this file change the machine: they install kickd as a
-// systemd unit, as docs/install-linux.md does, and they move the clock.
-// They run only with KICKD_MACHINE_TEST=1, which the CI sets on its
-// throwaway machines. They run one at a time, because every unit listens
-// on port 9787.
+// systemd unit, as docs/src/content/docs/getting-started/install-linux.md
+// does, and they move the clock. They run only with KICKD_MACHINE_TEST=1,
+// which the CI sets on its throwaway machines. They run one at a time,
+// because every unit listens on port 9787.
 
 import (
 	"bytes"

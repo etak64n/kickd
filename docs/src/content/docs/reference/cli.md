@@ -1,6 +1,7 @@
-# Command-line reference
-
-[Documentation index](index.md)
+---
+title: Command-line reference
+description: Every subcommand of kickd, firing events with parameters, and exit codes.
+---
 
 kickd is one executable with subcommands.
 `kickd run` starts the long-running kickd process, called the **agent**.

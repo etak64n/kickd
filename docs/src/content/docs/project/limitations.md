@@ -1,6 +1,7 @@
-# Known limitations
-
-[Documentation index](index.md)
+---
+title: Known limitations
+description: What kickd does not do yet, and what has not been tested.
+---
 
 In kickd, a named command in the config file is an **event**, and the long-running kickd process is the **agent**.
 

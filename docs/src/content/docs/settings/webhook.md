@@ -1,6 +1,7 @@
-# Webhook server settings
-
-[Documentation index](../index.md)
+---
+title: Webhook server settings
+description: Turning the HTTP server on and off, its address and the body limit, in the webhook section of the config.
+---
 
 In kickd, a named command in the config file is an **event**, and a **webhook trigger** fires an event when an HTTP request arrives at the path of the trigger.
 The long-running kickd process, called the **agent**, runs one HTTP server for all the webhook triggers of its config file.
@@ -13,9 +14,9 @@ webhook:
   max_body_bytes: 1048576
 ```
 
-Each webhook trigger sets its own path, methods and authentication among the triggers of its event, and [Trigger settings](triggers.md#webhook-triggers) describes those keys.
+Each webhook trigger sets its own path, methods and authentication among the triggers of its event, and [Trigger settings](/kickd/settings/triggers/#webhook-triggers) describes those keys.
 The server also answers requests to `/healthz` with 200 and `ok`, for health checks.
-It refuses requests that a web browser sends, and it limits the connections that it serves at once and the time that a request may take; [Webhooks](../webhook.md#limits-of-the-server) describes these rules.
+It refuses requests that a web browser sends, and it limits the connections that it serves at once and the time that a request may take; [Webhooks](/kickd/guides/webhooks/#limits-of-the-server) describes these rules.
 
 The agent reloads its config when the config file, or another YAML file next to it, is saved, added or removed: it waits 0.5 seconds after the change, checks the files, and switches to the new config when they have no errors.
 At the switch, the agent stops its HTTP server and starts a new one with the new settings, so a change to the `webhook` section of the config file takes effect when the file is saved.

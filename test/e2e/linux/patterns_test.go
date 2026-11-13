@@ -9,7 +9,8 @@ import (
 	"testing"
 )
 
-// The ways of running programs that docs/commands.md shows.
+// The ways of running programs that
+// docs/src/content/docs/guides/commands.md shows.
 
 func TestAPythonScriptRunsInItsVirtualEnvironment(t *testing.T) {
 	t.Parallel()

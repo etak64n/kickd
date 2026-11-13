@@ -1,0 +1,13 @@
+/* Indigo on the black and white of the site, for links and for the current page in the
+   sidebar, in the dark theme of Starlight and in its light theme. */
+:root {
+  --sl-color-accent-low: #18204e;
+  --sl-color-accent: #526cfe;
+  --sl-color-accent-high: #5e8bde;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #e5e9ff;
+  --sl-color-accent: #4051b5;
+  --sl-color-accent-high: #283593;
+}

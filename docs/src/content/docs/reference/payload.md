@@ -1,6 +1,7 @@
-# What a command receives
-
-[Documentation index](index.md)
+---
+title: What a command receives
+description: The environment variables and the payload JSON that a command receives.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 The information about one run that kickd passes to the command is called the **payload**.
@@ -19,7 +20,7 @@ The name of a variable about one kind of trigger starts with that kind: `KICKD_M
 | `KICKD_REQUEST_ID` | Every run | The request ID of the firing. kickd's log records of the firing carry the same value, so a command that writes it into its own logs links the two. |
 | `KICKD_ATTEMPT` | Every run | The attempt number: 1 for the first run, one higher for each rerun after an interruption |
 | `KICKD_TIME` | Every run | When the event fired, in UTC, in RFC 3339 format |
-| `KICKD_TRIGGER` | Every run | The kind of trigger: `manual`, `cron`, `webhook`, `file`, `after`, `startup`, `wake` or `restart`. `manual` means `kickd event`, and `restart` a restart by the event's [`restart`](settings/events.md#restart) setting. |
+| `KICKD_TRIGGER` | Every run | The kind of trigger: `manual`, `cron`, `webhook`, `file`, `after`, `startup`, `wake` or `restart`. `manual` means `kickd event`, and `restart` a restart by the event's [`restart`](/kickd/settings/events/#restart) setting. |
 | `KICKD_TRIGGER_ID` | Every run | The trigger, in the form `manual`, `cron:0 3 * * *`, `webhook:/hooks/x`, `file:/path`, `after:backup`, `startup` or `wake` |
 | `KICKD_PAYLOAD_FILE` | Every run | The path of a JSON file that holds the whole payload. kickd deletes the file when the command ends. |
 | `KICKD_DATA` | Every run | All parameters, the named values passed with the firing, as one JSON object: `{}` for an event without parameters |

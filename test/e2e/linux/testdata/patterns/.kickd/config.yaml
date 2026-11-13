@@ -2,7 +2,7 @@ log:
   path: 'kickd.log'
 events:
   # A Python script in its virtual environment, which the test creates as
-  # docs/commands.md says, with no activation.
+  # docs/src/content/docs/guides/commands.md says, with no activation.
   - name: report
     command: ['.venv/bin/python', 'report.py']
     workdir: 'reports'

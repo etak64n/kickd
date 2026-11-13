@@ -1,0 +1,4 @@
+# Supply-chain hardening: skip releases younger than a day, and accept
+# dependencies only from the npm registry.
+minimumReleaseAge: 1440
+blockExoticSubdeps: true

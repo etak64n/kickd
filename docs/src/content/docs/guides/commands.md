@@ -1,6 +1,7 @@
-# Running commands
-
-[Documentation index](index.md)
+---
+title: Running commands
+description: The environment of a command under each kind of service, the working directory and PATH, Python and Node.js.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd starts the command of each run as a child process.
@@ -12,7 +13,7 @@ A command gets three layers of environment variables, each on top of the one bef
 
 1. **The environment of kickd**, which depends on how kickd was started.
 2. **The event's `env`**, which adds variables and replaces variables of kickd that have the same name. `${VAR}` in a value is the variable `VAR` of kickd.
-3. **The variables of the run**, such as `KICKD_EVENT`, `KICKD_RUN_ID` and `KICKD_DATA_REF`, which replace variables of the same name from the other layers. [What a command receives](payload.md) lists them.
+3. **The variables of the run**, such as `KICKD_EVENT`, `KICKD_RUN_ID` and `KICKD_DATA_REF`, which replace variables of the same name from the other layers. [What a command receives](/kickd/reference/payload/) lists them.
 
 In a terminal, `kickd run` has the environment of the shell that started it.
 A service gets the environment of its service manager instead, which holds far fewer variables:

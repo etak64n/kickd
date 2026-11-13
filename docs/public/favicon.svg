@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- The icon of kickd in a browser tab: the last letter of the logo, a d cut out of a
+       square, which fills the whole icon. The d keeps the stem of the logo over a shorter
+       bowl, so that it fits the square, and its edges fall on whole pixels at 16 and 32
+       pixels, the sizes at which tabs draw it. On dark tabs, which hide the dark square,
+       the square is light. -->
+  <style>
+    path { fill: #24292f; }
+    @media (prefers-color-scheme: dark) {
+      path { fill: #e6edf3; }
+    }
+  </style>
+  <path fill-rule="evenodd" d="M0 0h64v64H0zM40 4h8v56H16V28h24zM24 36h16v16H24z"/>
+</svg>

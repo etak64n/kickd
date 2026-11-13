@@ -1,6 +1,7 @@
-# How commands run
-
-[Documentation index](../index.md)
+---
+title: How commands run
+description: Processes, environment, output, stopping and exit status of the commands that kickd runs.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event becomes a **run**.
 The long-running kickd process, the **agent**, starts the command of each run as a child process and waits for it to exit.

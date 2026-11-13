@@ -1,6 +1,7 @@
-# Configuration reference
-
-[Documentation index](index.md)
+---
+title: Configuration reference
+description: Every key of the config, its default, and when a change takes effect.
+---
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
 The config file has five top-level sections, `log`, `webhook`, `database`, `env` and `events`, and the other files have only `events`.
@@ -9,12 +10,12 @@ Each firing is recorded as a **run** in the **database**, a SQLite file, and the
 
 Six pages describe the keys in detail, and each key of the tables links to its description:
 
-- [Log settings](settings/log.md): the `log` section
-- [Webhook server settings](settings/webhook.md): the `webhook` section
-- [Database settings](settings/database.md): the `database` section
-- [Event settings](settings/events.md): the keys of each event
-- [Parameter settings](settings/params.md): the keys of each parameter of an event
-- [Trigger settings](settings/triggers.md): the keys of each type of trigger
+- [Log settings](/kickd/settings/log/): the `log` section
+- [Webhook server settings](/kickd/settings/webhook/): the `webhook` section
+- [Database settings](/kickd/settings/database/): the `database` section
+- [Event settings](/kickd/settings/events/): the keys of each event
+- [Parameter settings](/kickd/settings/params/): the keys of each parameter of an event
+- [Trigger settings](/kickd/settings/triggers/): the keys of each type of trigger
 
 Every key is optional unless its description says otherwise.
 kickd reports unknown keys as errors, and `kickd check` lists every error in the file.
@@ -31,52 +32,52 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 
 | Key | Default | Description |
 |---|---|---|
-| [`log.path`](settings/log.md#logpath) | none | The log file. Without it, kickd logs to standard error. |
-| [`log.level`](settings/log.md#loglevel) | `info` | The least severe level that is logged: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. `LOG_LEVEL` overrides it. |
-| [`log.format`](settings/log.md#logformat) | `auto` | `auto`, `json` or `text`. `auto` writes text to a terminal and JSON to files and pipes. `LOG_FORMAT` overrides it. |
-| [`log.max_size_mb`](settings/log.md#logmax_size_mb) | `10` | The size in MB past which kickd renames the log file with `.1` appended and starts a new one. |
-| [`log.max_backups`](settings/log.md#logmax_backups) | `5` | How many renamed log files to keep. |
-| [`webhook.enabled`](settings/webhook.md#webhookenabled) | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
-| [`webhook.listen`](settings/webhook.md#webhooklisten) | `127.0.0.1:9787` | The address of the HTTP server that all webhook triggers share. |
-| [`webhook.max_body_bytes`](settings/webhook.md#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
-| [`database.path`](settings/database.md#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
-| [`database.retention`](settings/database.md#databaseretention) | `168h` | How long ended runs stay in the database. |
-| [`env`](settings/events.md#for-every-event) | none | Environment variables for the commands of every event, under the `env` of each event. |
-| [`events`](settings/events.md) | none | The list of events, in the config file or in another YAML file next to it. The config needs at least one event. |
+| [`log.path`](/kickd/settings/log/#logpath) | none | The log file. Without it, kickd logs to standard error. |
+| [`log.level`](/kickd/settings/log/#loglevel) | `info` | The least severe level that is logged: `trace`, `debug`, `info`, `warn`, `error` or `fatal`. `LOG_LEVEL` overrides it. |
+| [`log.format`](/kickd/settings/log/#logformat) | `auto` | `auto`, `json` or `text`. `auto` writes text to a terminal and JSON to files and pipes. `LOG_FORMAT` overrides it. |
+| [`log.max_size_mb`](/kickd/settings/log/#logmax_size_mb) | `10` | The size in MB past which kickd renames the log file with `.1` appended and starts a new one. |
+| [`log.max_backups`](/kickd/settings/log/#logmax_backups) | `5` | How many renamed log files to keep. |
+| [`webhook.enabled`](/kickd/settings/webhook/#webhookenabled) | `true` | `false` keeps the HTTP server off, so webhook triggers do not fire. |
+| [`webhook.listen`](/kickd/settings/webhook/#webhooklisten) | `127.0.0.1:9787` | The address of the HTTP server that all webhook triggers share. |
+| [`webhook.max_body_bytes`](/kickd/settings/webhook/#webhookmax_body_bytes) | `1048576` | The largest request body accepted, in bytes. |
+| [`database.path`](/kickd/settings/database/#databasepath) | `kickd.db` | The SQLite file that records every run, next to the config file by default. |
+| [`database.retention`](/kickd/settings/database/#databaseretention) | `168h` | How long ended runs stay in the database. |
+| [`env`](/kickd/settings/events/#for-every-event) | none | Environment variables for the commands of every event, under the `env` of each event. |
+| [`events`](/kickd/settings/events/) | none | The list of events, in the config file or in another YAML file next to it. The config needs at least one event. |
 
 ## Event keys
 
 | Key | Default | Description |
 |---|---|---|
-| [`name`](settings/events.md#name) | none | The event name. Required and unique: up to 64 letters, digits, `.`, `_`, `:` and `-`, starting with a letter or digit. |
-| [`description`](settings/events.md#description) | none | A description, shown by `kickd events`. |
-| [`command`](settings/events.md#command) | none | What the event runs. Required. A string runs through the shell, and a list starts a program with its arguments. |
-| [`workdir`](settings/events.md#workdir) | the directory of the config file | The working directory of the command. It must exist. |
-| [`env`](settings/events.md#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
-| [`user`](settings/events.md#user) | the user of the agent | The user whose rights the command and the stop command run with. Only an agent that runs as root on macOS or Linux accepts it. |
-| [`timeout`](settings/events.md#timeout) | none | The longest time the command may run. Without it, there is no limit. |
-| [`stop_command`](settings/events.md#stop_command) | none | What kickd runs to ask a running command to stop, before it sends SIGTERM. A string runs through the shell, and a list starts a program. |
-| [`stop_timeout`](settings/events.md#stop_timeout) | `10s` | How long kickd waits for the stop command, and then for the command after SIGTERM, before it kills it. |
-| [`concurrency`](settings/events.md#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue`, `parallel` or `replace`. |
-| [`restart`](settings/events.md#restart) | `never` | Whether kickd starts the event again when a run ends: `never`, `on-failure` or `always`. |
-| [`restart_delay`](settings/events.md#restart_delay) | `1s` | How long the first restart waits. Each restart after a short run waits twice as long as the one before. |
-| [`restart_max_delay`](settings/events.md#restart_max_delay) | `1m` | The longest wait before a restart, and how long a run must last for the wait to start again from `restart_delay`. |
-| [`on_interrupt`](settings/events.md#on_interrupt) | `abandon` | What happens to a run that a stop or a crash cut off: `abandon` or `rerun`. |
-| [`max_attempts`](settings/events.md#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |
-| [`stdin`](settings/events.md#stdin) | `none` | `payload` passes the payload JSON on standard input. |
-| [`log_output`](settings/events.md#log_output) | `true` | Whether kickd logs the output of the command and stores it with the run. |
-| [`output`](settings/events.md#output) | none | A file to which kickd appends the output of the command: `path`, and `max_size_mb` and `max_backups` as for the log file. |
-| [`params`](settings/events.md#params) | none | The parameters that a firing can pass. |
-| [`triggers`](settings/events.md#triggers) | none | The triggers, one or more. Required. |
+| [`name`](/kickd/settings/events/#name) | none | The event name. Required and unique: up to 64 letters, digits, `.`, `_`, `:` and `-`, starting with a letter or digit. |
+| [`description`](/kickd/settings/events/#description) | none | A description, shown by `kickd events`. |
+| [`command`](/kickd/settings/events/#command) | none | What the event runs. Required. A string runs through the shell, and a list starts a program with its arguments. |
+| [`workdir`](/kickd/settings/events/#workdir) | the directory of the config file | The working directory of the command. It must exist. |
+| [`env`](/kickd/settings/events/#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
+| [`user`](/kickd/settings/events/#user) | the user of the agent | The user whose rights the command and the stop command run with. Only an agent that runs as root on macOS or Linux accepts it. |
+| [`timeout`](/kickd/settings/events/#timeout) | none | The longest time the command may run. Without it, there is no limit. |
+| [`stop_command`](/kickd/settings/events/#stop_command) | none | What kickd runs to ask a running command to stop, before it sends SIGTERM. A string runs through the shell, and a list starts a program. |
+| [`stop_timeout`](/kickd/settings/events/#stop_timeout) | `10s` | How long kickd waits for the stop command, and then for the command after SIGTERM, before it kills it. |
+| [`concurrency`](/kickd/settings/events/#concurrency) | `skip` | What happens when the event fires while it runs: `skip`, `queue`, `parallel` or `replace`. |
+| [`restart`](/kickd/settings/events/#restart) | `never` | Whether kickd starts the event again when a run ends: `never`, `on-failure` or `always`. |
+| [`restart_delay`](/kickd/settings/events/#restart_delay) | `1s` | How long the first restart waits. Each restart after a short run waits twice as long as the one before. |
+| [`restart_max_delay`](/kickd/settings/events/#restart_max_delay) | `1m` | The longest wait before a restart, and how long a run must last for the wait to start again from `restart_delay`. |
+| [`on_interrupt`](/kickd/settings/events/#on_interrupt) | `abandon` | What happens to a run that a stop or a crash cut off: `abandon` or `rerun`. |
+| [`max_attempts`](/kickd/settings/events/#max_attempts) | `3` | With `rerun`, how many times one firing may run, counting the first run. |
+| [`stdin`](/kickd/settings/events/#stdin) | `none` | `payload` passes the payload JSON on standard input. |
+| [`log_output`](/kickd/settings/events/#log_output) | `true` | Whether kickd logs the output of the command and stores it with the run. |
+| [`output`](/kickd/settings/events/#output) | none | A file to which kickd appends the output of the command: `path`, and `max_size_mb` and `max_backups` as for the log file. |
+| [`params`](/kickd/settings/events/#params) | none | The parameters that a firing can pass. |
+| [`triggers`](/kickd/settings/events/#triggers) | none | The triggers, one or more. Required. |
 
 ## Parameter keys
 
 | Key | Default | Description |
 |---|---|---|
-| [`name`](settings/params.md#name) | none | The parameter name. Required: up to 64 letters, digits and `_`, not starting with a digit. |
-| [`required`](settings/params.md#required) | `false` | `true` refuses a firing without the parameter. |
-| [`default`](settings/params.md#default) | none | The value when a firing does not pass the parameter. Without it, the value is empty. |
-| [`description`](settings/params.md#description) | none | A description, shown by `kickd events --json`. |
+| [`name`](/kickd/settings/params/#name) | none | The parameter name. Required: up to 64 letters, digits and `_`, not starting with a digit. |
+| [`required`](/kickd/settings/params/#required) | `false` | `true` refuses a firing without the parameter. |
+| [`default`](/kickd/settings/params/#default) | none | The value when a firing does not pass the parameter. Without it, the value is empty. |
+| [`description`](/kickd/settings/params/#description) | none | A description, shown by `kickd events --json`. |
 
 ## Trigger keys
 
@@ -84,13 +85,13 @@ Each trigger takes `type` and only the keys of its type.
 
 | Type | Keys | Fires the event |
 |---|---|---|
-| [`manual`](settings/triggers.md#manual-triggers) | none | When `kickd event NAME` names the event |
-| [`cron`](settings/triggers.md#cron-triggers) | `schedule` (required), `timezone`, `missed` (default `run`) | At the times of a cron expression |
-| [`webhook`](settings/triggers.md#webhook-triggers) | `path` (required), `methods`, `token`, `secret`, `wait` (default `false`) | When an HTTP request arrives at the path |
-| [`file`](settings/triggers.md#file-triggers) | `path` (required), `recursive` (default `false`), `include`, `exclude`, `changes`, `debounce` (default `1s`) | When files change in the directory |
-| [`after`](settings/triggers.md#after-triggers) | `event` (required), `status` (required) | When a run of the other event ends with one of the statuses |
-| [`startup`](settings/triggers.md#startup-triggers) | none | When the agent starts |
-| [`wake`](settings/triggers.md#wake-triggers) | none | When the machine wakes from sleep |
+| [`manual`](/kickd/settings/triggers/#manual-triggers) | none | When `kickd event NAME` names the event |
+| [`cron`](/kickd/settings/triggers/#cron-triggers) | `schedule` (required), `timezone`, `missed` (default `run`) | At the times of a cron expression |
+| [`webhook`](/kickd/settings/triggers/#webhook-triggers) | `path` (required), `methods`, `token`, `secret`, `wait` (default `false`) | When an HTTP request arrives at the path |
+| [`file`](/kickd/settings/triggers/#file-triggers) | `path` (required), `recursive` (default `false`), `include`, `exclude`, `changes`, `debounce` (default `1s`) | When files change in the directory |
+| [`after`](/kickd/settings/triggers/#after-triggers) | `event` (required), `status` (required) | When a run of the other event ends with one of the statuses |
+| [`startup`](/kickd/settings/triggers/#startup-triggers) | none | When the agent starts |
+| [`wake`](/kickd/settings/triggers/#wake-triggers) | none | When the machine wakes from sleep |
 
 An event lists at most one manual, one startup and one wake trigger.
 

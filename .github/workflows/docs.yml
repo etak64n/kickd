@@ -1,13 +1,13 @@
-# Builds the documentation site with MkDocs for every pull request that
-# changes the docs, and publishes it to GitHub Pages for every release, so
-# that the site describes the released version.
+# Builds the documentation site in docs/ with Starlight for every pull request
+# that changes the docs, so that a broken link or a link to a missing heading
+# fails before a release. Publishes it to GitHub Pages for every release, so
+# that the site describes the released version, and on a manual run.
 name: Docs
 
 on:
   pull_request:
     paths:
       - 'docs/**'
-      - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
   push:
     tags: ['v*']
@@ -26,21 +26,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # MkDocs 2.0 drops the plugins and the themes that Material for MkDocs
-      # needs, so the site stays on MkDocs 1.
-      - name: Install MkDocs
-        run: |
-          python3 -m venv "$RUNNER_TEMP/mkdocs"
-          "$RUNNER_TEMP/mkdocs/bin/pip" install --quiet 'mkdocs-material~=9.5' 'mkdocs<2'
+      # pnpm is the version that packageManager in docs/package.json names.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: docs/package.json
 
-      # mkdocs.yml sets strict, so a broken link or anchor fails the build.
-      - name: Build
-        run: '"$RUNNER_TEMP/mkdocs/bin/mkdocs" build'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+
+      - run: pnpm --dir docs install --frozen-lockfile
+
+      # starlight-links-validator, a plugin in docs/astro.config.mjs, fails
+      # the build on a link to a missing page or heading.
+      - run: pnpm --dir docs exec astro build
 
       - if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: docs/dist
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -54,4 +60,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

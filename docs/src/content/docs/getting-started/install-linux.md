@@ -1,6 +1,7 @@
-# Installing on Linux
-
-[Documentation index](index.md)
+---
+title: Installing on Linux
+description: The executable, the config, a system-wide or a per-user systemd unit, and the limit on watched directories.
+---
 
 On Linux with systemd, kickd runs as a systemd **unit**.
 A unit is a definition file that tells systemd how to start, stop and restart a program.
@@ -104,7 +105,7 @@ When the service stops, systemd sends SIGTERM to the agent alone, because the un
 kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
 systemd kills what is left of the unit only when the stop takes longer than its limit, 90 seconds by default.
-An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
+An event can run a [`stop_command`](/kickd/settings/events/#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](/kickd/settings/events/#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 

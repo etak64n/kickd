@@ -3,10 +3,10 @@
 package windows
 
 // The tests in this file change the machine: they install kickd as a
-// Windows service, as docs/install-windows.md does, create folders at the
-// root of C:, and move the clock. They run only with KICKD_MACHINE_TEST=1,
-// which the CI sets on its throwaway machines. They run one at a time,
-// because every service listens on port 9787.
+// Windows service, as docs/src/content/docs/getting-started/install-windows.md
+// does, create folders at the root of C:, and move the clock. They run only
+// with KICKD_MACHINE_TEST=1, which the CI sets on its throwaway machines.
+// They run one at a time, because every service listens on port 9787.
 
 import (
 	"bytes"
