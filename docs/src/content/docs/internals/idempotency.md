@@ -1,6 +1,7 @@
-# Delivery guarantees and idempotency
-
-[Documentation index](../index.md)
+---
+title: Delivery guarantees and idempotency
+description: When a firing can be lost or repeated, and how to write commands that tolerate repeats.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event becomes a **run** in the **database**, a SQLite file.
 The long-running kickd process, the **agent**, starts the command of each run.

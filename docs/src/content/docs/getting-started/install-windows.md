@@ -1,6 +1,7 @@
-# Installing on Windows
-
-[Documentation index](index.md)
+---
+title: Installing on Windows
+description: The executable, the config, a Windows service, and the environment of the SYSTEM account.
+---
 
 On Windows, kickd runs as a **Windows service**.
 A Windows service is a program that runs from the time Windows starts, whether or not anyone is logged in.

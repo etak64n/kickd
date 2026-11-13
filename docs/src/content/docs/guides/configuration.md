@@ -1,6 +1,7 @@
-# Configuration
-
-[Documentation index](index.md)
+---
+title: Configuration
+description: Where the config lives, defining events, events in several files, applying changes, and examples.
+---
 
 kickd reads a YAML config file, and the other YAML files next to it.
 The files define **events**, which are named commands.
@@ -136,7 +137,7 @@ The rules of these files are:
 - **What they hold**: an `events` section, in the same form as that of the config file. The `log`, `webhook`, `database` and `env` sections belong in the config file, and another file that has one is an error.
 - **Which files count**: the files directly in the directory. kickd reads no subdirectories, so a directory such as `~/.kickd/disabled` keeps files out of the config.
 - **Files without events**: a YAML file without an `events` section is left out, and `kickd check` names it as not read.
-- **Links**: a symbolic link to a file counts as the file, so the events of an app can stay in its repository, with a link to them in the directory. For the config of root on macOS and Linux, root must own the file that the link points to and the directories on the way to it, as [User accounts](users.md#the-user-of-the-agent) describes.
+- **Links**: a symbolic link to a file counts as the file, so the events of an app can stay in its repository, with a link to them in the directory. For the config of root on macOS and Linux, root must own the file that the link points to and the directories on the way to it, as [User accounts](/kickd/guides/users/#the-user-of-the-agent) describes.
 - **Order**: the events of the config file come first, then those of the other files in the order of the file names.
 - **Names**: event names are unique across all the files, and an after trigger can follow an event of another file.
 - **Paths**: a relative path in any of the files starts at the directory of the config file.
@@ -182,7 +183,7 @@ Under launchd on macOS, it is `/usr/bin:/bin:/usr/sbin:/sbin`.
 systemd gives a system-wide unit `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin`, with `/snap/bin` after them on Ubuntu, and a per-user unit the `PATH` of the systemd of the user.
 A Windows service sees only the system `PATH`.
 `kickd check` prints the working directory of each event, and the `PATH` that an event sets.
-[Running commands](commands.md) lists the environment that each kind of service gives commands, and shows how to run Python and Node.js.
+[Running commands](/kickd/guides/commands/) lists the environment that each kind of service gives commands, and shows how to run Python and Node.js.
 
 ## Applying changes
 
@@ -201,7 +202,7 @@ It switches to the new config when a valid version is saved.
 
 The agent opens its log and its database once, when it starts, so changes to the `log` and `database` sections take effect only when the agent starts again.
 `on_interrupt` and `max_attempts` also take effect at the next start, because the agent handles the runs that a stop or a crash cut off when it starts.
-The [configuration reference](config-keys.md#when-changes-take-effect) lists when each key takes effect.
+The [configuration reference](/kickd/settings/config-keys/#when-changes-take-effect) lists when each key takes effect.
 
 ## Differences between operating systems
 

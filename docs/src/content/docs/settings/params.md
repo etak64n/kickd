@@ -1,6 +1,7 @@
-# Parameter settings
-
-[Documentation index](../index.md)
+---
+title: Parameter settings
+description: The values that a firing passes to the command, in the parameters of an event.
+---
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
 In kickd, a named command in the config is an **event**, and asking kickd to run an event is **firing** it.

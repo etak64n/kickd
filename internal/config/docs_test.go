@@ -11,15 +11,17 @@ import (
 	"testing"
 )
 
-// TestDocumentedConfigsLoad keeps the examples in the documentation valid.
-// Every YAML block with an events key must load. Directories that exist
-// only on the machine an example was written for are the one accepted
-// problem.
+// TestDocumentedConfigsLoad keeps the examples in the documentation valid:
+// in the README, and in the pages of the documentation site, which are the
+// Markdown files in docs/src/content/docs. Every YAML block with an events
+// key must load. Directories that exist only on the machine an example was
+// written for are the one accepted problem.
 func TestDocumentedConfigsLoad(t *testing.T) {
 	root := filepath.Join("..", "..")
 	files := []string{filepath.Join(root, "README.md")}
-	err := filepath.WalkDir(filepath.Join(root, "docs"), func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".md") {
+	pages := filepath.Join(root, "docs", "src", "content", "docs")
+	err := filepath.WalkDir(pages, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && (strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".mdx")) {
 			files = append(files, p)
 		}
 		return err

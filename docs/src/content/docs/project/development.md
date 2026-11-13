@@ -1,6 +1,7 @@
-# Development
-
-[Documentation index](index.md)
+---
+title: Development
+description: Tests, the documentation site, and the source layout of kickd.
+---
 
 kickd needs Go 1.25 or later to build and test.
 
@@ -44,13 +45,6 @@ A runner cannot sleep, so the unit tests of `internal/trigger` check wake trigge
 
 Pushing a tag whose name starts with `v` publishes a release: GitHub Actions runs the tests, builds the six executables, and uploads them.
 
-## The documentation site
-
-The documentation site is built from the Markdown files in `docs` with MkDocs and its Material theme, as `mkdocs.yml` sets.
-GitHub Actions builds the site for every pull request that changes the docs, and a broken link or a link to a missing heading fails the build.
-For every release, it publishes the site to GitHub Pages, at https://etak64n.github.io/kickd/, so that the site describes the released version.
-Running the Docs workflow by hand on GitHub publishes the site from the branch or tag that it runs on, such as `main` after a change of the docs alone.
-
 govulncheck, the vulnerability checker of the Go team, checks the dependencies and the Go standard library for every push to `main`, every pull request, and once a week.
 
 After a change to the dependencies in `go.mod`, run `./scripts/third-party-licenses.sh` and commit `internal/licenses/licenses.txt`, the text that `kickd licenses` prints. CI fails while that file is out of date.
@@ -60,10 +54,25 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
+## The documentation site
+
+The documentation site is built with Starlight, the documentation theme of Astro, from the Markdown files in `docs/src/content/docs`, and `docs/astro.config.mjs` lists them in the sidebar.
+These commands build it into `docs/dist`, with Node.js and the version of pnpm that `packageManager` in `docs/package.json` names:
+
+```sh
+pnpm --dir docs install
+pnpm --dir docs exec astro build
+```
+
+A broken link or a link to a missing heading fails the build.
+GitHub Actions builds the site for every pull request that changes the docs.
+For every release, it publishes the site to GitHub Pages, at https://etak64n.github.io/kickd/, so that the site describes the released version.
+Running the Docs workflow by hand on GitHub publishes the site from the branch or tag that it runs on, such as `main` after a change of the docs alone.
+
 ## Source layout
 
 ```
-cmd/kickd/          The kickd command: the agent (run), run commands (event, events, queue, runs, show, cancel, status), setup (check, init, service)
+cmd/kickd/          The kickd command: the agent (run), run commands (event, events, history, show, cancel, status), setup (check, init, service)
 internal/config/    Loading, defaults and validation of the config, and the examples that kickd init writes
 internal/queue/     The SQLite database: run records, recovery of interrupted runs, the heartbeat of the agent
 internal/runner/    Running commands, and consuming the queue: concurrency, reruns of interrupted runs
@@ -73,7 +82,7 @@ internal/logging/   JSON and text log output, and log file rotation
 internal/event/     The types of a firing and its payload
 internal/licenses/  The license texts that kickd licenses prints
 test/e2e/           The end-to-end tests of each OS: the kickd executable run the way its users do
-docs/               The documentation, which mkdocs.yml builds into the documentation site
+docs/               The documentation site, which Starlight builds from the pages in src/content/docs
 scripts/            build-all.sh, the cross build for every platform; third-party-licenses.sh, the list of licenses
 .github/workflows/  ci.yml, the tests on every OS; vulncheck.yml, the vulnerability check; release.yml, the release workflow; docs.yml, the documentation site
 ```

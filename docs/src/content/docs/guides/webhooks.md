@@ -1,6 +1,7 @@
-# Webhooks
-
-[Documentation index](index.md)
+---
+title: Webhooks
+description: Authentication, request IDs, parameters and responses of webhook triggers.
+---
 
 In kickd, a named command in the config file is an **event**.
 A **webhook trigger** fires an event when an HTTP request arrives at the trigger's path.

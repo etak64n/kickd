@@ -1,6 +1,7 @@
-# Runs
-
-[Documentation index](index.md)
+---
+title: Runs
+description: How firings become runs, run statuses, interrupted runs, and the database.
+---
 
 In kickd, a named command in the config file is an **event**, and asking kickd to run an event is **firing** it.
 Every firing is recorded as a **run** in the **database**, a SQLite file.

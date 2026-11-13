@@ -1,6 +1,7 @@
-# Platform differences
-
-[Documentation index](../index.md)
+---
+title: Platform differences
+description: Processes, signals, file watching, services and permissions on macOS, Linux and Windows.
+---
 
 kickd runs the same code on macOS, Linux and Windows, except where the operating systems differ.
 In kickd, a named command in the config file is an **event**, each firing of an event becomes a **run**, and the long-running kickd process is the **agent**.

@@ -1,6 +1,7 @@
-# Installing on macOS
-
-[Documentation index](index.md)
+---
+title: Installing on macOS
+description: The executable, the config, a LaunchAgent or a LaunchDaemon, and what commands can reach under launchd.
+---
 
 On macOS, **launchd** starts and restarts long-running programs.
 launchd reads a definition file for each program, starts the program as the file describes, and starts it again when it exits.
@@ -97,7 +98,7 @@ When background activity for kickd is turned off in System Settings > General > 
 
 When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
-An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
+An event can run a [`stop_command`](/kickd/settings/events/#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](/kickd/settings/events/#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.
 
@@ -173,7 +174,7 @@ events:
 
 `env` adds environment variables for the command, and `${PATH}` in its values expands to the `PATH` of kickd itself.
 `kickd check` prints the `PATH` that each event sets.
-The [`env` of the config file](settings/events.md#for-every-event) sets a `PATH` for every event at once.
+The [`env` of the config file](/kickd/settings/events/#for-every-event) sets a `PATH` for every event at once.
 
 ## Locale under launchd
 

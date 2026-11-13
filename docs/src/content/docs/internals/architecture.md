@@ -1,6 +1,7 @@
-# Architecture
-
-[Documentation index](../index.md)
+---
+title: Architecture
+description: The parts of the agent, the path of a firing, reloading and stopping.
+---
 
 kickd is one Go executable.
 `kickd run` starts the long-running process, called the **agent**.
@@ -26,7 +27,7 @@ The `agent` package connects the parts and reloads the config, and the `logging`
 
 ## Path of a firing
 
-![Four triggers fire events: a cron schedule at 3:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. The kickd agent runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](../images/overview.svg)
+![Four triggers fire events: a cron schedule at 3\:00, a POST request to /hooks/deploy, changes in ~/app/src, and the command kickd event notify. The kickd agent runs the command of each event: rsync for backup, deploy.sh for deploy, make build for build, and notify.sh for notify.](../../../assets/overview.svg)
 
 Every firing takes the same path, whatever fired it:
 

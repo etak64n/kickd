@@ -1,6 +1,7 @@
-# Database internals
-
-[Documentation index](../index.md)
+---
+title: Database internals
+description: The SQLite database, locking between processes, consumption of the queue, and recovery at startup.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 The runs are kept in the **database**, a SQLite file, and the runs that have not started yet form the **queue**.

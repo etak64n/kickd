@@ -3,10 +3,10 @@
 package macos
 
 // The tests in this file change the Mac: they install kickd as a launchd
-// service, as docs/install-macos.md does, and they move the clock. They run
-// only with KICKD_MACHINE_TEST=1, which the CI sets on its throwaway
-// machines. They run one at a time, because every service listens on port
-// 9787.
+// service, as docs/src/content/docs/getting-started/install-macos.md does,
+// and they move the clock. They run only with KICKD_MACHINE_TEST=1, which
+// the CI sets on its throwaway machines. They run one at a time, because
+// every service listens on port 9787.
 
 import (
 	"bytes"

@@ -13,7 +13,7 @@ events:
         token: 'whoami-token'
       - type: manual
   # Prints the environment that the commands of kickd get, as
-  # docs/commands.md shows.
+  # docs/src/content/docs/guides/commands.md shows.
   - name: show-env
     command: ['env']
     triggers:

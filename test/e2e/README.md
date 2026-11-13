@@ -214,7 +214,7 @@ The events of the YAML files next to the config file.
 
 ### The environment of commands
 
-The layers that [Running commands](../../docs/commands.md) describes.
+The layers that [Running commands](https://etak64n.github.io/kickd/guides/commands/) describes.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -264,7 +264,7 @@ Processes that a command leaves running, and the processes that a timeout or `ki
 
 ### The ways of running programs in the docs
 
-The examples of [Running commands](../../docs/commands.md).
+The examples of [Running commands](https://etak64n.github.io/kickd/guides/commands/).
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|

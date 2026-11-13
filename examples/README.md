@@ -1,6 +1,6 @@
 # Examples
 
-[Documentation index](../docs/index.md)
+[Documentation index](https://etak64n.github.io/kickd/)
 
 Each file here is a complete kickd config for one task.
 Copy a file to the config file of the kickd that runs it: `~/.kickd/config.yaml` for the kickd of a user, or the config for the whole machine, such as `/etc/kickd/config.yaml` on Linux, for a kickd that runs as root.

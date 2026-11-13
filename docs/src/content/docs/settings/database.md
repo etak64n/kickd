@@ -1,6 +1,7 @@
-# Database settings
-
-[Documentation index](../index.md)
+---
+title: Database settings
+description: The SQLite file and how long ended runs stay, in the database section of the config.
+---
 
 In kickd, a named command in the config file is an **event**, and each firing of an event is recorded as a **run**.
 kickd records every run in its **database**, a SQLite file: runs that wait, runs that are running, and runs that have ended.

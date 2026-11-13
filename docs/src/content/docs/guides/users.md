@@ -1,6 +1,7 @@
-# User accounts
-
-[Documentation index](index.md)
+---
+title: User accounts
+description: Which user runs the agent and its commands, who can fire events, and the files that kickd creates.
+---
 
 In kickd, a named command in the config file is an **event**, each firing of an event becomes a **run**, and the long-running kickd process is the **agent**.
 The agent starts the command of every run as a child process.
@@ -44,7 +45,7 @@ On Windows, kickd does not check the permissions of the config.
 A command starts as a child process of the agent and runs as the same user: with the same groups on macOS and Linux, and with the same access token on Windows.
 The command also inherits the environment of the agent, so `HOME` or `USERPROFILE` points to the home directory of that user, when the user has one.
 
-On macOS and Linux, an agent that runs as root can run the command of an event as another user, whom the event names with [`user`](settings/events.md#user).
+On macOS and Linux, an agent that runs as root can run the command of an event as another user, whom the event names with [`user`](/kickd/settings/events/#user).
 The command and the stop command then run with the user ID, the groups and the home directory of that user.
 Windows has no such setting, and the config of any user other than root cannot have it.
 
@@ -88,7 +89,7 @@ A command of an agent that runs as root writes files that belong to root, even i
 
 - **A per-user service**, a LaunchAgent on macOS or a per-user unit on Linux, suits events that work on the files of one user. The commands have the permissions of that user, and no more.
 - **A system-wide service**, as root on macOS and Linux or as SYSTEM on Windows, suits tasks for the whole machine. Every command in the config file then runs with full rights, unless its event has a `user`, and the config file is the config for the whole machine, which only root and administrators can change.
-- **A system-wide service with `user`**, on macOS and Linux, suits a machine where tasks of one user must run without that user logging in. The agent starts at boot as root, and each event with a [`user`](settings/events.md#user) runs with the permissions of that user, and no more.
+- **A system-wide service with `user`**, on macOS and Linux, suits a machine where tasks of one user must run without that user logging in. The agent starts at boot as root, and each event with a [`user`](/kickd/settings/events/#user) runs with the permissions of that user, and no more.
 - **Windows** has only the service that runs as SYSTEM.
 
 The service managers themselves can run a service as another user.

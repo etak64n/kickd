@@ -1,6 +1,7 @@
-# Event settings
-
-[Documentation index](../index.md)
+---
+title: Event settings
+description: Commands, working directories, environment variables, time limits, overlap and interrupted runs, in the keys of each event.
+---
 
 kickd reads its **config** from the config file, `~/.kickd/config.yaml` by default, and from the other YAML files next to it that have an `events` section.
 In kickd, a named command in the config is an **event**.
@@ -453,7 +454,7 @@ The command can always read the payload from the file named by the variable `KIC
 - **payload**: standard input carries the payload JSON, the same text as the file.
 
 `payload` suits programs that read JSON on standard input, such as jq.
-[What a command receives](../payload.md) lists the fields of the payload.
+[What a command receives](/kickd/reference/payload/) lists the fields of the payload.
 
 ```yaml
 events:
@@ -536,7 +537,7 @@ events:
 The command receives each parameter in a variable named after it, `KICKD_DATA_` and the name in capitals, so `ref` arrives in `KICKD_DATA_REF`.
 `kickd event` passes parameters as `KEY=VALUE` arguments, and a webhook request as query values.
 Without `params`, `kickd event` accepts any names made of letters, digits and `_`, and webhook requests pass no parameters.
-[Parameter settings](params.md) describes each key of a parameter.
+[Parameter settings](/kickd/settings/params/) describes each key of a parameter.
 
 ```yaml
 events:
@@ -561,7 +562,7 @@ An event fires only through the triggers that it lists, and it can list several 
 A trigger has one of seven types, `manual`, `cron`, `webhook`, `file`, `after`, `startup` and `wake`, and takes only the keys of its type.
 `- type: manual` lets `kickd event NAME` fire the event, and an event without it cannot be fired by hand.
 An event lists at most one manual, one startup and one wake trigger.
-[Trigger settings](triggers.md) describes each type and its keys.
+[Trigger settings](/kickd/settings/triggers/) describes each type and its keys.
 
 ```yaml
 events:

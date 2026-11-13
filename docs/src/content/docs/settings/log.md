@@ -1,6 +1,7 @@
-# Log settings
-
-[Documentation index](../index.md)
+---
+title: Log settings
+description: The log file, levels, formats and rotation, in the log section of the config.
+---
 
 The long-running kickd process, called the **agent**, writes a **log**: one record for each thing that it does, such as loading its config, starting a command, or receiving a webhook request.
 The `log` section of the config file sets where the agent writes its records, which records it writes, and in what format:
@@ -16,7 +17,7 @@ log:
 
 The agent opens its log once, when it starts, and keeps it until it stops.
 A change to the `log` section therefore takes effect at the next start of the agent, and saving the config file while the agent runs leaves the log as it is.
-[Logging](../logging.md) describes the records themselves: their keys, their messages and their two formats.
+[Logging](/kickd/reference/logging/) describes the records themselves: their keys, their messages and their two formats.
 
 ## `log.path`
 
