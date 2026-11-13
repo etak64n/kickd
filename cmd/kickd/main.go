@@ -251,6 +251,9 @@ func cmdCheck(path string, args []string) error {
 		fmt.Printf("- %s [%s; on interrupt: %s%s]: %s\n", e.Name, e.Concurrency, interrupt, restart, cmd)
 		fmt.Printf("    file     %s\n", filepath.Base(e.File))
 		fmt.Printf("    workdir  %s\n", e.Workdir)
+		if e.User != "" {
+			fmt.Printf("    user     %s\n", e.User)
+		}
 		if stop := commandText(e.StopShell, e.StopCommand); stop != "" {
 			fmt.Printf("    stop     %s (stop_timeout %s)\n", stop, e.StopTimeout)
 		}

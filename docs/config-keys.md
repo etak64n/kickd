@@ -53,6 +53,7 @@ kickd reports unknown keys as errors, and `kickd check` lists every error in the
 | [`command`](settings/events.md#command) | none | What the event runs. Required. A string runs through the shell, and a list starts a program with its arguments. |
 | [`workdir`](settings/events.md#workdir) | the directory of the config file | The working directory of the command. It must exist. |
 | [`env`](settings/events.md#env) | none | Environment variables for the command. A `PATH` here also decides where the program of `command` is found. |
+| [`user`](settings/events.md#user) | the user of the agent | The user whose rights the command and the stop command run with. Only an agent that runs as root on macOS or Linux accepts it. |
 | [`timeout`](settings/events.md#timeout) | none | The longest time the command may run. Without it, there is no limit. |
 | [`stop_command`](settings/events.md#stop_command) | none | What kickd runs to ask a running command to stop, before it sends SIGTERM. A string runs through the shell, and a list starts a program. |
 | [`stop_timeout`](settings/events.md#stop_timeout) | `10s` | How long kickd waits for the stop command, and then for the command after SIGTERM, before it kills it. |
@@ -104,7 +105,7 @@ Most keys take effect at that reload, and some wait for the next start of the ag
 | `log.*` | At the next start of the agent, which opens its log once |
 | `webhook.*` | At the reload, which restarts the HTTP server |
 | `database.*` | At the next start of the agent, which opens the database once |
-| `name`, `command`, `workdir`, `env`, `timeout`, `stop_command`, `stop_timeout`, `concurrency`, `restart`, `restart_delay`, `restart_max_delay`, `stdin`, `log_output`, `output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
+| `name`, `command`, `workdir`, `env`, `user`, `timeout`, `stop_command`, `stop_timeout`, `concurrency`, `restart`, `restart_delay`, `restart_max_delay`, `stdin`, `log_output`, `output` | At the reload, for runs that start after it. Running commands keep the settings with which they started. |
 | `description` and `params` | At once for `kickd events` and `kickd event`, which read the config each time they run, and at the reload for webhook requests |
 | `on_interrupt` and `max_attempts` | At the next start of the agent, which handles the runs that were cut off when it starts |
 | Manual triggers | At once for `kickd event`, which reads the config each time it runs |

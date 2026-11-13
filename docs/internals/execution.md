@@ -31,6 +31,7 @@ The `KICKD_` variables come last, so `env` cannot override them.
 The **payload** is the JSON description of a run: the event, the trigger, the parameters, and the details of the firing.
 Before it starts the command, kickd writes the payload to a new file named `kickd-payload-<random>.json` in the temporary directory of the OS.
 On macOS and Linux, only the user that runs kickd can read the file.
+For an event with a `user`, the file is in `/tmp` and belongs to that user instead, because the temporary directory of an agent that runs as root can be closed to other users.
 The path of the file is in `KICKD_PAYLOAD_FILE`, and kickd deletes the file when the command exits.
 A rerun gets a new file with the new attempt number.
 

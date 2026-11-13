@@ -135,7 +135,7 @@ events:
 
 A command receives four layers of environment variables, each on top of the one before:
 
-1. **The environment of kickd**, which depends on how kickd was started: a terminal gives kickd the variables of its shell, and a service manager gives it far fewer.
+1. **The environment of kickd**, which depends on how kickd was started: a terminal gives kickd the variables of its shell, and a service manager gives it far fewer. For an event with a [`user`](#user), `HOME`, `USER`, `LOGNAME` and `TMPDIR` are those of that user.
 2. **The `env` of the config file**, which applies to every event (see [For every event](#for-every-event)).
 3. **The `env` of the event**, which adds variables and replaces the variables of the layers below that have the same name.
 4. **The variables of the run**, such as `KICKD_EVENT` and `KICKD_DATA_REF`, which replace the variables of the same name from the other layers.
@@ -179,6 +179,45 @@ events:
     workdir: '~/reports'
     env:
       PATH: '${HOME}/.local/bin:${PATH}'
+    triggers:
+      - type: manual
+```
+
+## `user`
+
+`user` names the user whose rights the command runs with, on macOS and Linux, when kickd runs as root.
+
+- **Type**: the name of a user of the machine, such as `alice`.
+- **Default**: none, which runs the command as the user of the agent.
+- **Takes effect**: for runs that start after the file that defines the event is saved.
+
+Only root can start a program as another user, so `user` needs an agent that runs as root: a LaunchDaemon on macOS or a system-wide unit on Linux, which `sudo kickd service install` sets up.
+In the config of any other user, and on Windows, `user` is an error of the config.
+
+When a run starts, kickd looks up the user and starts the command with the user ID, the group and the other groups of that user.
+A user that the machine does not have fails the run before the command starts, with the reason `start_failed`.
+The release executables look up users without cgo: on macOS they ask the directory service of the system, and on Linux they read `/etc/passwd` and `/etc/group`, so on Linux they do not find a user that only a network directory knows.
+
+The environment and the files of the run belong to the user:
+
+- `HOME` is the home directory of the user, and `USER` and `LOGNAME` are its name. These replace the variables of the agent, so `${HOME}` in an [`env`](#env) value is the home directory of the user, and an `env` can still set them.
+- `TMPDIR` is `/tmp`, because the temporary directory of the agent can be closed to other users.
+- The payload file at `KICKD_PAYLOAD_FILE` is in `/tmp` and belongs to the user, so only the user and root can read it.
+
+The [`stop_command`](#stop_command) runs as the same user.
+The user needs access to the [`workdir`](#workdir), and a command that cannot enter it fails to start.
+Paths in the config still start at the home directory of the agent, so `~` in a `workdir` is the home directory of root, and a directory of the user is written in full.
+kickd itself writes the log, the [`output`](#output) file and the database as the user of the agent.
+`kickd check` prints the user of an event on its `user` line.
+
+```yaml
+events:
+  - name: report
+    command: ['uv', 'run', 'report.py']
+    workdir: '/home/alice/reports'
+    env:
+      PATH: '${HOME}/.local/bin:${PATH}'   # ${HOME} is /home/alice
+    user: 'alice'
     triggers:
       - type: manual
 ```

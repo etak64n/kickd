@@ -321,6 +321,7 @@ kickd installed as a service as the installation guides do: launchd on macOS, sy
 | `TestServiceOfTheSystemAcceptsAWebhookRequest` | ✓ | ✓ |  |
 | `TestServiceOfTheSystemReloadsTheConfigOnSystemctlReload` |  | ✓ |  |
 | `TestServiceOfTheSystemRunsCommandsAsRoot` | ✓ | ✓ |  |
+| `TestServiceOfTheSystemRunsTheCommandOfAnEventAsItsUser` | ✓ | ✓ |  |
 | `TestServiceOfTheSystemRunsCommandsWithThePathOfSystemd` |  | ✓ |  |
 | `TestServiceOfTheSystemRunsCommandsWithoutHome` |  | ✓ |  |
 | `TestServiceOfTheSystemStartsAgainAfterACrash` | ✓ | ✓ |  |

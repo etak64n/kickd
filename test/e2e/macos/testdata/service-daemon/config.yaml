@@ -19,3 +19,10 @@ events:
     command: ['env']
     triggers:
       - type: manual
+  # Prints the user, the home directory and whether the payload file can be
+  # read, for a command that runs as the user nobody.
+  - name: whoami-nobody
+    command: 'id -un; echo "$HOME"; test -r "$KICKD_PAYLOAD_FILE" && echo payload'
+    user: 'nobody'
+    triggers:
+      - type: manual
