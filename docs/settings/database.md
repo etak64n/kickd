@@ -29,6 +29,7 @@ A change to the `database` section therefore takes effect at the next start of t
 kickd creates the file, and the directories on its path, when they do not exist.
 The file gets the permissions 0600 on macOS and Linux, so only its owner can read and write it.
 SQLite keeps two more files next to it, with `-wal` and `-shm` appended to the name, and kickd gives them the same permissions.
+The agent also keeps `.lock` appended to the name, the lock that lets one agent at a time run on the database, with the same permissions.
 
 The agent and every subcommand that uses the same config file use this database, so each of them must run as a user that can read and write it.
 A database that kickd for the whole machine created belongs to root, or to administrators and SYSTEM on Windows.

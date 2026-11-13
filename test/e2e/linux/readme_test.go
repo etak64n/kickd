@@ -5,6 +5,7 @@ package linux
 import (
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 )
 
@@ -20,6 +21,21 @@ func readme(t *testing.T) *home {
 	return h
 }
 
+// initToken returns the token that kickd init wrote into the webhook
+// trigger of deploy, in place of the token of the README.
+func initToken(t *testing.T, h *home) string {
+	t.Helper()
+	b, err := os.ReadFile(h.path("event.example.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`token: '([^']*)'`).FindSubmatch(b)
+	if m == nil || string(m[1]) == "replace-with-a-long-random-string" || len(m[1]) < 20 {
+		t.Fatalf("kickd init wrote no random token:\n%s", b)
+	}
+	return string(m[1])
+}
+
 func TestReadmeNotifyRunsByHand(t *testing.T) {
 	h := readme(t)
 	h.start()
@@ -32,7 +48,7 @@ func TestReadmeNotifyRunsByHand(t *testing.T) {
 func TestReadmeDeployRunsOnAWebhookRequestWithTheToken(t *testing.T) {
 	h := readme(t)
 	h.start()
-	res := request(t, "POST", 9787, "/hooks/deploy", "", "Authorization", "Bearer replace-with-a-long-random-string")
+	res := request(t, "POST", 9787, "/hooks/deploy", "", "Authorization", "Bearer "+initToken(t, h))
 	if res.status != http.StatusAccepted {
 		t.Fatalf("POST /hooks/deploy: %d %s", res.status, res.body)
 	}

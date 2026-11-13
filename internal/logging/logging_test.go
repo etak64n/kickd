@@ -249,7 +249,7 @@ func TestFanout(t *testing.T) {
 
 func TestRotationKeepsGenerations(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "r.log")
-	rf, err := openRotating(path, 100, 2, nil)
+	rf, err := openRotating(path, 100, 2, 0o644, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

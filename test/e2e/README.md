@@ -93,7 +93,7 @@ Every kind of change, new directories, `include`, `exclude`, `changes`, `recursi
 
 ### Webhook triggers
 
-Tokens, signatures with `secret`, `wait: true`, parameters from the query, `methods`, `max_body_bytes` and the request ID of the caller.
+Tokens, signatures with `secret`, `wait: true`, parameters from the query, `methods`, `max_body_bytes`, requests from web browsers and the request ID of the caller.
 
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
@@ -101,6 +101,7 @@ Tokens, signatures with `secret`, `wait: true`, parameters from the query, `meth
 | `TestWebhookKeepsTheRequestIDOfTheCaller` | ✓ | ✓ | ✓ |
 | `TestWebhookRefusesABodyOverMaxBodyBytes` | ✓ | ✓ | ✓ |
 | `TestWebhookRefusesAMethodThatIsNotListed` | ✓ | ✓ | ✓ |
+| `TestWebhookRefusesARequestFromAWebBrowser` | ✓ | ✓ | ✓ |
 | `TestWebhookRefusesARequestWithAWrongSignature` | ✓ | ✓ | ✓ |
 | `TestWebhookRefusesARequestWithAWrongToken` | ✓ | ✓ | ✓ |
 | `TestWebhookRefusesARequestWithoutASignature` | ✓ | ✓ | ✓ |
@@ -135,6 +136,15 @@ A runner of the CI cannot sleep, so this test checks the machine while it is awa
 | Test | macOS | Linux | Windows |
 |---|:-:|:-:|:-:|
 | `TestWakeDoesNotFireWhileTheMachineIsAwake` | ✓ | ✓ | ✓ |
+
+### Starting the agent
+
+One agent at a time on a database, and no command when a trigger cannot start.
+
+| Test | macOS | Linux | Windows |
+|---|:-:|:-:|:-:|
+| `TestASecondAgentDoesNotStartOnTheDatabaseOfARunningOne` | ✓ | ✓ | ✓ |
+| `TestAnAgentWhoseWebhookAddressIsInUseStartsNoCommand` | ✓ | ✓ | ✓ |
 
 ### Runs
 

@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/etak64n/kickd/internal/event"
@@ -30,6 +31,21 @@ const RequestIDHeader = "X-Request-ID"
 // statusClientGone marks requests whose caller disconnected before the
 // response, as nginx does with 499.
 const statusClientGone = 499
+
+// Limits of the server, so that clients that hold connections open or send
+// slowly cannot use up the memory and the file descriptors of the agent.
+const (
+	maxConns          = 256              // connections served at once; more wait to be accepted
+	maxHeaderBytes    = 64 << 10         // the request line and the headers
+	readHeaderTimeout = 10 * time.Second // to receive the request line and the headers
+	readBodyTimeout   = 30 * time.Second // to receive the body
+	idleTimeout       = 60 * time.Second // a kept-alive connection without a request
+)
+
+// signatureHeaders carry the signature of the body. The payload leaves
+// them out, as it leaves out the token, because a signature lets anyone
+// who reads it send the same body again.
+var signatureHeaders = []string{"X-Hub-Signature-256", "X-Hub-Signature", "X-Kickd-Signature"}
 
 // WebhookRoute describes one URL path that fires a named event.
 type WebhookRoute struct {
@@ -52,9 +68,11 @@ type WebhookServer struct {
 	logger  *slog.Logger
 	mux     *http.ServeMux
 	routes  map[string]bool
+	ln      net.Listener
 }
 
-// NewWebhookServer creates a server that listens on addr once Run is called.
+// NewWebhookServer creates a server for addr. Listen binds the address,
+// and Run serves on it.
 func NewWebhookServer(addr string, maxBody int64, logger *slog.Logger) *WebhookServer {
 	if maxBody <= 0 {
 		maxBody = DefaultMaxBody
@@ -97,12 +115,20 @@ func (s *WebhookServer) Handler() http.Handler {
 // Len returns the number of registered routes.
 func (s *WebhookServer) Len() int { return len(s.routes) }
 
-// Register adds a route that dispatches to h.
-func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
+// Register adds a route that dispatches to h. A path that the router
+// rejects is an error, as a path registered twice is.
+func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) (err error) {
 	if s.routes[r.Path] {
 		return fmt.Errorf("webhook path %q is registered twice", r.Path)
 	}
-	s.routes[r.Path] = true
+	// ServeMux panics on a pattern that it cannot parse or that conflicts
+	// with another; the config rules out such paths, and this keeps a
+	// path that slips through from stopping the agent.
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("webhook path %q: %v", r.Path, p)
+		}
+	}()
 	methods := map[string]bool{}
 	for _, m := range r.Methods {
 		methods[strings.ToUpper(m)] = true
@@ -121,12 +147,29 @@ func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
 	s.mux.HandleFunc(r.Path, func(w http.ResponseWriter, req *http.Request) {
 		id := requestIDOf(req.Context())
 		log := routeLog.With("requestId", id)
+		// A web page that the user opens can make the browser send a
+		// request to 127.0.0.1, and browsers mark such requests with these
+		// headers. Programs that call webhooks do not send them.
+		if fromBrowser(req) {
+			log.Warn("Webhook rejected", "reason", "browser_request", "method", req.Method, "path", req.URL.Path, "remoteAddr", req.RemoteAddr)
+			s.writeJSON(w, log, http.StatusForbidden, map[string]any{"requestId": id, "error": "requests from web browsers are not accepted"})
+			return
+		}
 		if len(methods) > 0 && !methods[req.Method] {
 			log.Warn("Webhook rejected", "reason", "method_not_allowed", "method", req.Method, "path", req.URL.Path, "remoteAddr", req.RemoteAddr)
 			s.writeJSON(w, log, http.StatusMethodNotAllowed, map[string]any{"requestId": id, "error": "method not allowed"})
 			return
 		}
-		body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, s.maxBody))
+		// The token is in the headers or the query, so a request without
+		// it is refused before kickd reads its body.
+		if r.Token != "" {
+			if reason := checkToken(req, r.Token); reason != "" {
+				log.Warn("Webhook authentication failed", "reason", reason, "authMethod", "token", "method", req.Method, "path", req.URL.Path, "remoteAddr", req.RemoteAddr)
+				s.writeJSON(w, log, http.StatusUnauthorized, map[string]any{"requestId": id, "error": "unauthorized"})
+				return
+			}
+		}
+		body, err := readBody(w, req, s.maxBody)
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
@@ -137,13 +180,6 @@ func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
 			log.Warn("Webhook body read failed", "method", req.Method, "path", req.URL.Path, "remoteAddr", req.RemoteAddr, logging.Err(err))
 			s.writeJSON(w, log, http.StatusBadRequest, map[string]any{"requestId": id, "error": "cannot read body"})
 			return
-		}
-		if r.Token != "" {
-			if reason := checkToken(req, r.Token); reason != "" {
-				log.Warn("Webhook authentication failed", "reason", reason, "authMethod", "token", "method", req.Method, "path", req.URL.Path, "remoteAddr", req.RemoteAddr)
-				s.writeJSON(w, log, http.StatusUnauthorized, map[string]any{"requestId": id, "error": "unauthorized"})
-				return
-			}
 		}
 		if r.Secret != "" {
 			if reason, header := checkSignature(req, body, r.Secret); reason != "" {
@@ -181,7 +217,7 @@ func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
 				Method:     req.Method,
 				Path:       req.URL.Path,
 				RemoteAddr: req.RemoteAddr,
-				Headers:    flatten(req.Header, "Authorization", "X-Kickd-Token"),
+				Headers:    flatten(req.Header, append([]string{"Authorization", "X-Kickd-Token"}, signatureHeaders...)...),
 				Query:      flatten(query, "token"),
 				Body:       string(body),
 			},
@@ -194,11 +230,14 @@ func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
 				s.writeJSON(w, log, http.StatusConflict, map[string]any{"requestId": id, "event": r.Event, "status": "skipped"})
 			case errors.Is(err, event.ErrQueueFull):
 				s.writeJSON(w, log, http.StatusConflict, map[string]any{"requestId": id, "event": r.Event, "status": "dropped"})
-			case err != nil:
+			case err != nil && req.Context().Err() != nil:
 				// The caller disconnected; the job keeps running.
 				if sw, ok := w.(*statusWriter); ok {
 					sw.gone = true
 				}
+			case err != nil:
+				// The run could not be recorded, so it does not run.
+				s.writeJSON(w, log, http.StatusServiceUnavailable, map[string]any{"requestId": id, "event": r.Event, "status": "failed", "error": "the run could not be recorded"})
 			default:
 				status := http.StatusOK
 				if res.ExitCode != 0 || res.Error != "" {
@@ -217,24 +256,74 @@ func (s *WebhookServer) Register(r WebhookRoute, h event.Handler) error {
 			return
 		}
 		st := h.Dispatch(ev)
-		status := http.StatusAccepted
-		if st == event.Dropped {
-			status = http.StatusConflict
+		switch st {
+		case event.Dropped:
+			s.writeJSON(w, log, http.StatusConflict, map[string]any{"requestId": id, "event": r.Event, "status": string(st)})
+		case event.Failed:
+			s.writeJSON(w, log, http.StatusServiceUnavailable, map[string]any{"requestId": id, "event": r.Event, "status": string(st), "error": "the run could not be recorded"})
+		default:
+			s.writeJSON(w, log, http.StatusAccepted, map[string]any{"requestId": id, "event": r.Event, "status": string(st)})
 		}
-		s.writeJSON(w, log, status, map[string]any{"requestId": id, "event": r.Event, "status": string(st)})
 	})
+	s.routes[r.Path] = true
 	return nil
 }
 
-// Run listens and serves until ctx is done.
-func (s *WebhookServer) Run(ctx context.Context) error {
+// fromBrowser reports whether a web browser sent req: browsers add Origin
+// to the requests that pages make, and the Sec-Fetch headers to every
+// request.
+func fromBrowser(req *http.Request) bool {
+	for _, h := range []string{"Origin", "Sec-Fetch-Site", "Sec-Fetch-Mode"} {
+		if req.Header.Get(h) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// readBody reads the body of req, up to limit bytes, within
+// readBodyTimeout. The deadline ends once the body is read, because the
+// server keeps reading the connection while the handler waits, to notice
+// a caller that leaves, and a deadline that passed would end the request.
+func readBody(w http.ResponseWriter, req *http.Request, limit int64) ([]byte, error) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Now().Add(readBodyTimeout))
+	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, limit))
+	_ = rc.SetReadDeadline(time.Time{})
+	return body, err
+}
+
+// Listen binds the address of the server, so that an address in use is
+// found before the agent starts anything. Run calls it when it was not
+// called.
+func (s *WebhookServer) Listen() error {
+	if s.ln != nil {
+		return nil
+	}
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("webhook listen: %w", err)
 	}
+	s.ln = newLimitListener(ln, maxConns)
+	return nil
+}
+
+// SetListener makes the server serve on ln, which the caller bound.
+func (s *WebhookServer) SetListener(ln net.Listener) {
+	s.ln = newLimitListener(ln, maxConns)
+}
+
+// Run serves until ctx is done.
+func (s *WebhookServer) Run(ctx context.Context) error {
+	if err := s.Listen(); err != nil {
+		return err
+	}
+	ln := s.ln
 	srv := &http.Server{
 		Handler:           s.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
 		ErrorLog:          stdlog.New(serverErrorWriter{s.logger}, "", 0),
 	}
 	addr := ln.Addr().String()
@@ -296,6 +385,9 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
+// Unwrap lets http.ResponseController reach the connection.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *statusWriter) code() int {
 	switch {
 	case w.gone:
@@ -304,6 +396,53 @@ func (w *statusWriter) code() int {
 		return http.StatusOK
 	}
 	return w.status
+}
+
+// limitListener accepts a connection only while fewer than the capacity
+// of slots are open. The others wait in the backlog of the OS.
+type limitListener struct {
+	net.Listener
+	slots     chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func newLimitListener(ln net.Listener, n int) *limitListener {
+	return &limitListener{Listener: ln, slots: make(chan struct{}, n), done: make(chan struct{})}
+}
+
+func (l *limitListener) Accept() (net.Conn, error) {
+	select {
+	case l.slots <- struct{}{}:
+	case <-l.done:
+		return nil, net.ErrClosed
+	}
+	c, err := l.Listener.Accept()
+	if err != nil {
+		<-l.slots
+		return nil, err
+	}
+	return &limitConn{Conn: c, release: func() { <-l.slots }}, nil
+}
+
+// Close also ends an Accept that waits for a slot.
+func (l *limitListener) Close() error {
+	err := l.Listener.Close()
+	l.closeOnce.Do(func() { close(l.done) })
+	return err
+}
+
+// limitConn gives its slot back when it closes, once.
+type limitConn struct {
+	net.Conn
+	once    sync.Once
+	release func()
+}
+
+func (c *limitConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(c.release)
+	return err
 }
 
 type requestIDKey struct{}

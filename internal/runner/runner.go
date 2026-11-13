@@ -416,7 +416,9 @@ func (r *Runner) openOutput(log *slog.Logger, o Output) (io.Writer, func(), erro
 	defer r.outMu.Unlock()
 	s := r.outputs[o.Path]
 	if s == nil {
-		w, err := logging.OpenRotating(o.Path, o.MaxBytes, o.MaxBackups, rotationReport{log: log, file: o.Path})
+		// The output file holds what the command printed, which the
+		// database keeps from other users too.
+		w, err := logging.OpenRotating(o.Path, o.MaxBytes, o.MaxBackups, 0o600, rotationReport{log: log, file: o.Path})
 		if err != nil {
 			return nil, nil, err
 		}

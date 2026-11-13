@@ -50,6 +50,7 @@ The history holds the status and exit code of each run, and the first 64 KB of i
 `database.path` gives the full path of the database, and without it, the database is `kickd.db` in the directory of the config file.
 `database.path` names another file, and `kickd check` prints where the database is.
 The agent and the other kickd commands must run as users that can read and write this database.
+One agent at a time runs on a database: a second `kickd run` on the same database stops at once, with an error that names the PID of the first agent.
 
 ## Interrupted runs
 

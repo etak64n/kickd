@@ -62,9 +62,10 @@ The same two records in text format:
 | `Database opened` | INFO | The agent opened the database | `file`, `count` |
 | `Interrupted run requeued` | WARN | An interrupted run will run again, as `on_interrupt: rerun` says | `runId`, `reason`, `attempt`, `maxAttempts` |
 | `Interrupted run abandoned` | WARN | An interrupted run will not run again. ERROR when the run reached `max_attempts` | `runId`, `reason`, `attempt` |
+| `Interrupted run canceled` | INFO | `kickd cancel` asked to stop a run that a crash cut off, so the run will not run again | `runId`, `reason`, `detail`, `attempt` |
 | `Config loaded` | INFO | The agent loaded its config at startup | `file`, `eventCount`, `triggerCount` |
 | `Config reloaded` | INFO | The agent reloaded its config | `file`, `eventCount`, `triggerCount` |
-| `Config reload failed` | ERROR | The reloaded config had errors. The agent keeps the previous config | `file`, `errorType`, `errorMessage` |
+| `Config reload failed` | ERROR | The reloaded config had errors, or needs a webhook address that is in use. The agent keeps the previous config | `file`, `errorType`, `errorMessage` |
 | `Config warning` | WARN | The config has a problem that does not stop the agent | `event`, `reason`, `detail` |
 | `File watch started` | INFO | A file trigger started watching a directory | `event`, `file`, `recursive`, `count` |
 | `Cron schedule added` | INFO | A cron trigger was registered | `event`, `schedule`, `nextRunAt` |
@@ -97,14 +98,14 @@ The same two records in text format:
 | `Queued run dropped` | WARN | A waiting run was discarded because the config no longer defines its event | `runId`, `reason` |
 | `Webhook received` | INFO | A webhook request passed authentication | `method`, `path`, `bytes`, `authMethod` |
 | `Webhook authentication failed` | WARN | The token or signature of a webhook request did not match | `reason`, `authMethod`, `remoteAddr` |
-| `Webhook rejected` | WARN | A webhook request had a method that is not allowed, a body over the limit, or a missing required parameter | `reason`, `detail` |
+| `Webhook rejected` | WARN | A web browser sent a webhook request, or the request had a method that is not allowed, a body over the limit, or a missing required parameter | `reason`, `detail` |
 | `Request completed` | INFO | The webhook server sent a response | `method`, `path`, `status`, `durationMs` |
 | `Database operation failed` | ERROR | Reading or writing the database failed | `detail`, `file`, `errorType`, `errorMessage` |
 | `Database path change needs a restart` | WARN | A reloaded config moves the database, which takes effect only when the agent restarts | `file`, `detail` |
-| `Agent stopping` | INFO | The agent began to stop | `signal` or `reason`, `inFlightJobs` |
+| `Agent stopping` | INFO | The agent began to stop: on a signal, at a stop of its service (`reason` `service_stop`), or because a trigger failed after the agent started (`reason` `trigger_failed`) | `signal` or `reason`, `inFlightJobs` |
 | `Agent stopped` | INFO | The agent stopped | `uptimeSec`, `processed`, `succeeded`, `failed`, `skipped`, `canceled`, `interrupted` |
 | `Config load failed` | FATAL | The config had errors at startup, so the agent could not start | `file`, `errorType`, `errorMessage`, `exitCode` |
-| `Agent start failed` | FATAL | A trigger could not start, so the agent could not start | `errorType`, `errorMessage`, `exitCode` |
+| `Agent start failed` | FATAL | A trigger could not start, or another agent runs on the database, so the agent could not start | `errorType`, `errorMessage`, `exitCode` |
 
 `Run skipped, previous run still active` is a WARN only for the first skip during a run, and a DEBUG for later ones.
 The record that ends the running run counts the skips in `skipped`.

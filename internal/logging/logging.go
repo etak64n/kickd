@@ -70,7 +70,9 @@ func New(o Options) (*slog.Logger, io.Closer, error) {
 		closer   io.Closer = nopCloser{}
 	)
 	if o.File != "" {
-		rf, err := openRotating(o.File, int64(o.MaxSizeMB)<<20, o.MaxBackups, stderr)
+		// Other users may read the log: it holds no output of the
+		// commands, and kickd masks the secrets that it logs.
+		rf, err := openRotating(o.File, int64(o.MaxSizeMB)<<20, o.MaxBackups, 0o644, stderr)
 		if err != nil {
 			return nil, nil, fmt.Errorf("open log file: %w", err)
 		}

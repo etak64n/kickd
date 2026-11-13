@@ -141,6 +141,12 @@ func (d *Dispatcher) Recover(ctx context.Context) error {
 		spec, ok := d.specs[run.Event]
 		d.mu.Unlock()
 		switch {
+		case run.CancelRequested:
+			// kickd cancel asked to stop the run while no agent ran.
+			if err := d.store.CancelInterrupted(ctx, run.ID); err != nil {
+				return err
+			}
+			log.Info("Interrupted run canceled", "reason", "canceled_by_user", "detail", how, "attempt", run.Attempt)
 		case !ok:
 			if err := d.store.Abandon(ctx, run.ID, "event_removed"); err != nil {
 				return err
@@ -236,14 +242,14 @@ func (d *Dispatcher) submit(name string, ev event.Event, wait bool) (event.Dispa
 	spec, ok := d.specs[name]
 	d.mu.Unlock()
 	if !ok {
-		return event.Dropped, 0, nil, fmt.Errorf("unknown event %q", name)
+		return event.Failed, 0, nil, fmt.Errorf("unknown event %q", name)
 	}
 	ev.Name = name
 	ev.Data = WithDefaults(ev.Data, spec.Defaults)
 	log := d.log.With("requestId", ev.RequestID, "event", name, "trigger", ev.Trigger)
 	payload, err := json.Marshal(ev)
 	if err != nil {
-		return event.Dropped, 0, nil, err
+		return event.Failed, 0, nil, err
 	}
 	max := 0
 	if spec.Concurrency == PolicyQueue {
@@ -259,7 +265,7 @@ func (d *Dispatcher) submit(name string, ev event.Event, wait bool) (event.Dispa
 	}, max)
 	if err != nil {
 		d.queueError(log, "enqueue", err)
-		return event.Dropped, 0, nil, err
+		return event.Failed, 0, nil, err
 	}
 	if dropped {
 		d.r.dropped.Add(1)
@@ -368,7 +374,15 @@ func (d *Dispatcher) follow(ctx context.Context) {
 		for _, r := range ended {
 			d.mu.Lock()
 			followers, specs := d.follows[r.Event], d.specs
+			// A run that ended in another process, such as one that kickd
+			// cancel canceled while it waited, still has its webhook
+			// caller waiting here.
+			ch := d.waiters[r.ID]
+			delete(d.waiters, r.ID)
 			d.mu.Unlock()
+			if ch != nil {
+				ch <- event.Result{ExitCode: -1, Error: r.Status, Reason: r.Reason}
+			}
 			var runs []queue.Run
 			var maxQueued []int
 			if r.Status != queue.StatusRetried {

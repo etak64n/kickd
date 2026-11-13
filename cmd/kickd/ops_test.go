@@ -98,7 +98,7 @@ func TestOpsWithoutAgent(t *testing.T) {
 	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "canceled run 2 (deploy); it had not started") {
 		t.Errorf("cancel --event: %d %q", code, out)
 	}
-	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "no run of deploy is queued or running") {
+	if code, out, _ := ops(t, cfg, "cancel", "--event", "deploy"); code != 0 || !strings.Contains(out, "no run of deploy is queued, running or interrupted") {
 		t.Errorf("cancel --event without runs: %d %q", code, out)
 	}
 	if code, _, errOut := ops(t, cfg, "cancel", "--event", "nope"); code != exitFailed || !strings.Contains(errOut, `unknown event "nope"`) {
@@ -277,9 +277,19 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.ExampleConfig(runtime.GOOS, c.system) {
 			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
 		}
+		// The events file is the example, with a random token in place of
+		// the token of the README.
 		events := filepath.Join(filepath.Dir(c.path), config.ExampleEventsName)
-		if b, err := os.ReadFile(events); err != nil || string(b) != config.ExampleEvents(runtime.GOOS) {
-			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), events, err)
+		b, err := os.ReadFile(events)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token := regexp.MustCompile(`token: '([^']*)'`).FindSubmatch(b)
+		if token == nil || string(token[1]) == config.ExampleToken || len(token[1]) < 20 {
+			t.Fatalf("init wrote no random token to %s:\n%s", events, b)
+		}
+		if want := strings.Replace(config.ExampleEvents(runtime.GOOS), config.ExampleToken, string(token[1]), 1); string(b) != want {
+			t.Fatalf("init wrote %d bytes to %s, want the example with a random token", len(b), events)
 		}
 	}
 	if !strings.Contains(config.ExampleConfig("linux", true), "'/var/lib/kickd/kickd.db'") || !strings.Contains(config.ExampleConfig("linux", false), "'~/.kickd/kickd.db'") {

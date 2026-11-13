@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -44,7 +45,8 @@ var errTriggerFailed = errors.New("trigger failed")
 
 // Run starts the agent and blocks until ctx is done. The first
 // configuration must load and start cleanly. Later, a configuration that
-// fails to load is logged and the previous one stays in effect.
+// fails to load or whose webhook address cannot be bound is logged, and
+// the previous one stays in effect.
 func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 	procID := opts.ProcessID
 	if procID == "" {
@@ -58,24 +60,30 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 	if err != nil {
 		return err
 	}
+	// Two agents on one database would both run every firing, and each
+	// would take the running runs of the other for runs that a crash cut
+	// off, so the second one stops here.
+	release, err := queue.LockAgent(cfg.Database.Path)
+	if err != nil {
+		return err
+	}
+	defer release()
 	store, err := openQueue(ctx, log, cfg.Database.Path)
 	if err != nil {
 		return err
 	}
 	defer store.Close()
 
-	rn := runner.New(ctx, base, procID)
+	// The commands run until ctx ends, or until the agent gives up
+	// because a trigger failed.
+	runCtx, endRuns := context.WithCancelCause(ctx)
+	defer endRuns(nil)
+	rn := runner.New(runCtx, base, procID)
 	disp := runner.NewDispatcher(rn, store, log, cfg.Database.Retention)
 	disp.Configure(specs(cfg))
 	if err := disp.Recover(ctx); err != nil {
 		return fmt.Errorf("recover interrupted runs: %w", err)
 	}
-	loopCtx, stopLoop := context.WithCancel(context.Background())
-	loopDone := make(chan struct{})
-	go func() {
-		defer close(loopDone)
-		disp.Loop(loopCtx, runner.AgentInfo(opts.Version, started))
-	}()
 
 	reload := make(chan string, 1)
 	requestReload := func(reason string) {
@@ -87,8 +95,23 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 	go watchConfig(ctx, log, opts.ConfigPath, requestReload)
 	notifyHangup(ctx, func() { requestReload("signal") })
 
-	shutdown := func() error {
-		log.Info("Agent stopping", append([]any{"inFlightJobs", rn.InFlight()}, causeAttrs(context.Cause(ctx))...)...)
+	// The triggers start before the agent consumes the queue, so that a
+	// trigger that cannot start, such as a webhook server whose address is
+	// in use, stops the agent before it starts any command.
+	trig, err := startTriggers(ctx, cfg, disp, store, log, nil)
+	if err != nil {
+		return err
+	}
+
+	loopCtx, stopLoop := context.WithCancel(context.Background())
+	loopDone := make(chan struct{})
+	go func() {
+		defer close(loopDone)
+		disp.Loop(loopCtx, runner.AgentInfo(opts.Version, started))
+	}()
+
+	shutdown := func(cause error) {
+		log.Info("Agent stopping", append([]any{"inFlightJobs", rn.InFlight()}, causeAttrs(cause)...)...)
 		rn.Wait()
 		stopLoop()
 		<-loopDone
@@ -96,7 +119,6 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 			log.Warn("Database operation failed", "detail", "agent_stopped", "file", store.Path(), logging.Err(err))
 		}
 		logStopped(log, rn, started)
-		return nil
 	}
 
 	first := true
@@ -104,7 +126,6 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 		for _, w := range cfg.Warnings() {
 			log.Warn("Config warning", "event", w.Event, "reason", w.Reason, "detail", w.Detail)
 		}
-		errCh, stop := startTriggers(ctx, cfg, disp, store, log)
 		msg := "Config loaded"
 		if !first {
 			msg = "Config reloaded"
@@ -116,30 +137,36 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 
 		linksCtx, stopLinks := context.WithCancel(ctx)
 		watchLinks(linksCtx, log, cfg, requestReload)
-		next, err := waitForChange(ctx, log, opts.ConfigPath, reload, errCh)
+		next, ln, err := waitForReload(ctx, log, opts.ConfigPath, reload, trig.errs, cfg)
+		stopLinks()
 		switch {
 		case ctx.Err() != nil:
-			stopLinks()
-			stop(context.Cause(ctx))
-			return shutdown()
+			if ln != nil {
+				ln.Close()
+			}
+			trig.stop(context.Cause(ctx))
+			shutdown(context.Cause(ctx))
+			return nil
 		case err != nil && first:
-			stopLinks()
-			stop(errTriggerFailed)
-			stopLoop()
-			<-loopDone
+			// A trigger of the first config failed after it started. The
+			// agent stops as it does at a clean stop, so the runs that
+			// started are recorded as interrupted, and on_interrupt decides
+			// at the next start what becomes of them.
+			trig.stop(errTriggerFailed)
+			endRuns(errTriggerFailed)
+			shutdown(errTriggerFailed)
 			return err
 		case err != nil:
-			stop(errTriggerFailed)
+			trig.stop(errTriggerFailed)
 			log.Error("Trigger failed", logging.Err(err), "detail", "no triggers run until the config is saved again; queued runs and manual firings still run")
-			next = waitForValidConfig(ctx, log, opts.ConfigPath, reload)
+			next, ln, _ = waitForReload(ctx, log, opts.ConfigPath, reload, nil, nil)
 			if next == nil {
-				stopLinks()
-				return shutdown()
+				shutdown(context.Cause(ctx))
+				return nil
 			}
 		default:
-			stop(event.ErrReload)
+			trig.stop(event.ErrReload)
 		}
-		stopLinks()
 		first = false
 		if next.Database.Path != cfg.Database.Path {
 			log.Warn("Database path change needs a restart", "file", cfg.Database.Path, "detail", next.Database.Path)
@@ -147,6 +174,11 @@ func Run(ctx context.Context, base *slog.Logger, opts Options) error {
 		}
 		cfg = next
 		disp.Configure(specs(cfg))
+		if trig, err = startTriggers(ctx, cfg, disp, store, log, ln); err != nil {
+			// The address of the webhook server stayed the same, and
+			// another program took it while the triggers restarted.
+			trig = failedTriggers(err)
+		}
 	}
 }
 
@@ -160,8 +192,7 @@ func waitForChange(ctx context.Context, log *slog.Logger, path string, reload <-
 			return nil, nil
 		case err := <-errCh:
 			return nil, err
-		case reason := <-reload:
-			log.Info("Config reload requested", "reason", reason)
+		case <-reload:
 			next, err := config.Load(path)
 			if err != nil {
 				log.Error("Config reload failed", "file", path, logging.Err(err), "detail", "the previous config stays in effect")
@@ -172,11 +203,47 @@ func waitForChange(ctx context.Context, log *slog.Logger, path string, reload <-
 	}
 }
 
-// waitForValidConfig waits, with no triggers running, for a reload that
-// yields a valid configuration. It returns nil on shutdown.
-func waitForValidConfig(ctx context.Context, log *slog.Logger, path string, reload <-chan string) *config.Config {
-	next, _ := waitForChange(ctx, log, path, reload, nil)
-	return next
+// waitForReload waits, as waitForChange does, for a valid configuration
+// that can replace cur, the configuration whose triggers run, or nil when
+// none run. A configuration whose webhook server needs an address that
+// cur does not hold gets that address bound first, and the listener is
+// returned with it; an address in use keeps cur in effect.
+func waitForReload(ctx context.Context, log *slog.Logger, path string, reload <-chan string, errCh <-chan error, cur *config.Config) (*config.Config, net.Listener, error) {
+	for {
+		next, err := waitForChange(ctx, log, path, reload, errCh)
+		if next == nil || err != nil {
+			return nil, nil, err
+		}
+		addr, ok := webhookAddr(next)
+		if !ok {
+			return next, nil, nil
+		}
+		if held, ok := webhookAddr(cur); ok && held == addr {
+			return next, nil, nil
+		}
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Error("Config reload failed", "file", path, logging.Err(fmt.Errorf("webhook listen: %w", err)), "detail", "the previous config stays in effect")
+			continue
+		}
+		return next, ln, nil
+	}
+}
+
+// webhookAddr returns the address that the webhook server of cfg listens
+// on, and false when cfg has no webhook server.
+func webhookAddr(cfg *config.Config) (string, bool) {
+	if cfg == nil || !cfg.Webhook.IsEnabled() {
+		return "", false
+	}
+	for _, e := range cfg.Events {
+		for _, t := range e.Triggers {
+			if t.Type == config.TriggerWebhook {
+				return cfg.Webhook.Listen, true
+			}
+		}
+	}
+	return "", false
 }
 
 // openQueue opens the database.
@@ -219,13 +286,31 @@ func causeAttrs(cause error) []any {
 		return []any{"signal", logging.SignalName(sc.Signal)}
 	case errors.Is(cause, ErrServiceStop):
 		return []any{"reason", "service_stop"}
+	case errors.Is(cause, errTriggerFailed):
+		return []any{"reason", "trigger_failed"}
 	}
 	return []any{"reason", "context_canceled"}
 }
 
+// triggers are the running triggers of one configuration. Fatal trigger
+// errors arrive on errs, and stop ends the triggers with a cause.
+type triggers struct {
+	errs <-chan error
+	stop func(error)
+}
+
+// failedTriggers stands for triggers that could not start: err is waiting
+// on errs, and nothing runs.
+func failedTriggers(err error) *triggers {
+	errs := make(chan error, 1)
+	errs <- err
+	return &triggers{errs: errs, stop: func(error) {}}
+}
+
 // startTriggers builds the triggers of cfg and runs them until stop is
-// called with a cause. Fatal trigger errors arrive on the returned channel.
-func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Dispatcher, state trigger.CronState, log *slog.Logger) (<-chan error, func(error)) {
+// called. The webhook server listens on ln, or binds its address here,
+// so an address in use is an error before any trigger runs.
+func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Dispatcher, state trigger.CronState, log *slog.Logger, ln net.Listener) (*triggers, error) {
 	ctx, cancel := context.WithCancelCause(parent)
 	cronSched := trigger.NewCronScheduler(log, state)
 	var hook *trigger.WebhookServer
@@ -299,7 +384,15 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 		log.Info("Webhook triggers disabled", "count", disabledHooks, "detail", "webhook.enabled is false, so the HTTP server does not start")
 	}
 	if hook != nil {
+		if ln != nil {
+			hook.SetListener(ln)
+		} else if err := hook.Listen(); err != nil {
+			cancel(err)
+			return nil, err
+		}
 		runnables = append(runnables, runnable{event.KindWebhook, hook.Run})
+	} else if ln != nil {
+		ln.Close()
 	}
 
 	errCh := make(chan error, len(runnables)+1)
@@ -323,7 +416,7 @@ func startTriggers(parent context.Context, cfg *config.Config, disp *runner.Disp
 		cancel(cause)
 		wg.Wait()
 	}
-	return errCh, stop
+	return &triggers{errs: errCh, stop: stop}, nil
 }
 
 // specs converts the events of cfg into runner specs.

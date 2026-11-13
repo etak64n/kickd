@@ -288,8 +288,9 @@ events:
 - **Takes effect**: for runs that start after the file that defines the event is saved.
 
 kickd waits up to `stop_timeout` for the [`stop_command`](#stop_command), when the event has one, and up to `stop_timeout` again after SIGTERM.
-A service manager gives kickd itself a limited time to stop, such as 20 seconds by default for launchd and 90 seconds for systemd.
-Keep `stop_timeout` short enough that the commands stop within that time when kickd stops.
+When kickd runs as a service, the service manager gives it a limited time to stop: 20 seconds by default for launchd and 90 seconds for systemd, after which they kill it.
+On Windows, kickd stops waiting for its commands after 30 seconds.
+Keep `stop_timeout`, twice over for an event with a `stop_command`, short enough that the commands stop within that time when kickd stops.
 A negative duration is an error of the config.
 
 ```yaml
@@ -509,6 +510,7 @@ The output of a long-running program, such as the access log of a server, needs 
 - **`max_backups`**: how many renamed files to keep. The default is `5`.
 
 Runs that write to the same file at the same time share it, so their lines do not mix within a line.
+kickd creates the file readable and writable by the user of the agent alone, as it creates the database, which also keeps output, and it takes these permissions from an existing file that has more.
 A file that kickd cannot open is logged as `Output file unavailable`, and the command runs without it.
 
 ```yaml

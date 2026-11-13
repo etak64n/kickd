@@ -571,11 +571,11 @@ func (c *cli) cancel(args []string) error {
 	}
 	switch {
 	case r.Status == queue.StatusCanceled && !r.CancelRequested:
-		fmt.Fprintf(c.stdout, "canceled run %d (%s); it had not started\n", r.ID, r.Event)
+		fmt.Fprintln(c.stdout, canceledLine(r))
 	case r.CancelRequested:
 		fmt.Fprintf(c.stdout, "asked kickd to stop run %d (%s)\n", r.ID, r.Event)
 		if !c.agentAlive(ctx, st) {
-			fmt.Fprintln(c.stderr, "kickd: the agent is not running; it handles the run as interrupted when it starts")
+			fmt.Fprintln(c.stderr, "kickd: the agent is not running; it records the run as canceled when it starts")
 		}
 	default:
 		return fmt.Errorf("run %d is %s and cannot be canceled", r.ID, r.Status)
@@ -595,7 +595,7 @@ func (c *cli) cancelEvent(ctx context.Context, cfg *config.Config, st *queue.Sto
 		if _, ok := cfg.EventByName(name); !ok {
 			return fmt.Errorf("unknown event %q", name)
 		}
-		fmt.Fprintf(c.stdout, "no run of %s is queued or running\n", name)
+		fmt.Fprintf(c.stdout, "no run of %s is queued, running or interrupted\n", name)
 		return nil
 	}
 	stopping := false
@@ -605,12 +605,21 @@ func (c *cli) cancelEvent(ctx context.Context, cfg *config.Config, st *queue.Sto
 			fmt.Fprintf(c.stdout, "asked kickd to stop run %d (%s)\n", r.ID, r.Event)
 			continue
 		}
-		fmt.Fprintf(c.stdout, "canceled run %d (%s); it had not started\n", r.ID, r.Event)
+		fmt.Fprintln(c.stdout, canceledLine(r))
 	}
 	if stopping && !c.agentAlive(ctx, st) {
-		fmt.Fprintln(c.stderr, "kickd: the agent is not running; it handles the runs as interrupted when it starts")
+		fmt.Fprintln(c.stderr, "kickd: the agent is not running; it records the runs as canceled when it starts")
 	}
 	return nil
+}
+
+// canceledLine tells that kickd cancel canceled run r at once: a run that
+// waited in the queue, or an interrupted run, which waited to run again.
+func canceledLine(r queue.Run) string {
+	if r.StartedAt.IsZero() {
+		return fmt.Sprintf("canceled run %d (%s); it had not started", r.ID, r.Event)
+	}
+	return fmt.Sprintf("canceled run %d (%s); it was cut off, and it does not run again", r.ID, r.Event)
 }
 
 func (c *cli) status(args []string) error {

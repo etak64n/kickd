@@ -6,8 +6,8 @@ import (
 )
 
 // The unit that kickd service install writes on Linux starts kickd again
-// soon after it exits, and a per-user unit starts with the systemd of the
-// user.
+// soon after it exits, a stop signals kickd alone, and a per-user unit
+// starts with the systemd of the user.
 func TestServiceConfigSystemdUnit(t *testing.T) {
 	for _, user := range []bool{false, true} {
 		c := serviceConfig("/etc/kickd/config.yaml", user)
@@ -16,7 +16,7 @@ func TestServiceConfigSystemdUnit(t *testing.T) {
 		if user {
 			want = "WantedBy=default.target\n"
 		}
-		if !strings.Contains(unit, "}}RestartSec=5\n") || !strings.HasSuffix(unit, want) {
+		if !strings.Contains(unit, "}}RestartSec=5\nKillMode=mixed\n") || !strings.HasSuffix(unit, want) {
 			t.Errorf("user %v: the unit is\n%s", user, unit)
 		}
 		if c.Option["Restart"] != "always" {

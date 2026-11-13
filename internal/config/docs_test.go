@@ -94,7 +94,8 @@ func TestExamplesLoad(t *testing.T) {
 // checkLoads loads a config and reports every problem except those of the
 // machine the config was written for: directories that exist only there,
 // and a user for the commands, which needs kickd to run as root on macOS
-// or Linux.
+// or Linux. The token of the examples, which the reader replaces, is not a
+// problem either.
 func checkLoads(t *testing.T, name, path string) {
 	t.Helper()
 	_, err := Load(path)
@@ -103,7 +104,8 @@ func checkLoads(t *testing.T, name, path string) {
 		for _, p := range ve.Problems {
 			machine := strings.Contains(p.Error(), "is not a directory") ||
 				errors.Is(p, errUserOnWindows) || errors.Is(p, errUserNotRoot)
-			if !machine {
+			example := errors.Is(p, errExampleValue)
+			if !machine && !example {
 				t.Errorf("%s: %v", name, p)
 			}
 		}

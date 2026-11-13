@@ -100,8 +100,10 @@ After `systemctl stop`, systemd leaves it stopped.
 When the config file, or another YAML file next to it, is saved, the agent reloads the config.
 `sudo systemctl reload kickd` also reloads it, because `reload` sends SIGHUP to the agent, and the agent reloads its config on SIGHUP.
 
-When the service stops, kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
+When the service stops, systemd sends SIGTERM to the agent alone, because the unit sets `KillMode=mixed`, and the agent stops its commands itself.
+kickd sends SIGTERM to the commands that are running and waits up to 10 seconds for them to exit.
 Commands still running after 10 seconds are stopped with SIGKILL.
+systemd kills what is left of the unit only when the stop takes longer than its limit, 90 seconds by default.
 An event can run a [`stop_command`](settings/events.md#stop_command) before SIGTERM, and set the wait with [`stop_timeout`](settings/events.md#stop_timeout).
 The runs stopped this way are recorded as interrupted.
 When the agent starts again, it handles each interrupted run as the event's `on_interrupt` setting says: `abandon` gives the run up, and `rerun` starts it again.

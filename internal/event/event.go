@@ -168,12 +168,10 @@ func (e Event) Env() []string {
 	var filePath, fileOp, fileCount, filePaths string
 	if len(e.Files) > 0 {
 		last := e.Files[len(e.Files)-1]
-		paths := make([]string, len(e.Files))
-		for i, f := range e.Files {
-			paths[i] = f.Path
-		}
 		filePath, fileOp, fileCount = last.Path, last.Op, strconv.Itoa(len(e.Files))
-		filePaths = strings.Join(paths, string(os.PathListSeparator))
+		if filePaths = joinPaths(e.Files); len(filePaths) > MaxFilePathsEnv {
+			filePaths = ""
+		}
 	}
 	var afterEvent, afterRunID, afterStatus, afterExitCode string
 	if e.After != nil {
@@ -209,6 +207,22 @@ func (e Event) Env() []string {
 	)
 }
 
+// joinPaths joins the paths of files with the separator of PATH.
+func joinPaths(files []FileChange) string {
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.Path
+	}
+	return strings.Join(paths, string(os.PathListSeparator))
+}
+
+// MaxFilePathsEnv is the longest KICKD_FILE_PATHS, in bytes. The OS
+// limits the size of one environment variable, to 128 KiB on Linux and to
+// about 32,000 characters on Windows, and a longer list would keep the
+// command from starting, so a longer list leaves the variable empty. The
+// payload file lists every path.
+const MaxFilePathsEnv = 30 << 10
+
 // DispatchStatus tells what happened to a firing handed to the queue.
 type DispatchStatus string
 
@@ -216,6 +230,9 @@ type DispatchStatus string
 const (
 	Queued  DispatchStatus = "queued"
 	Dropped DispatchStatus = "dropped"
+	// Failed is a firing that could not be recorded in the database, so
+	// it does not run.
+	Failed DispatchStatus = "failed"
 )
 
 // ErrBusy is returned by RunSync when the run was skipped because the
