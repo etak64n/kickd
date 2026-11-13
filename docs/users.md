@@ -33,6 +33,12 @@ The user of the agent also decides which config file the agent reads:
 The config file of root, administrators and SYSTEM is the config for the whole machine.
 Only root and administrators can change the files in its directory, because its commands run as root or as SYSTEM.
 
+On macOS and Linux, kickd checks this before it reads the config of root, whether as the agent or as a subcommand under `sudo`.
+Root must own the config file, every other file of events, every directory on the way to each of them, and the file that each link on the way points to, and neither their group nor other users may write to them.
+Otherwise, kickd refuses the config, and `kickd check` names the file or directory that another user can change, with the `sudo chown` or `sudo chmod` command that fixes it.
+kickd cannot see the scripts and programs that the commands run, so these need the same protection: a script that another user can change runs as root too.
+On Windows, kickd does not check the permissions of the config.
+
 ## The user of the commands
 
 A command starts as a child process of the agent and runs as the same user: with the same groups on macOS and Linux, and with the same access token on Windows.

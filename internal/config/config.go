@@ -442,6 +442,15 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if System() {
+		files := []string{abs}
+		for _, f := range others {
+			files = append(files, f.path)
+		}
+		if err := checkRootOnly(files); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
 	cfg, err := parse(data, abs, others)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)

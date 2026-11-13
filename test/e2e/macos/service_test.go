@@ -300,6 +300,19 @@ func TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine(t *testing.T) {
 	}
 }
 
+func TestServiceCheckWithSudoRefusesAConfigThatOtherUsersCanChange(t *testing.T) {
+	changesTheMac(t)
+	s := &service{t: t, sudo: true, config: "/Library/Application Support/kickd/config.yaml"}
+	s.removeAtEnd(filepath.Dir(s.config))
+	s.must("mkdir", "-p", filepath.Dir(s.config))
+	s.must("cp", "testdata/service-daemon/config.yaml", s.config)
+	s.must("chmod", "o+w", s.config)
+	r := s.kickd("check")
+	if want := "can be changed by its group or by other users"; r.code == 0 || !strings.Contains(r.stdout+r.stderr, want) {
+		t.Errorf("sudo kickd check: exit %d, want an error with %q\n%s%s", r.code, want, r.stdout, r.stderr)
+	}
+}
+
 func TestServiceOfTheSystemRunsCommandsAsRoot(t *testing.T) {
 	s := launchDaemon(t)
 	if r := s.waitForRun(s.fire("whoami")); r.Output != "root\n" {

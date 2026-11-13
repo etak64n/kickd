@@ -309,6 +309,7 @@ kickd installed as a service as the installation guides do: launchd on macOS, sy
 |---|:-:|:-:|:-:|
 | `TestServiceAcceptsAWebhookRequest` |  |  | ✓ |
 | `TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine` | ✓ | ✓ |  |
+| `TestServiceCheckWithSudoRefusesAConfigThatOtherUsersCanChange` | ✓ | ✓ |  |
 | `TestServiceGivesCommandsTheProfileOfSystem` |  |  | ✓ |
 | `TestServiceGivesCommandsTheTempFolderOfWindows` |  |  | ✓ |
 | `TestServiceInitMakesTheConfigReadableOnlyByItsOwner` |  | ✓ |  |

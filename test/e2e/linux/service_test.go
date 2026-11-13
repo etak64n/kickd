@@ -333,6 +333,19 @@ func TestServiceCheckWithSudoReadsTheConfigForTheWholeMachine(t *testing.T) {
 	}
 }
 
+func TestServiceCheckWithSudoRefusesAConfigThatOtherUsersCanChange(t *testing.T) {
+	changesTheMachine(t)
+	s := &service{t: t, sudo: true, env: os.Environ(), config: "/etc/kickd/config.yaml"}
+	s.removeAtEnd("/etc/kickd")
+	s.must("mkdir", "-p", "/etc/kickd")
+	s.must("cp", "testdata/service-system/config.yaml", s.config)
+	s.must("chmod", "o+w", s.config)
+	r := s.kickd("check")
+	if want := "can be changed by its group or by other users"; r.code == 0 || !strings.Contains(r.stdout+r.stderr, want) {
+		t.Errorf("sudo kickd check: exit %d, want an error with %q\n%s%s", r.code, want, r.stdout, r.stderr)
+	}
+}
+
 func TestServiceInitMakesTheConfigReadableOnlyByItsOwner(t *testing.T) {
 	changesTheMachine(t)
 	s := &service{t: t, sudo: true, env: os.Environ(), config: "/etc/kickd/config.yaml"}
