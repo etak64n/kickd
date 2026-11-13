@@ -378,6 +378,7 @@ type run struct {
 	Status     string         `json:"status"`
 	Reason     string         `json:"reason"`
 	ExitCode   *int           `json:"exitCode"`
+	Signal     string         `json:"signal"`
 	Skipped    int            `json:"skipped"`
 	StartedAt  string         `json:"startedAt"`
 	FinishedAt string         `json:"finishedAt"`
@@ -399,6 +400,16 @@ func (r run) started() time.Time  { t, _ := time.Parse(time.RFC3339, r.StartedAt
 func (r run) finished() time.Time { t, _ := time.Parse(time.RFC3339, r.FinishedAt); return t }
 
 // line returns the value that the command printed as KEY=value on the first
+// ending tells how the run ended: its reason, exit code, signal and
+// duration, for the message of a test that the run failed.
+func (r run) ending() string {
+	exit := "none"
+	if r.ExitCode != nil {
+		exit = strconv.Itoa(*r.ExitCode)
+	}
+	return fmt.Sprintf("reason %q, exit code %s, signal %q, %d ms", r.Reason, exit, r.Signal, r.DurationMs)
+}
+
 // line that starts with key and "=".
 func (r run) line(key string) string {
 	for _, l := range strings.Split(r.Output, "\n") {
