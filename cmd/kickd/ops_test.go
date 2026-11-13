@@ -277,9 +277,19 @@ func TestInitWritesTheExampleOnce(t *testing.T) {
 		if b, err := os.ReadFile(c.path); err != nil || string(b) != config.ExampleConfig(runtime.GOOS, c.system) {
 			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), c.path, err)
 		}
+		// The events file is the example, with a random token in place of
+		// the token of the README.
 		events := filepath.Join(filepath.Dir(c.path), config.ExampleEventsName)
-		if b, err := os.ReadFile(events); err != nil || string(b) != config.ExampleEvents(runtime.GOOS) {
-			t.Fatalf("init wrote %d bytes to %s, err %v", len(b), events, err)
+		b, err := os.ReadFile(events)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token := regexp.MustCompile(`token: '([^']*)'`).FindSubmatch(b)
+		if token == nil || string(token[1]) == config.ExampleToken || len(token[1]) < 20 {
+			t.Fatalf("init wrote no random token to %s:\n%s", events, b)
+		}
+		if want := strings.Replace(config.ExampleEvents(runtime.GOOS), config.ExampleToken, string(token[1]), 1); string(b) != want {
+			t.Fatalf("init wrote %d bytes to %s, want the example with a random token", len(b), events)
 		}
 	}
 	if !strings.Contains(config.ExampleConfig("linux", true), "'/var/lib/kickd/kickd.db'") || !strings.Contains(config.ExampleConfig("linux", false), "'~/.kickd/kickd.db'") {
