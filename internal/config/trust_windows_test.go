@@ -181,11 +181,25 @@ func TestLoadReadsTheConfigForTheWholeMachineInTheFolderThatInitCreates(t *testi
 	}
 }
 
+// letUsersChange gives path the access control list of sddl, in which the
+// Users group, every account of the machine, has full control. The account
+// that runs the test belongs to the Administrators group, which may change
+// the config, so the test needs another account to stand for the others.
+func letUsersChange(t *testing.T, path, sddl string) {
+	t.Helper()
+	dacl, _, err := sd(t, sddl).DACL()
+	if err == nil {
+		err = windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLoadRefusesTheConfigForTheWholeMachineInAFolderThatOtherAccountsCanChange(t *testing.T) {
 	needsAdministrator(t)
-	// The folder inherits the rules of the temporary folder of the user,
-	// which give the user full control.
 	dir := writeFiles(t, machineConfig(t), map[string]string{"config.yaml": event("backup")})
+	letUsersChange(t, dir, "D:(A;OICI;FA;;;BU)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
 	_, err := Load(Path())
 	for _, want := range []string{dir + ": kickd runs the commands of the YAML files in this folder as SYSTEM", "can be changed by", `icacls "` + dir + `" /inheritance:r`} {
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -202,6 +216,7 @@ func TestLoadRefusesAFileOfEventsThatLinksToAFileThatOtherAccountsCanChange(t *t
 	}
 	writeFiles(t, dir, map[string]string{"config.yaml": event("backup")})
 	target := filepath.Join(writeFiles(t, t.TempDir(), map[string]string{"linked-events.yaml": event("deploy")}), "linked-events.yaml")
+	letUsersChange(t, target, "D:(A;;FA;;;BU)(A;;FA;;;SY)(A;;FA;;;BA)")
 	if err := os.Symlink(target, filepath.Join(dir, "deploy.yaml")); err != nil {
 		t.Skip(err)
 	}
