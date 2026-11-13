@@ -77,7 +77,30 @@ func (w *FileWatcher) Run(ctx context.Context, h event.Handler) error {
 		timer   *time.Timer
 		fire    <-chan time.Time
 		errs    = limiter{every: time.Minute}
+		// rewatch receives the new directories to watch again, where a
+		// first watch can lose its flags (see rewatchNewDirs).
+		rewatch = make(chan string, 64)
 	)
+	// collect adds the changes that are new in this window to pending, and
+	// returns how many it added.
+	collect := func(changes []event.FileChange) int {
+		added := 0
+		for _, c := range changes {
+			log.Log(ctx, logging.LevelTrace, "File change detected", "file", c.Path, "op", c.Op)
+			key := c.Op + "\x00" + c.Path
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			if len(pending) >= maxPendingChanges {
+				dropped++
+				continue
+			}
+			seen[key] = struct{}{}
+			pending = append(pending, c)
+			added++
+		}
+		return added
+	}
 	flush := func() {
 		if dropped > 0 {
 			log.Warn("File changes dropped, too many pending", "file", w.Root, "count", dropped, "thresholdCount", maxPendingChanges)
@@ -111,22 +134,36 @@ func (w *FileWatcher) Run(ctx context.Context, h event.Handler) error {
 			if !ok {
 				return nil
 			}
-			changes := w.translate(watcher, log, fe, ops)
+			changes, dirs := w.translate(watcher, log, fe, ops)
+			if rewatchNewDirs {
+				for _, dir := range dirs {
+					time.AfterFunc(rewatchDelay, func() {
+						select {
+						case rewatch <- dir:
+						case <-ctx.Done():
+						}
+					})
+				}
+			}
+			// Every change restarts the debounce, also one that this window
+			// holds already.
+			collect(changes)
 			if len(changes) == 0 {
 				continue
 			}
-			for _, c := range changes {
-				log.Log(ctx, logging.LevelTrace, "File change detected", "file", c.Path, "op", c.Op)
-				key := c.Op + "\x00" + c.Path
-				if _, dup := seen[key]; dup {
-					continue
-				}
-				if len(pending) >= maxPendingChanges {
-					dropped++
-					continue
-				}
-				seen[key] = struct{}{}
-				pending = append(pending, c)
+			if w.Debounce <= 0 {
+				flush()
+				continue
+			}
+			if timer != nil {
+				timer.Stop()
+			}
+			timer = time.NewTimer(w.Debounce)
+			fire = timer.C
+		case dir := <-rewatch:
+			// Files that translate reported already are no new change.
+			if collect(w.watchAgain(watcher, log, dir, ops)) == 0 {
+				continue
 			}
 			if w.Debounce <= 0 {
 				flush()
@@ -180,13 +217,15 @@ func (l *limiter) allow() (suppressed int, ok bool) {
 }
 
 // translate converts an fsnotify event into zero or more file changes,
-// registering newly created directories when watching recursively.
-func (w *FileWatcher) translate(watcher *fsnotify.Watcher, log *slog.Logger, fe fsnotify.Event, ops map[string]bool) []event.FileChange {
+// registering newly created directories when watching recursively. It
+// also returns the directories that it started to watch.
+func (w *FileWatcher) translate(watcher *fsnotify.Watcher, log *slog.Logger, fe fsnotify.Event, ops map[string]bool) ([]event.FileChange, []string) {
 	rel := w.rel(fe.Name)
 	if rel == "" {
-		return nil
+		return nil, nil
 	}
 	var out []event.FileChange
+	var dirs []string
 	op := opName(fe.Op)
 	if ops[op] && w.match(rel) {
 		out = append(out, event.FileChange{Path: fe.Name, Op: op})
@@ -208,8 +247,27 @@ func (w *FileWatcher) translate(watcher *fsnotify.Watcher, log *slog.Logger, fe 
 			})
 			if err != nil {
 				log.Warn("Directory not watched", "file", fe.Name, "reason", "watch_failed", logging.Err(err))
+			} else {
+				dirs = append(dirs, fe.Name)
 			}
 		}
+	}
+	return out, dirs
+}
+
+// watchAgain watches dir, a directory that appeared a moment ago, once
+// more, and reports the files in it as created, as translate does for a
+// new directory. The changes that translate reported for it already wait
+// in the same window, so they count once.
+func (w *FileWatcher) watchAgain(watcher *fsnotify.Watcher, log *slog.Logger, dir string, ops map[string]bool) []event.FileChange {
+	var out []event.FileChange
+	_, err := w.addTree(watcher, log, dir, func(p string) {
+		if ops["create"] && w.match(w.rel(p)) {
+			out = append(out, event.FileChange{Path: p, Op: "create"})
+		}
+	})
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Warn("Directory not watched", "file", dir, "reason", "watch_failed", logging.Err(err))
 	}
 	return out
 }
